@@ -138,10 +138,10 @@ function CompanionApp() {
           <motion.main
             key={activeView}
             className="page-transition"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.24, ease: [0.2, 0.7, 0.2, 1] }}
+            initial={{ opacity: 0, x: 12, filter: 'blur(2px)' }}
+            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: -10, filter: 'blur(1.5px)' }}
+            transition={{ duration: 0.2, ease: [0.2, 0, 0.13, 1] }}
           >
             <ErrorBoundary>
               {page}

@@ -7,19 +7,22 @@ type GaugeProps = {
   max?: number;
 };
 
-const CX = 50, CY = 50, R = 36;
+const CX = 50, CY = 50, R = 37;
 const START = 225, SWEEP = 270;
 
-function pt(deg: number): [number, number] {
+function ptRaw(deg: number, radius = R): [number, number] {
   const r = ((deg - 90) * Math.PI) / 180;
-  return [CX + R * Math.cos(r), CY + R * Math.sin(r)];
+  return [CX + radius * Math.cos(r), CY + radius * Math.sin(r)];
 }
 
-function arc(d1: number, d2: number, large: boolean) {
-  const [x1, y1] = pt(d1);
-  const [x2, y2] = pt(d2);
-  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 ${large ? 1 : 0} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+function arc(d1: number, d2: number, large: boolean, radius = R) {
+  const [x1, y1] = ptRaw(d1, radius);
+  const [x2, y2] = ptRaw(d2, radius);
+  return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${radius} ${radius} 0 ${large ? 1 : 0} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`;
 }
+
+/** Tick dot positions at 0 %, 25 %, 50 %, 75 %, 100 % of arc */
+const TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
 
 export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
   const animated = useAnimatedNumber(value);
@@ -27,33 +30,66 @@ export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
   const fillEnd = START + SWEEP * pct;
   const large = pct * SWEEP > 180;
 
-  const color = pct >= 0.85 ? '#ff6d6d' : pct >= 0.65 ? '#f5c86b' : '#55d6ff';
-  const glow  = pct >= 0.85 ? 'rgba(255,109,109,0.65)' : pct >= 0.65 ? 'rgba(245,200,107,0.65)' : 'rgba(85,214,255,0.65)';
+  // Color thresholds
+  const color    = pct >= 0.85 ? '#ff6d6d' : pct >= 0.65 ? '#f5c86b' : '#55d6ff';
+  const colorEnd = pct >= 0.85 ? '#ff9999' : pct >= 0.65 ? '#fad482' : '#84f0c4';
+  const glow     = pct >= 0.85 ? 'rgba(255,109,109,0.7)' : pct >= 0.65 ? 'rgba(245,200,107,0.7)' : 'rgba(85,214,255,0.7)';
+
+  // Gradient endpoint coordinates
+  const [gx1, gy1] = ptRaw(START);
+  const [gx2, gy2] = ptRaw(fillEnd > START ? fillEnd : START + 10);
+  const gradId = `gauge-grad-${label.replace(/\s+/g, '-')}`;
 
   return (
     <div className="gauge">
       <div className="gauge-face">
         <svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+          <defs>
+            <linearGradient id={gradId} gradientUnits="userSpaceOnUse"
+              x1={gx1.toFixed(2)} y1={gy1.toFixed(2)}
+              x2={gx2.toFixed(2)} y2={gy2.toFixed(2)}>
+              <stop offset="0%"   stopColor={color}    />
+              <stop offset="100%" stopColor={colorEnd} />
+            </linearGradient>
+          </defs>
+
+          {/* Outer bezel ring */}
+          <circle cx={CX} cy={CY} r={44} fill="none"
+            stroke="rgba(255,255,255,0.04)" strokeWidth={0.75} />
+
           {/* Track arc */}
           <path
             d={arc(START, START + SWEEP, true)}
             fill="none"
-            stroke="rgba(255,255,255,0.16)"
-            strokeWidth={5.5}
+            stroke="rgba(255,255,255,0.13)"
+            strokeWidth={6}
             strokeLinecap="round"
           />
-          {/* Fill arc */}
-          {pct > 0.01 && (
+
+          {/* Tick marks at 0 / 25 / 50 / 75 / 100 % */}
+          {TICK_FRACTIONS.map((t) => {
+            const deg = START + SWEEP * t;
+            const [tx, ty] = ptRaw(deg);
+            const active = pct > 0.02 && t <= pct + 0.01;
+            return (
+              <circle key={t} cx={tx} cy={ty} r={1.6}
+                fill={active ? color : 'rgba(255,255,255,0.18)'} />
+            );
+          })}
+
+          {/* Fill arc with gradient */}
+          {pct > 0.015 && (
             <path
               d={arc(START, fillEnd, large)}
               fill="none"
-              stroke={color}
-              strokeWidth={5.5}
+              stroke={`url(#${gradId})`}
+              strokeWidth={6}
               strokeLinecap="round"
-              style={{ filter: `drop-shadow(0 0 5px ${glow})` }}
+              style={{ filter: `drop-shadow(0 0 6px ${glow})` }}
             />
           )}
         </svg>
+
         <div className="gauge-center">
           <strong>{Math.round(animated)}</strong>
           <span>{unit}</span>

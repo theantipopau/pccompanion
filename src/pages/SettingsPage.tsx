@@ -6,10 +6,12 @@ import { setStartupEnabled } from '../services/systemService';
 import type { OverlayPreset, TrayMetric } from '../types/system';
 
 const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
-  { id: 'compact-bar', label: 'Compact bar' },
-  { id: 'corner-widget', label: 'Corner widget' },
-  { id: 'vertical-list', label: 'Vertical list' },
-  { id: 'minimal-card', label: 'Minimal card' },
+  { id: 'compact-bar',    label: 'Compact bar' },
+  { id: 'corner-widget',  label: 'Corner widget' },
+  { id: 'vertical-list',  label: 'Vertical list' },
+  { id: 'minimal-card',   label: 'Minimal card' },
+  { id: 'cinematic',      label: 'Cinematic — big numbers' },
+  { id: 'benchmark',      label: 'Benchmark — dense grid' },
 ];
 
 export function SettingsPage() {

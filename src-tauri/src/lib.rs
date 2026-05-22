@@ -228,11 +228,13 @@ fn apply_performance_profile(id: String, dry_run: bool) -> PerformanceProfileRes
     ];
     if dry_run {
         actions.push("Skipped power plan write (dry-run mode).".to_string());
+        actions.push("Skipped timer resolution change (dry-run mode).".to_string());
     } else {
         actions.push(match set_windows_power_plan(&id) {
             Ok(msg) => msg,
             Err(err) => format!("Power plan update failed: {err}"),
         });
+        actions.push(crate::windows_util::set_timer_resolution(&id));
     }
     PerformanceProfileResult {
         applied_profile: id,

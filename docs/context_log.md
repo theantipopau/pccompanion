@@ -46,6 +46,31 @@
 
 ## Completed Work
 
+### Phase: AAA Premium UX Visual Identity (2026-05-23)
+
+#### Visual system + styling
+- Added extended design tokens in `src/styles.css` for spacing, radius, shadow, easing and duration scales.
+- Added subtle telemetry-inspired scanline/dot textures to body, hero/splash surfaces, and premium glass treatment for key overlays/panels.
+- Reworked gauge, sidebar metric strip, fan/thermal rows, and card-tone surfaces for a restrained industrial-luxury look.
+
+#### OSD overlay expansion
+- Fully redesigned OSD presentation styles with stronger visual hierarchy and lower visual noise.
+- Added/updated six OSD visual modes in CSS: compact-bar, corner-widget, vertical-list, minimal-card, cinematic, benchmark.
+- Updated type system and settings surface to expose new presets end-to-end.
+
+#### Component upgrades
+- `src/components/Gauge.tsx`: rebuilt gauge SVG with gradient arc fill, major tick marks (0/25/50/75/100), bezel ring, and improved threshold glow.
+- `src/components/HardwareIcon.tsx`: new custom icon set for hardware telemetry UI (CPU/GPU/RAM/NVMe/HDD/fan/thermal/network/power/VRAM).
+- `src/components/Shell.tsx`: topbar now has native drag region; sidebar live metric strip now uses custom hardware icons.
+- `src/App.tsx`: upgraded page transition to directional slide + fade + subtle blur for premium navigation feel.
+
+#### Dashboard refinements
+- `src/pages/DashboardPage.tsx`: adopted custom hardware icons in system spec region and network adapter iconography for Wi-Fi/Ethernet context.
+- Improved fan RPM formatting readability with localized number formatting.
+
+#### Validation
+- Frontend build validation passed (`npm run build`): TypeScript compile + Vite production build completed successfully.
+
 ### Phase: Branding + UI Polish (2026-05-22)
 
 #### Logo / branding

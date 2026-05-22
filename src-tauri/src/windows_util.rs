@@ -1346,3 +1346,65 @@ const BLOATWARE_SPECS: &[BloatwareSpec] = &[
         action: "appx",
     },
 ];
+
+// ─── Timer resolution ────────────────────────────────────────────────────────
+
+/// Set the Windows multimedia timer resolution based on the active performance
+/// profile.
+///
+/// Windows defaults to ~15.6 ms (156 001 × 100 ns units).  Gaming and Creator
+/// profiles lower this to 0.5 ms (5 000 units) to reduce CPU scheduling
+/// latency.  Quiet / Power-Saver releases the override and lets Windows choose
+/// the most efficient interval.
+///
+/// Returns a human-readable status message for display in the UI.
+pub fn set_timer_resolution(profile_id: &str) -> String {
+    #[cfg(windows)]
+    {
+        // NtSetTimerResolution is an ntdll export that is not part of the
+        // official Win32 surface but is universally available on Windows XP+.
+        // Units are 100-nanosecond intervals (same as FILETIME).
+        //
+        // Signature:
+        //   NTSTATUS NtSetTimerResolution(
+        //       ULONG DesiredResolution,   // requested period in 100-ns units
+        //       BOOLEAN SetResolution,     // TRUE = set, FALSE = release
+        //       PULONG CurrentResolution   // receives the new period
+        //   );
+        #[link(name = "ntdll")]
+        extern "system" {
+            fn NtSetTimerResolution(
+                desired: u32,
+                set: u8,   // BOOLEAN (1 byte on Windows)
+                current: *mut u32,
+            ) -> i32; // NTSTATUS
+        }
+
+        const UNIT: &str = "100 ns";
+        let (desired, set, label): (u32, u8, &str) = match profile_id {
+            "gaming" | "creator" => (5_000,  1, "0.5 ms (gaming)"),
+            "balanced"           => (10_000, 1, "1.0 ms (balanced)"),
+            "quiet"              => (0,      0, "system default"),
+            _                    => (10_000, 1, "1.0 ms (fallback)"),
+        };
+
+        let mut current: u32 = 0;
+        let status = unsafe { NtSetTimerResolution(desired, set, &mut current) };
+
+        if status == 0 {
+            let actual_ms = current as f32 / 10_000.0;
+            format!(
+                "Timer resolution → {label} (actual {:.2} ms, status {UNIT} OK)",
+                actual_ms
+            )
+        } else {
+            format!("Timer resolution → {label} (NtSetTimerResolution status 0x{status:08X})")
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = profile_id;
+        "Timer resolution: no-op on non-Windows".to_string()
+    }
+}

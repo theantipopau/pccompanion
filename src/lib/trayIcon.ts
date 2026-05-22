@@ -47,6 +47,8 @@ export function renderTrayIconRgba(value: number | null, isTemp: boolean): Uint8
     const canvas = new OffscreenCanvas(SIZE, SIZE);
     const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
     if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     const cx = SIZE / 2;
     const cy = SIZE / 2;
@@ -56,16 +58,25 @@ export function renderTrayIconRgba(value: number | null, isTemp: boolean): Uint8
     const startAngle = (225 * Math.PI) / 180;
     const totalSweep = (270 * Math.PI) / 180;
 
-    // ── Background circle ──────────────────────────────────────────
+    // ── Background circle (layered radial depth) ───────────────────
     ctx.clearRect(0, 0, SIZE, SIZE);
-    ctx.fillStyle = '#0e1420';
+    const bg = ctx.createRadialGradient(cx - 3, cy - 4, 2, cx, cy, 16);
+    bg.addColorStop(0, '#162132');
+    bg.addColorStop(1, '#0a0f18');
+    ctx.fillStyle = bg;
     ctx.beginPath();
     ctx.arc(cx, cy, 15.5, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+    ctx.stroke();
+
     // ── Track arc (dim) ────────────────────────────────────────────
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 2.8;
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.arc(cx, cy, arcR, startAngle, startAngle + totalSweep);
@@ -76,12 +87,20 @@ export function renderTrayIconRgba(value: number | null, isTemp: boolean): Uint8
     if (pct > 0.01) {
       ctx.save();
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2.8;
+      ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       ctx.shadowColor = color;
-      ctx.shadowBlur = 5;
+      ctx.shadowBlur = 7;
       ctx.beginPath();
       ctx.arc(cx, cy, arcR, startAngle, startAngle + pct * totalSweep);
+      ctx.stroke();
+
+      // Thin inner highlight gives the ring a sharper premium edge.
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, arcR - 0.35, startAngle, startAngle + pct * totalSweep);
       ctx.stroke();
       ctx.restore();
     }
@@ -90,14 +109,17 @@ export function renderTrayIconRgba(value: number | null, isTemp: boolean): Uint8
     const display = value !== null ? Math.round(value).toString() : '--';
     const fontSize = display.length >= 3 ? 9 : 11;
     ctx.fillStyle = '#f4f7fa';
-    ctx.font = `700 ${fontSize}px Inter, ui-sans-serif, sans-serif`;
+    ctx.font = `700 ${fontSize}px "Segoe UI Variable", "Cascadia Mono", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 1.5;
     ctx.fillText(display, cx, cy + 3.5);
+    ctx.shadowBlur = 0;
 
     // ── Unit label ─────────────────────────────────────────────────
     ctx.fillStyle = color;
-    ctx.font = `600 6px Inter, ui-sans-serif, sans-serif`;
+    ctx.font = `600 6px "Segoe UI Variable", "Cascadia Mono", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(isTemp ? '\u00b0C' : '%', cx, cy + 11);

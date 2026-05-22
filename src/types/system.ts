@@ -92,7 +92,7 @@ export type BloatwareItem = {
   action: 'appx' | 'startup' | 'service' | 'scheduled-task' | 'policy';
 };
 
-export type OverlayPreset = 'compact-bar' | 'corner-widget' | 'vertical-list' | 'minimal-card';
+export type OverlayPreset = 'compact-bar' | 'corner-widget' | 'vertical-list' | 'minimal-card' | 'cinematic' | 'benchmark';
 
 export type PerformanceMode = 'balanced' | 'performance' | 'quiet';
 

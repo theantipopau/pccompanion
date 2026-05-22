@@ -1,6 +1,7 @@
 import { Cpu, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, PlugZap, Thermometer, Zap } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge as RadialGauge } from '../components/Gauge';
+import { CpuIcon, GpuIcon, NvmeIcon, RamIcon, HddIcon, VramIcon, NetworkIcon, EthernetIcon, WifiIcon } from '../components/HardwareIcon';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -137,6 +138,9 @@ export function DashboardPage() {
               <span className="eyebrow">Network</span>
               <h2>Throughput</h2>
             </div>
+            {sample?.network.adapterType === 'wifi'
+              ? <WifiIcon size={18} />
+              : <EthernetIcon size={18} />}
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={history}>
@@ -173,11 +177,11 @@ export function DashboardPage() {
             </div>
           </div>
           <dl>
-            <dt><Cpu size={15} /> CPU</dt>
+            <dt><CpuIcon size={15} /> CPU</dt>
             <dd>{systemInfo?.cpu ?? <Skeleton className="text-line" />}</dd>
-            <dt><MonitorUp size={15} /> GPU</dt>
+            <dt><GpuIcon size={15} /> GPU</dt>
             <dd>{systemInfo?.gpu ?? <Skeleton className="text-line" />}</dd>
-            <dt><MemoryStick size={15} /> RAM</dt>
+            <dt><RamIcon size={15} /> RAM</dt>
             <dd>{systemInfo ? `${systemInfo.ram} at ${systemInfo.ramSpeed}` : <Skeleton className="text-line" />}</dd>
             <dt><HardDrive size={15} /> Storage</dt>
             <dd>
@@ -209,7 +213,7 @@ export function DashboardPage() {
             {(sample?.fans ?? []).map((fan) => (
               <div className="fan-row" key={fan.label}>
                 <span>{fan.label}</span>
-                <strong>{fan.rpm != null ? `${fan.rpm} RPM` : fan.pct != null ? `${fan.pct}%` : 'N/A'}</strong>
+                <strong>{fan.rpm != null ? `${fan.rpm.toLocaleString()} RPM` : fan.pct != null ? `${fan.pct}%` : 'N/A'}</strong>
               </div>
             ))}
             {sample?.gpu.powerWatts != null && (

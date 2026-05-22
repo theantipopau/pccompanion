@@ -89,11 +89,11 @@
 - [x] Performance profiles page (Balanced / Gaming / Creator / Quiet)
 - [x] Profile selection UI with recommended use-case labels
 - [x] Profile intent stored and applied to Companion state
-- [ ] Power plan switching via `powercfg` *(next: wire `apply_performance_profile` to real Win32 calls)*
+- [x] Power plan switching via `powercfg` *(Balanced → Balanced, Gaming/Creator → Ultimate/High Performance, Quiet → Power Saver)*
 - [ ] Fan curve profile writes *(requires vendor API or SuperIO driver)*
 - [ ] Process priority management
 - [ ] CPU park/unpark control
-- [ ] Timer resolution optimisation (NtSetTimerResolution)
+- [x] Timer resolution optimisation — `NtSetTimerResolution` via ntdll (Gaming/Creator → 0.5 ms, Balanced → 1.0 ms, Quiet → system default)
 
 ---
 
@@ -134,6 +134,49 @@
 - [ ] Search functionality (the search bar in the topbar is currently decorative)
 - [ ] Startup folder (`shell:startup`) scanning in StartupManagerPage
 - [ ] `RunOnce` key scanning in registry startup sources
+
+---
+
+## Phase 7 — AAA Premium Visual Identity 🎨 In Progress
+
+> Target aesthetic: **subtle industrial luxury** — high-end workstation software, cyber-minimal, precision-focused.
+> Reference: Porsche Design, Nothing OS, high-end BIOS UI, premium automotive telemetry.
+
+### Design System ✅ Complete
+- [x] Extended CSS design token system — spacing scale (`--sp-1`→`--sp-6`), radius scale (`--r-sm`→`--r-full`), shadow scale (`--shadow-sm/lg/xl`), easing curves (`--ease-out/spring/in-out`), durations (`--dur-fast/base/slow`)
+- [x] Surface tokens — `--surface-dim`, `--surface-raised`, `--cyan-dim`, `--cyan-glow`
+- [x] Body scan-line grid texture — repeating-linear-gradient at 40 px intervals, hardware telemetry aesthetic
+- [x] Splash screen — grid texture overlay + premium glass panel (`blur(40px) saturate(1.4)`, inset cyan highlight)
+
+### Component Upgrades ✅ Complete
+- [x] **Gauge.tsx** — Premium SVG redesign: linearGradient arc fill (start→end coordinates), outer bezel ring, tick marks at 0/25/50/75/100 %, gradient color thresholds (cyan → amber → red), drop-shadow glow, `R=37` (wider arc)
+- [x] **HardwareIcon.tsx** — New file: custom precision SVG hardware icons (CpuIcon, GpuIcon, RamIcon, NvmeIcon, HddIcon, FanIcon, ThermalIcon, WifiIcon, EthernetIcon, PowerIcon, VramIcon, NetworkIcon) — thin-line industrial style, 24×24 viewBox, distinct from Lucide
+- [x] **Shell.tsx** — Added `data-tauri-drag-region` to topbar header for native window dragging
+- [x] **OsdOverlay** — Complete CSS redesign: blur/saturate backdrop, inset highlights, 6 modes:
+  - `compact-bar` — horizontal pill bar
+  - `corner-widget` — default stacked list
+  - `vertical-list` — tight vertical
+  - `minimal-card` — 2-col grid, column layout per metric
+  - `cinematic` — large 30 px values, 2-col centered cards
+  - `benchmark` — dense Cascadia Code monospace, 2-col grid
+- [x] **types/system.ts** — `OverlayPreset` extended with `'cinematic' | 'benchmark'`
+- [x] **SettingsPage.tsx** — Two new OSD preset options in dropdown
+
+### Surface & Panel Quality ✅ Complete
+- [x] Gauge CSS — dark glass face (`radial-gradient #131e2e → #0c1219`), bezel box-shadow, cyan hover border
+- [x] Gauge face — premium inner bezel (`0 0 0 1px rgba(255,255,255,0.055)`, deep inset shadows)
+- [x] Sidebar metrics widget — cyan-tinted border + background + inset glow
+- [x] Hero monitor panel — dot-matrix dot background (`22 px × 22 px` radial dots)
+- [x] Metric card tone variants — `3 px` border-left (was 2.5 px), stronger gradient fills
+- [x] Fan / thermal rows — `border-radius: 10px`, hover state with cyan border flash
+- [x] Dashboard — HardwareIcons replace generic Lucide icons in system info section; network panel shows adapter type icon; fan RPM formatted with `toLocaleString()`
+
+### Pending ❌
+- [ ] Shell.tsx — Framer Motion page transition upgrade (slide + fade)
+- [ ] Panel component — subtle hover elevation (box-shadow transition)
+- [ ] Chart tooltips — custom styled Recharts tooltip component
+- [ ] Topbar — search bar activation (currently decorative)
+- [ ] trayIcon.ts — richer arc glow and sharper text rendering
 
 ---
 

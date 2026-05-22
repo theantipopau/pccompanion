@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
-use sysinfo::{Networks, System};
+use sysinfo::{Components, Networks, System};
 
 // ─── Shared IPC types ───────────────────────────────────────────────────────
 
@@ -505,11 +505,42 @@ pub fn monitor_loop(
             state.tick()
         };
 
-        // --- CPU temperature from WMI (Windows only) ---
+        // --- CPU temperature: WMI paths first, then sysinfo Components fallback ---
         #[cfg(windows)]
-        let cpu_temp: Option<f32> = wmi_opt
-            .as_ref()
-            .and_then(|ctx| crate::wmi_provider::query_cpu_temp(ctx));
+        let cpu_temp: Option<f32> = {
+            let wmi_temp = wmi_opt
+                .as_ref()
+                .and_then(|ctx| crate::wmi_provider::query_cpu_temp(ctx));
+            if wmi_temp.is_some() {
+                wmi_temp
+            } else {
+                // Fallback: sysinfo Components (works on some Intel systems
+                // where WMI thermal zones are empty but PDH counters are live).
+                let components = Components::new_with_refreshed_list();
+                let sysinfo_temp = components
+                    .iter()
+                    .filter(|c| {
+                        let l = c.label().to_lowercase();
+                        l.contains("cpu")
+                            || l.contains("core")
+                            || l.contains("package")
+                            || l.contains("tdie")
+                            || l.contains("tctl")
+                    })
+                    .filter_map(|c| c.temperature())
+                    .reduce(f32::max);
+                if sysinfo_temp.is_none() {
+                    log::warn!(
+                        "CPU temperature unavailable: WMI thermal zones and sysinfo components \
+                         both returned None. App may need elevated privileges or vendor thermal \
+                         drivers (e.g. Dell Command Monitor) to read sensors on this machine."
+                    );
+                } else {
+                    log::debug!("CPU temp via sysinfo Components: {:?} °C", sysinfo_temp);
+                }
+                sysinfo_temp
+            }
+        };
         #[cfg(not(windows))]
         let cpu_temp: Option<f32> = None;
 

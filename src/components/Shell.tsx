@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Cpu, Gauge, Layers, MemoryStick, Minimize2, MonitorUp, Search, Settings, Thermometer } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
@@ -7,6 +8,7 @@ import type { NavItem } from '../types/navigation';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { ErrorBoundary } from './ErrorBoundary';
+import { CpuIcon, GpuIcon, RamIcon, ThermalIcon } from './HardwareIcon';
 
 type ShellProps = {
   navItems: NavItem[];
@@ -83,16 +85,26 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             const Icon = item.icon;
             const active = item.id === activeView;
             return (
-              <button
+              <motion.button
                 key={item.id}
                 className={active ? 'nav-item active' : 'nav-item'}
                 onClick={() => onNavigate(item.id)}
                 aria-current={active ? 'page' : undefined}
                 title={item.label}
+                whileHover={{ x: active ? 0 : 2 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
-              </button>
+                {active && (
+                  <motion.span
+                    className="nav-active-pip"
+                    layoutId="nav-active-pip"
+                    transition={{ duration: 0.2, ease: [0.2, 0, 0.13, 1] }}
+                  />
+                )}
+              </motion.button>
             );
           })}
         </nav>
@@ -101,35 +113,35 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
         <div className="sidebar-metrics">
           <span className="sidebar-metrics-label">Live sensors</span>
           <div className="sidebar-metric-row">
-            <Thermometer size={13} />
+            <ThermalIcon size={13} />
             <span>CPU</span>
             <strong className={tempClass(sample?.cpu.temperature)}>
               {sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : '—'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
-            <MonitorUp size={13} />
+            <GpuIcon size={13} />
             <span>GPU</span>
             <strong className={tempClass(sample?.gpu.temperature)}>
               {sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : '—'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
-            <Cpu size={13} />
+            <CpuIcon size={13} />
             <span>CPU%</span>
             <strong className={usageClass(sample?.cpu.usage)}>
               {sample ? pct(sample.cpu.usage) : '—'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
-            <MonitorUp size={13} />
+            <GpuIcon size={13} />
             <span>GPU%</span>
             <strong className={usageClass(sample?.gpu.usage)}>
               {sample ? pct(sample.gpu.usage) : '—'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
-            <MemoryStick size={13} />
+            <RamIcon size={13} />
             <span>RAM</span>
             <strong className={usageClass(sample?.memory.usage)}>
               {sample ? pct(sample.memory.usage) : '—'}
@@ -145,7 +157,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
         </div>
       </aside>
       <section className="workspace">
-        <header className={dashboardActive ? 'topbar dashboard-topbar' : 'topbar'}>
+        <header className={dashboardActive ? 'topbar dashboard-topbar' : 'topbar'} data-tauri-drag-region>
           {!dashboardActive && (
             <button className="topbar-brand" onClick={() => onNavigate('dashboard')} title="Open dashboard">
               <img className="brand-icon" src={assets.radiumLogo} alt="Radium" />
