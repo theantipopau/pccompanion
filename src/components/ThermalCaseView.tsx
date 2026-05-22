@@ -1,6 +1,6 @@
 import { Fan, HardDrive, MemoryStick, MonitorUp, Power, Thermometer } from 'lucide-react';
-import { useMonitor } from '../context/MonitorContext';
-import { useSettings } from '../context/SettingsContext';
+import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
 import { temp } from '../lib/format';
 import { Panel } from './Panel';
 

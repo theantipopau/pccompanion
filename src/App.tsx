@@ -18,7 +18,9 @@ import { RegistryCleanerPage } from './pages/RegistryCleanerPage';
 import { PerformanceProfilesPage } from './pages/PerformanceProfilesPage';
 import { ProcessMonitorPage } from './pages/ProcessMonitorPage';
 import { MonitorProvider } from './context/MonitorContext';
-import { SettingsProvider, useSettings } from './context/SettingsContext';
+import { SettingsProvider } from './context/SettingsContext';
+import { useSettings } from './hooks/useSettings';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { optimizeRam, setOverlayWindow, showMainWindow } from './services/systemService';
 import type { NavItem } from './types/navigation';
 
@@ -141,7 +143,9 @@ function CompanionApp() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.24, ease: [0.2, 0.7, 0.2, 1] }}
           >
-            {page}
+            <ErrorBoundary>
+              {page}
+            </ErrorBoundary>
           </motion.main>
         </AnimatePresence>
       </Shell>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, Cpu, Fan, Gauge, Gamepad2, Loader2, Moon, RadioTower, Sparkles, Zap } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { useSettings } from '../context/SettingsContext';
+import { useSettings } from '../hooks/useSettings';
 import { applyPerformanceProfile, getPerformanceProfiles } from '../services/systemService';
 import type { PerformanceProfile, PerformanceProfileId, PerformanceProfileResult } from '../types/system';
 

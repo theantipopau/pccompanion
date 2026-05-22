@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
 import { Cpu, Fan, Gauge, MemoryStick, MonitorUp, Move } from 'lucide-react';
 import { useMemo, useRef } from 'react';
-import { useMonitor } from '../context/MonitorContext';
-import { useSettings } from '../context/SettingsContext';
+import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
 import { gb, mhz, pct, temp } from '../lib/format';
 
 export function OsdOverlay() {

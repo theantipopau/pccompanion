@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getHardwareSample, getSystemInfo } from '../services/systemService';
 import type { HardwareSample, SystemInfo } from '../types/system';
-import { useMonitor } from '../context/MonitorContext';
+import { useMonitor } from './useMonitor';
 
 type MonitorState = {
   systemInfo: SystemInfo | null;

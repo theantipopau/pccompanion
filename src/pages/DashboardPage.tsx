@@ -6,8 +6,8 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Skeleton } from '../components/Skeleton';
 import { StatePill } from '../components/StatePill';
-import { useMonitor } from '../context/MonitorContext';
-import { useSettings } from '../context/SettingsContext';
+import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
 import { assets, vendorLogo } from '../lib/assets';
 

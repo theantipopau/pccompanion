@@ -2,7 +2,7 @@ import { Activity, Download, FileJson, ShieldCheck, Siren } from 'lucide-react';
 import { useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { useMonitor } from '../context/MonitorContext';
+import { useMonitor } from '../hooks/useMonitor';
 import { exportDiagnostics } from '../services/systemService';
 import type { DiagnosticsExport } from '../types/system';
 

@@ -1,9 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getHardwareSample, getSystemInfo, setTrayStatus, setTrayIconData } from '../services/systemService';
 import { isNative } from '../services/native';
 import type { HardwareSample, MetricPoint, SystemInfo } from '../types/system';
 import { temp, pct } from '../lib/format';
-import { useSettings } from './SettingsContext';
+import { useSettings } from '../hooks/useSettings';
 import { renderTrayIconRgba, extractTrayValue } from '../lib/trayIcon';
 
 type MonitorContextValue = {
@@ -15,7 +15,7 @@ type MonitorContextValue = {
   native: boolean;
 };
 
-const MonitorContext = createContext<MonitorContextValue | null>(null);
+export const MonitorContext = createContext<MonitorContextValue | null>(null);
 
 export function MonitorProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
@@ -26,6 +26,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
   const historyRef = useRef<MetricPoint[]>([]);
   const visibleRef = useRef(document.visibilityState === 'visible');
   const trayIconRef = useRef<{ lastUpdate: number }>({ lastUpdate: 0 });
+  const consecutiveErrorsRef = useRef(0);
 
   useEffect(() => {
     getSystemInfo().then(setSystemInfo).catch((err) => setError(String(err)));
@@ -52,6 +53,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
           setSample(next);
           setLoading(false);
           setError(null);
+          consecutiveErrorsRef.current = 0;
           if (settings.tray.showLiveTooltip) {
             void setTrayStatus({
               tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} / ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} / ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)}`,
@@ -71,12 +73,19 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         if (!disposed) {
+          consecutiveErrorsRef.current += 1;
           setLoading(false);
           setError(String(err));
         }
       } finally {
-        const delay = visibleRef.current || settings.overlay.enabled ? settings.monitoring.refreshMs : settings.monitoring.backgroundRefreshMs;
-        if (!disposed) timeoutId = window.setTimeout(tick, delay);
+        const base = visibleRef.current || settings.overlay.enabled
+          ? settings.monitoring.refreshMs
+          : settings.monitoring.backgroundRefreshMs;
+        // Exponential backoff on consecutive errors, capped at 30 s.
+        const backoff = consecutiveErrorsRef.current > 0
+          ? Math.min(base * Math.pow(2, consecutiveErrorsRef.current - 1), 30_000)
+          : base;
+        if (!disposed) timeoutId = window.setTimeout(tick, backoff);
       }
     }
 
@@ -101,8 +110,4 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
   return <MonitorContext.Provider value={value}>{children}</MonitorContext.Provider>;
 }
 
-export function useMonitor() {
-  const context = useContext(MonitorContext);
-  if (!context) throw new Error('useMonitor must be used inside MonitorProvider');
-  return context;
-}
+

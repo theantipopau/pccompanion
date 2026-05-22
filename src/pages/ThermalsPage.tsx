@@ -4,8 +4,8 @@ import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { ThermalCaseView } from '../components/ThermalCaseView';
-import { useMonitor } from '../context/MonitorContext';
-import { useSettings } from '../context/SettingsContext';
+import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
 import { mbps, mhz, pct, temp } from '../lib/format';
 
 export function ThermalsPage() {

@@ -47,9 +47,11 @@
 - [ ] Add more bloatware entries to `BLOATWARE_SPECS`
 - [x] Add browser cache paths to storage scanner (Edge, Chrome, Firefox)
 - [x] Add Windows Update delivery optimisation cache to storage scanner
-- [ ] Startup scanner: add `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce` support
-- [ ] Startup scanner: Startup folder (`shell:startup`) support
+- [x] Startup scanner: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce` support
+- [x] Startup scanner: Startup folder (`shell:startup`) support
 - [ ] Unit tests for `cleanup.rs` and `windows_util.rs` (dry-run paths)
+- [x] Error boundary wired around all page renders (IPC failures show recovery UI)
+- [x] Retry logic in MonitorContext — exponential backoff on consecutive IPC errors (capped at 30 s)
 - [x] Gauge circle readability fix (dark-on-dark text was unreadable; now explicit bright colors)
 - [x] Thermals page clipping fix (`thermals-grid` / `case-visual` min-width overflows resolved)
 - [x] Registry cleaner UX — step guide (Scan/Review/Backup/Clean), improved layout, guarantees panel

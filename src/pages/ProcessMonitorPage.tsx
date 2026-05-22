@@ -2,7 +2,7 @@ import { Activity, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { useMonitor } from '../context/MonitorContext';
+import { useMonitor } from '../hooks/useMonitor';
 import { listTopProcesses } from '../services/systemService';
 import type { ProcessInfo } from '../types/system';
 

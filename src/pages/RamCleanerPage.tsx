@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { useMonitor } from '../context/MonitorContext';
+import { useMonitor } from '../hooks/useMonitor';
 import { gb } from '../lib/format';
 import { optimizeRam } from '../services/systemService';
 import type { RamCleanupResult } from '../types/system';

@@ -3,8 +3,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
 import { pct, temp } from '../lib/format';
 import type { NavItem } from '../types/navigation';
-import { useMonitor } from '../context/MonitorContext';
-import { useSettings } from '../context/SettingsContext';
+import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
 import { ErrorBoundary } from './ErrorBoundary';
 
 type ShellProps = {

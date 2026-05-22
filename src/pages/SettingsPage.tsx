@@ -1,7 +1,7 @@
 import { Bell, Gauge, MonitorDot, Palette, Power, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { useSettings } from '../context/SettingsContext';
+import { useSettings } from '../hooks/useSettings';
 import { setStartupEnabled } from '../services/systemService';
 import type { OverlayPreset, TrayMetric } from '../types/system';
 

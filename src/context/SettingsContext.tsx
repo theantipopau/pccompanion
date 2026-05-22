@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useEffect, useMemo, useState } from 'react';
 import type { CompanionSettings } from '../types/system';
 
 const SETTINGS_KEY = 'radium-companion-settings';
 
-export const defaultSettings: CompanionSettings = {
+export const SettingsContext = createContext<SettingsContextValue | null>(null);
+
+const defaultSettings: CompanionSettings = {
   theme: 'radium-dark',
   tray: {
     minimizeToTray: true,
@@ -40,8 +42,6 @@ type SettingsContextValue = {
   resetSettings: () => void;
 };
 
-const SettingsContext = createContext<SettingsContextValue | null>(null);
-
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<CompanionSettings>(() => {
     try {
@@ -68,12 +68,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
-}
-
-export function useSettings() {
-  const context = useContext(SettingsContext);
-  if (!context) throw new Error('useSettings must be used inside SettingsProvider');
-  return context;
 }
 
 function mergeSettings(base: CompanionSettings, partial: Partial<CompanionSettings>): CompanionSettings {
