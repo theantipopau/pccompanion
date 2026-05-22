@@ -36,7 +36,7 @@ struct WmiVideoController {
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 struct WmiGpuEngine {
     Name: Option<String>,
     UtilizationPercentage: Option<u64>,
@@ -64,7 +64,7 @@ struct WmiPhysicalMemory {
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, dead_code)]
 struct WmiProcessor {
     Name: Option<String>,
     Manufacturer: Option<String>,

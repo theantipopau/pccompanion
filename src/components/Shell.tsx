@@ -1,4 +1,5 @@
-import { Bell, Cpu, Gauge, MemoryStick, Minimize2, MonitorUp, Search, Settings, Thermometer } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bell, Cpu, Gauge, Layers, MemoryStick, Minimize2, MonitorUp, Search, Settings, Thermometer } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
 import { pct, temp } from '../lib/format';
@@ -18,6 +19,45 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const { sample, native } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dashboardActive = activeView === 'dashboard';
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const searchResults = searchQuery.trim()
+    ? navItems.filter(item => item.label.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') { setSearchQuery(''); e.currentTarget.blur(); }
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      onNavigate(searchResults[0].id);
+      setSearchQuery('');
+      e.currentTarget.blur();
+    }
+  }
+
+  const trayPreview = (() => {
+    const metric = settings.tray.liveIconMetric;
+    if (!sample || metric === 'disabled') return { Icon: Gauge, label: 'Tray off' };
+    switch (metric) {
+      case 'cpuTemp':  return { Icon: Thermometer, label: temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) + ' CPU' };
+      case 'gpuTemp':  return { Icon: Thermometer, label: temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) + ' GPU' };
+      case 'cpuUsage': return { Icon: Cpu,         label: pct(sample.cpu.usage) + ' CPU' };
+      case 'gpuUsage': return { Icon: MonitorUp,   label: pct(sample.gpu.usage) + ' GPU' };
+      case 'ramUsage': return { Icon: MemoryStick, label: pct(sample.memory.usage) + ' RAM' };
+      default:         return { Icon: Cpu,         label: 'Scanning' };
+    }
+  })();
 
   async function handleMinimize() {
     try {
@@ -112,21 +152,59 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               <span>Companion</span>
             </button>
           )}
-          <div className="search-field">
-            <Search size={16} />
-            <span>Search modules, hardware, utilities</span>
+          <div className="search-wrapper">
+            <div className="search-field" onClick={() => searchRef.current?.focus()}>
+              <Search size={16} />
+              <input
+                ref={searchRef}
+                className="search-input"
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search… ⌃K"
+                aria-label="Search modules"
+              />
+              {searchQuery && (
+                <button
+                  className="search-clear"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                >×</button>
+              )}
+            </div>
+            {searchResults.length > 0 && (
+              <div className="search-results" role="listbox">
+                {searchResults.map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      className="search-result-item"
+                      role="option"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { onNavigate(item.id); setSearchQuery(''); }}
+                    >
+                      <Icon size={15} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="window-actions">
-            <div className="tray-preview" title="Live tray tooltip preview">
-              <Cpu size={15} />
-              <span>CPU {sample ? `${temp(sample.cpu.temperature, settings.monitoring.temperatureUnit)} ${pct(sample.cpu.usage)}` : 'Scanning'}</span>
+            <div className="tray-preview" title="Live tray icon preview">
+              <trayPreview.Icon size={15} />
+              <span>{trayPreview.label}</span>
             </div>
             <button
               title="Toggle OSD"
               className={settings.overlay.enabled ? 'icon-button active' : 'icon-button'}
               onClick={() => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, enabled: !current.overlay.enabled } }))}
             >
-              <Cpu size={17} />
+              <Layers size={17} />
             </button>
             <button title="Notifications" className="icon-button">
               <Bell size={17} />

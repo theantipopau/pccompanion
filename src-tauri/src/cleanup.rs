@@ -67,7 +67,7 @@ fn trim_all_working_sets() -> (u32, u32) {
         let _ = K32EmptyWorkingSet(self_handle);
     }
 
-    let mut sys = sysinfo::System::new_all();
+    let sys = sysinfo::System::new_all();
     let mut trimmed = 0u32;
     let mut total = 0u32;
 

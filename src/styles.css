@@ -170,7 +170,7 @@ button {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .sidebar-metrics-label {
@@ -305,11 +305,16 @@ button {
   font-weight: 800;
 }
 
+.search-wrapper {
+  position: relative;
+  width: min(440px, 48vw);
+}
+
 .search-field {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(440px, 48vw);
+  width: 100%;
   height: 38px;
   padding: 0 12px;
   border: 1px solid var(--line);
@@ -317,6 +322,96 @@ button {
   background: rgba(255, 255, 255, 0.05);
   color: var(--muted);
   font-size: 13px;
+  cursor: text;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.search-field:focus-within {
+  border-color: rgba(85, 214, 255, 0.4);
+  background: rgba(85, 214, 255, 0.06);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  caret-color: var(--cyan);
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+.search-clear {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: 140ms ease;
+}
+
+.search-clear:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+}
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 4px;
+  border: 1px solid rgba(85, 214, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 12, 20, 0.97);
+  backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: 140ms ease;
+}
+
+.search-result-item:hover {
+  border-color: rgba(85, 214, 255, 0.2);
+  background: rgba(85, 214, 255, 0.1);
+  color: var(--cyan);
+}
+
+.search-result-item svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.search-result-item:hover svg {
+  color: var(--cyan);
 }
 
 .window-actions {
@@ -627,6 +722,11 @@ button {
 .tone-green.panel { box-shadow: var(--shadow), inset 0 1px 0 rgba(132, 240, 140, 0.16); }
 .tone-amber.panel { box-shadow: var(--shadow), inset 0 1px 0 rgba(245, 200, 107, 0.18); }
 .tone-red.panel   { box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 109, 109, 0.18); }
+
+.metric-card.tone-cyan  { border-left: 2.5px solid rgba(85, 214, 255, 0.5);  background: linear-gradient(135deg, rgba(85, 214, 255, 0.05) 0%, var(--surface) 60%); }
+.metric-card.tone-green { border-left: 2.5px solid rgba(132, 240, 140, 0.45); background: linear-gradient(135deg, rgba(132, 240, 140, 0.04) 0%, var(--surface) 60%); }
+.metric-card.tone-amber { border-left: 2.5px solid rgba(245, 200, 107, 0.5);  background: linear-gradient(135deg, rgba(245, 200, 107, 0.04) 0%, var(--surface) 60%); }
+.metric-card.tone-red   { border-left: 2.5px solid rgba(255, 109, 109, 0.5);  background: linear-gradient(135deg, rgba(255, 109, 109, 0.05) 0%, var(--surface) 60%); }
 
 .metric-card-head {
   display: flex;
