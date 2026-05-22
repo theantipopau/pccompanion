@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/radiumcompanion-marketing.png" alt="Radium PCs Companion" width="720" />
+</p>
+
 # Radium PCs Companion
 
 Premium Windows companion utility for Radium PCs custom gaming and workstation systems. Built with Tauri v2, React 19, TypeScript, and a Rust hardware backend.
