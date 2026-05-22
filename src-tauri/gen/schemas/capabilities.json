@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default permissions for the Radium PCs Companion desktop window.","local":true,"windows":["main"],"permissions":["core:default","log:default"]}}

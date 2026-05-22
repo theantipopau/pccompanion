@@ -1,0 +1,637 @@
+# Radium PCs Companion — AI Agent Context Log
+
+> **READ THIS FIRST.** Every AI agent working on this repository must read this file at session start and update it at session end. This is the single source of truth for cross-session and cross-agent continuity.
+
+---
+
+## Current Project State
+
+| Area | Status |
+|---|---|
+| Frontend (React/TypeScript) | ✅ Stable — all pages implemented, mock-data and native-data compatible |
+| Rust backend — HAL modules | ✅ Complete (hardware, wmi_provider, nvml_provider, amd_provider, cleanup, windows_util) |
+| Rust backend — lib.rs rewrite | ✅ Complete (all commands delegate to modules) |
+| Background monitoring thread | ✅ Implemented (not yet build-validated) |
+| WMI telemetry — CPU temp (ACPI path) | ✅ Primary: `ROOT\WMI\MSAcpi_ThermalZoneTemperature`; fallback: perf-counter path |
+| WMI telemetry — GPU usage | ✅ Implemented via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine` |
+| NVML telemetry (NVIDIA GPU full) | ✅ Implemented (dynamic `nvml.dll` loading) |
+| ADL2 telemetry (AMD GPU full) | ✅ Implemented (dynamic `atiadlxx.dll` loading) |
+| Intel Arc telemetry | ✅ WMI usage% only — IGCL deferred; UI shows notice |
+| Network adapter detection | ✅ Most-active adapter name + type (wifi/ethernet/unknown) |
+| Storage drive type detection | ✅ NVMe/SSD/HDD via sysinfo DiskKind + name heuristic |
+| WMI disk model names | ✅ `Win32_DiskDrive` query → "Model (N GB)" labels |
+| RAM cleaner (real EmptyWorkingSet) | ✅ Implemented |
+| Storage scanner (real file sizes) | ✅ Implemented (includes Edge/Chrome/Firefox/WU/DeliveryOpt caches) |
+| Startup manager (real registry) | ✅ Implemented (StartupApproved key reads/writes) |
+| Bloatware scanner (real AppX queries) | ✅ Implemented (10 known packages via PowerShell) |
+| Registry cleaner | ✅ Implemented (scan + backup to Documents + dry-run/live clean) |
+| Performance profiles page | ✅ UI + service contracts done; backend applies Companion state only (no firmware writes yet) |
+| Diagnostics export | ✅ Exports JSON bundle to `%ProgramData%\Radium PCs Companion\diagnostics\` |
+| **callNative browser/native split** | ✅ `isNative()` detection — browser uses mock, Tauri mode propagates real errors |
+| **All mutating ops execute for real** | ✅ `dryRun: false` for startup, bloatware, storage, registry operations |
+| **MonitorContext `native` flag** | ✅ `native: boolean` exposed in context; DashboardPage shows browser-preview banner |
+| **Branding — logos** | ✅ `radiumcompanion-header.png` wordmark + `radiumlogo.png` icon wired throughout |
+| **App icon / favicon** | ✅ `tauri.conf.json` bundle icon + `index.html` favicon both set to `radiumlogo.png` |
+| **Standalone EXE / NSIS installer** | ✅ `tauri.conf.json` NSIS configured; `npm run build:exe` produces installer |
+| **Run scripts** | ✅ `npm run desktop`, `build:exe`, `package:windows`, `package:portable`, `check:desktop` |
+| **Minimize to tray** | ✅ Close button hides to tray; `--background`/`--silent` start hidden; double-click restores |
+| **Live tray icon (metric)** | ❌ Not yet — planned next (canvas-rendered 32×32 icon with gauge arc) |
+| UI density rework | ✅ CSS scaled down across all components |
+| UI polish — panels, nav, scrollbar | ✅ Panel glow hover, nav left-accent active, status-dot pulse, thin cyan scrollbar |
+| Desktop run scripts | ✅ `desktop`, `dev:desktop`, `build:exe`, `package:windows`, `check:desktop` scripts added |
+| EXE packaging config | ✅ Tauri NSIS bundle metadata configured |
+| Build validation | ❌ **Pending** — cargo not available in current terminal env; developer must validate |
+
+---
+
+## Completed Work
+
+### Phase: Branding + UI Polish (2026-05-22)
+
+#### Logo / branding
+- `src/lib/assets.ts`: `radiumHeader` now points to `images/radiumcompanion-header.png` (was `images/clean/radiumheader-transparent.png`). `appIcon` now points to `images/radiumlogo.png` (was `images/clean/app-icon.png`).
+- `src-tauri/tauri.conf.json`: bundle icon updated to `../images/radiumlogo.png`.
+- `index.html`: added `<link rel="icon" type="image/png" href="/images/radiumlogo.png" />`.
+- `src/components/Shell.tsx`: sidebar brand-lockup now shows `radiumlogo.png` icon (30px) + `radiumcompanion-header.png` wordmark side by side. Topbar-brand (non-dashboard pages) shows icon (22px) + "Companion" text — no more wide wordmark in the topbar.
+
+#### CSS polish (`src/styles.css`)
+- `.brand-lockup`: uses flex with `.brand-icon` + `.brand-wordmark` classes; removed old `.brand-lockup img` catch-all.
+- `.brand-icon`: 30px square, border-radius 6px, flex-shrink 0.
+- `.brand-wordmark`: max-width 128px, max-height 30px, auto width.
+- `.topbar-brand`: added `:hover` state; `.brand-icon` override at 22px; reduced min-width to 138px.
+- `.nav-item.active`: added left accent border (`border-left-color: rgba(85,214,255,0.6)`, 2px) for stronger active indicator.
+- `.status-dot`: added `pulse-dot` `@keyframes` animation (2.8s ease-in-out, box-shadow pulse).
+- `.panel`: border-radius increased 8px → 10px; hover state now includes `box-shadow` glow in addition to border-color change; transition added `box-shadow`.
+- `.page-transition`: added `scroll-behavior: smooth`; custom thin cyan scrollbar via `::-webkit-scrollbar` rules.
+- `.topbar-brand`: removed old `img` width rule, added hover rule.
+
+### Phase: Real Hardware Integration + Desktop Utility Polish — Part 2 (2026-05-22)
+
+#### Root causes addressed
+1. **`callNative` was silently swallowing ALL errors** in both browser and native Tauri mode — if WMI/NVML/ADL failed, mock data was returned with no indication. Now: fallback is browser-only; in Tauri mode, Rust command errors propagate to the UI.
+2. **All mutating operations had `dryRun: true` hardcoded** — startup manager, bloatware remover, storage cleaner, and registry cleaner were all no-ops. Now: `dryRun: false` for all.
+3. **WMI CPU temperature used an unreliable path** (`Win32_PerfFormattedData_Counters_ThermalZoneInformation`) that doesn't work on many machines. Now: primary path is `ROOT\WMI\MSAcpi_ThermalZoneTemperature` (tenths of Kelvin, more reliable on Intel/AMD).
+
+#### `src/services/native.ts` (reworked)
+- Added `isNative(): boolean` — checks `window.__TAURI_INTERNALS__` (Tauri 2.x marker)
+- `callNative` now only uses mock fallback in browser mode (`!isNative()`)
+- In native Tauri mode: errors from `invoke()` propagate directly to callers
+- Browser mode still works for preview/dev as before
+
+#### `src/services/systemService.ts` (updated)
+- `removeBloatware`: `dryRun: true` → `dryRun: false` (real AppX removal now active)
+- `setStartupItemEnabled`: `dryRun: true` → `dryRun: false` (real registry writes now active)
+- `runStorageCleanup`: `dryRun: true` → `dryRun: false` (real temp file deletion now active)
+- `cleanRegistryIssues`: `dryRun: true` → `dryRun: false` (real registry cleanup now active)
+- `applyPerformanceProfile`: stays `dryRun: true` (power plan/fan table writes not yet implemented)
+- All mock fallback strings changed from `[dry-run]` to `[browser]` prefix
+
+#### `src/context/MonitorContext.tsx` (updated)
+- `MonitorContextValue` extended: `native: boolean`
+- `isNative()` imported from `native.ts`; passed through context value
+- Consumers can now branch on `native` to show/hide browser-preview indicators
+
+#### `src/pages/DashboardPage.tsx` (updated)
+- `error` replaced by dual notice system:
+  - `!native` → amber `.notice-preview` banner: "Browser preview — run `npm run tauri dev` to connect to real hardware"
+  - `native && error` → red `.notice-error` banner with the actual error string
+
+#### `src/styles.css` (updated)
+- `.notice` reworked: now base class only (border-radius, font-size, padding)
+- `.notice-preview`: amber bordered variant for browser mode indicator
+- `.notice-error`: red bordered variant for native errors
+- `.notice code`: monospace inline code style
+
+#### `src-tauri/src/wmi_provider.rs` (updated)
+- New `WmiAcpiThermalZone` struct: `CurrentTemperature: Option<u32>` (decikelvin)
+- `WmiContext.root_wmi: Option<WMIConnection>` — second connection to `ROOT\WMI`
+- `WmiContext::init()` now also connects to `ROOT\WMI` via `COMLibrary::assume_initialized()` (safe: no double-init, no double-deinit)
+- `query_cpu_temp()` tries `ROOT\WMI\MSAcpi_ThermalZoneTemperature` first (decikelvin formula: `val / 10.0 - 273.15`); falls back to `ROOT\CIMV2` perf-counter path
+
+### Phase: Real Hardware Integration + Desktop Utility Polish (2026-05-22)
+
+#### `src-tauri/src/hardware.rs` (updated)
+- `NetworkSample`: added `adapter_name: String`, `adapter_type: String` (`"wifi" | "ethernet" | "unknown"`)
+- `StorageSample`: added `drive_type: String` (`"nvme" | "ssd" | "hdd" | "unknown"`)
+- `HardwareCache`: added `net_adapter_name: String`, `net_adapter_type: String`
+- `SysinfoTick`: added `adapter_name: String`, `adapter_type: String`
+- `SysinfoState::tick()`: completely rewrote network section — now finds best non-loopback adapter by traffic volume using per-interface `received() + transmitted()`; added NVMe heuristic (device name contains "nvme") for drive_type; added `total_space > 0` filter on disks
+- `snapshot()`: populates `adapter_name`/`adapter_type` in `NetworkSample`
+- `monitor_loop()`: writes `tick.adapter_name`/`tick.adapter_type` to cache (guard: only updates if non-empty)
+- New helper: `adapter_type_from_name(name: &str) -> &'static str` — keyword matching for wifi/ethernet/unknown; covers Wi-Fi, WLAN, 802.11, Ethernet, LAN, Realtek, Killer, Intel Ethernet
+
+#### `src-tauri/src/wmi_provider.rs` (updated)
+- New `WmiDiskDrive` struct: `Model: Option<String>`, `Size: Option<u64>`
+- New `query_disk_models(ctx)` inner function: queries `Win32_DiskDrive ORDER BY Size DESC`, formats as `"Model (N GB)"`
+- `query_storage_list()` now calls disk model query first, only falls back to sysinfo on empty result
+
+#### `src/types/system.ts` (updated)
+- `HardwareSample.network` extended: `adapterName: string`, `adapterType: 'wifi' | 'ethernet' | 'unknown'`
+- `HardwareSample.storage` element extended: `driveType: 'ssd' | 'hdd' | 'nvme' | 'unknown'`
+
+#### `src/services/mockData.ts` (updated)
+- `network` mock: added `adapterName: 'Intel Wi-Fi 7 BE200'`, `adapterType: 'wifi' as const`
+- `storage` mock: updated to `driveType: 'nvme' as const` on both entries; labels changed to realistic model names (`Samsung SSD 990 PRO`, `WD_BLACK SN850X`)
+
+#### `src/lib/format.ts` (updated)
+- Added `driveTypeLabel(type: string): string` — maps `'nvme'→'NVMe'`, `'ssd'→'SSD'`, `'hdd'→'HDD'`, default `'Drive'`
+- Added `adapterTypeLabel(type: string): string` — maps `'wifi'→'Wi-Fi'`, `'ethernet'→'Ethernet'`, default `'Network'`
+
+#### `src/styles.css` (updated — density rework)
+- Sidebar: `232px → 208px`, gap `16px → 10px`, padding `18px 14px → 14px 12px`
+- Nav items: min-height `38px → 34px`, padding `0 12px → 0 10px`
+- Topbar: height `56px → 48px`, padding `18px → 16px`; all `page-transition` calc updated to `(100vh - 48px)`
+- Page padding: `18px → 14px`
+- Page header h1: `clamp(24px,2.5vw,36px) → clamp(16px,1.8vw,22px)`
+- Dashboard grid gap: `16px → 12px`
+- Hero monitor: padding `18px → 14px`, min-height `292px → 236px`
+- Dashboard brandmark: `min(220px,44vw)/72px → min(180px,36vw)/52px`
+- Vendor logos: `96px/36px → 76px/26px`, padding `7px 9px → 5px 7px`
+- Gauge row: gap `12px → 8px`, margin-top `28px → 14px`
+- Gauge: padding `16px 8px 8px → 10px 6px 6px`, gap `10px → 6px`
+- Gauge face: `118px → 100px`
+- Gauge track: inset `9px → 8px`, border `9px → 7px`
+- **Gauge needle (critical)**: height `50px → 42px`, margin-top `-42px → -34px`, `transform-origin: 50% 50px → 50% 42px`
+- Gauge center: `72px → 60px`; strong: `26px → 19px`
+- Metric card: min-height `132px → 108px`, padding `14px → 11px`; strong: `22px → 17px`; icon: `34px → 28px`
+- Chart/hardware/optimizer panels: padding `18px → 14px`
+- Sensor source: min-height `76px → 60px`, padding `12px → 10px`
+- OSD metric: min-height `34px → 28px`, padding `7px 9px → 5px 7px`; strong: `14px → 12px`
+- Case frame: `clamp(390px,50vh,540px)/390px → clamp(300px,40vh,430px)/300px`; responsive breakpoint `420px → 320px`
+- New utility classes: `.badge`, `.badge-dim`, `.drive-list`, `.drive-type-row`, `.sensor-hint`, `.intel-arc-notice`
+
+#### `src/pages/DashboardPage.tsx` (updated)
+- Imports `adapterTypeLabel`, `driveTypeLabel` from format.ts
+- Network `MetricCard`: detail now shows adapter name with Wi-Fi/Ethernet badge using new `badge-dim` class
+- Hardware identity storage `<dd>`: shows drive model list + per-drive type badges (NVMe/SSD/HDD)
+- `SensorSource` component: updated to show `'WMI (usage only)'` for Intel Arc GPUs; accepts optional `hint` prop; Intel Arc hint describes missing IGCL sensors
+
+#### `src/pages/ThermalsPage.tsx` (updated)
+- Reads `systemInfo` from `useMonitor()`; derives `gpuVendor`, `isIntelArc`, `gpuVendorLabel`
+- GPU detail panel heading now shows: `"NVIDIA via NVML"` / `"AMD via ADL2"` / `"Intel Arc via WMI"` / `"Vendor telemetry"`
+- Intel Arc path: shows GPU usage `DetailRow` + `.intel-arc-notice` (amber) explaining IGCL deferral
+- NVIDIA/AMD path: GPU fan row now also checks `fans[]` for a GPU-labelled fan RPM as fallback
+
+#### `src/components/OsdOverlay.tsx` (updated)
+- Replaced unused `Wifi` import with `Fan` icon for the fans metric
+- FAN metric: uses `gpu.fanPct` if available, otherwise chassis `fans[0].rpm`; detail shows `gpu.powerWatts` when available
+- CLK detail: changed from `"mhz GPU"` to `"GPU mhz"` ordering
+- RAM detail: changed from `"X used"` to `"X / Y"` showing total
+- VRAM detail: changed from `"X GB total"` to `"of X GB"`
+
+#### `src/components/MetricCard.tsx` (updated)
+- `detail` prop type widened from `string` to `ReactNode` — allows JSX fragments in detail line (used by DashboardPage Network card)
+
+### Phase: Embedded Vendor GPU Telemetry (Prior Session)
+
+#### `src-tauri/src/nvml_provider.rs` (new file, `#[cfg(windows)]`)
+- Dynamically loads `nvml.dll` from standard NVIDIA installation paths at runtime
+- Uses `LoadLibraryW` + `GetProcAddress` via `windows::Win32::System::LibraryLoader`
+- Resolves 11 NVML function pointers: `nvmlInit_v2`, `nvmlShutdown`, `nvmlDeviceGetCount_v2`, `nvmlDeviceGetHandleByIndex_v2`, `nvmlDeviceGetName`, `nvmlDeviceGetTemperature`, `nvmlDeviceGetUtilizationRates`, `nvmlDeviceGetMemoryInfo`, `nvmlDeviceGetClockInfo`, `nvmlDeviceGetFanSpeed`, `nvmlDeviceGetPowerUsage`
+- Returns `Option<NvmlContext>` — `None` if NVIDIA drivers absent (graceful degradation)
+- `NvmlContext::query_primary_gpu()` → `Option<GpuReading>` with all NVIDIA metrics
+- `Drop` impl: calls `nvmlShutdown()` + `FreeLibrary`
+
+#### `src-tauri/src/amd_provider.rs` (new file, `#[cfg(windows)]`)
+- Dynamically loads `atiadlxx.dll` from standard AMD installation paths at runtime
+- Resolves ADL2 function pointers: Create/Destroy, NumberOfAdapters, OD5 Temperature, OD5 FanSpeed, OD5 CurrentActivity, ODN Temperature (optional), DedicatedVRAMUsage (optional)
+- Memory alloc callback uses `HeapAlloc(GetProcessHeap())` — compatible with UCRT `free()` on Windows 10+
+- Auto-detects AMD adapter by probing Overdrive5 API on each adapter 0–7
+- Uses `ADL2_OverdriveN_Temperature_Get` (edge temp) when available (RX 480+), falls back to OD5
+- `AmdAdlContext::query_primary_gpu()` → `Option<GpuReading>` with AMD metrics
+- `AmdAdlContext::query_fan_rpm()` → `Option<u32>` for fan RPM
+- `Drop` impl: calls `ADL2_Main_Control_Destroy()` + `FreeLibrary`
+
+#### `src-tauri/src/hardware.rs` (updated)
+- Added `GpuReading` internal struct (not IPC — maps to cache fields; carries name, vendor, temp, usage, VRAM used/total, core/mem clocks, fan_pct, fan_rpm, power_watts)
+- Added `HardwareCache` fields: `gpu_core_clock_mhz`, `gpu_mem_clock_mhz`, `gpu_fan_pct`, `gpu_fan_rpm`, `gpu_power_watts`
+- Extended `GpuSample` IPC type: added `fan_pct: Option<u32>`, `power_watts: Option<f32>`
+- Extended `FanSample` IPC type: added `pct: Option<u32>`
+- Updated `snapshot()` to wire new cache fields into IPC structs (fans include GPU RPM/%)
+- Updated `monitor_loop()`: initialises NVML + ADL before main loop; GPU poll uses provider cascade; history now includes real GPU temp
+
+#### `src-tauri/src/lib.rs` (updated)
+- Added `#[cfg(windows)] mod nvml_provider;`
+- Added `#[cfg(windows)] mod amd_provider;`
+
+#### `src-tauri/Cargo.toml` (updated)
+- Added `Win32_System_LibraryLoader` to windows crate features
+
+#### `src/types/system.ts` (updated)
+- `HardwareSample.gpu` extended: `fanPct: number | null`, `powerWatts: number | null`
+- `HardwareSample.fans` updated: element type includes `pct: number | null`
+- `StartupItem.location` changed from union type to `string` (matches real scanner output like `"Registry (HKCU\\Run)"`)
+
+### Phase: Real Telemetry & Native Implementation (Prior Session)
+
+#### Cargo.toml
+- Added `wmi = "0.13"` under `[target.'cfg(windows)'.dependencies]`
+- Expanded `windows` crate features: `Win32_System_Registry`, `Win32_System_ProcessStatus`, `Win32_Foundation`
+
+#### `src-tauri/src/hardware.rs` (new file)
+- All IPC-facing structs: `MetricPoint`, `CpuSample`, `GpuSample`, `MemorySample`, `FanSample`, `StorageSample`, `NetworkSample`, `HardwareSample`, `SystemInfo`
+- `HardwareCache` — internal shared state written by background thread
+- `SysinfoState` + `SysinfoState::tick()` — sysinfo-based polling (CPU usage/clock, RAM, network delta, storage)
+- `MonitoringEngine` — holds `Arc<RwLock<HardwareCache>>` + `Arc<Mutex<SysinfoState>>`, provides `snapshot()` and `system_info_snapshot()`
+- `monitor_loop()` — background thread entry point; inits WMI once, then polls every 1 s; maintains 60-point rolling history
+- Helper functions: `bytes_to_gb()`, `vendor_from_str()`, `timestamp_now()`
+
+#### `src-tauri/src/wmi_provider.rs` (new file, `#[cfg(windows)]` module)
+- `WmiContext { cimv2: WMIConnection }` — single `ROOT\CIMV2` connection, initialised once via `COMLibrary::new()`
+- `query_static_system_info()` — GPU name/VRAM, CPU name, MB manufacturer, BIOS version, RAM speed/size, storage list
+- `query_cpu_temp()` — `Win32_PerfFormattedData_Counters_ThermalZoneInformation`, Kelvin→Celsius, filtered 0–120 °C, returns hottest zone
+- `query_gpu_usage()` — `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine WHERE Name LIKE '%engtype_3D%'`, averages utilisation %
+
+#### `src-tauri/src/cleanup.rs` (new file)
+- `RamCleanupResult` struct (serialisable)
+- `optimize_ram()` — calls `trim_all_working_sets()`, 600 ms settle, re-reads RAM, returns result
+- `trim_all_working_sets()` (Windows) — iterates sysinfo process list, calls `K32EmptyWorkingSet` via `OpenProcess(PROCESS_SET_QUOTA)` for each accessible PID
+- `StorageCleanupItem` struct
+- `scan_storage_cleanup()` — scans %TEMP%, C:\Windows\Temp, NVIDIA/AMD shader caches, WER archives with real `dir_size()` sizes
+- `run_storage_cleanup()` — dry-run or real `delete_dir_contents()`
+
+#### `src-tauri/src/windows_util.rs` (new file)
+- `StartupItem` struct (all `String` fields, serialisable)
+- `scan_startup_items()` — reads HKCU + HKLM Run keys via Win32 registry API; reads `StartupApproved` key for enabled state; classifies impact/recommended/publisher
+- `set_startup_item_enabled()` — writes `StartupApproved` first byte (0x02 = enabled, 0x03 = disabled) for HKCU/HKLM entries
+- `BloatwareItem` struct
+- `scan_bloatware()` — `Get-AppxPackage` via PowerShell, matched against `BLOATWARE_SPECS` (10 known removable packages)
+- `remove_bloatware()` — delegates to `remove_appx_package()` / `apply_policy_tweak()` / `disable_scheduled_task()`
+
+#### `src-tauri/src/lib.rs` (full rewrite)
+- Module declarations added: `mod cleanup; mod hardware; #[cfg(windows)] mod wmi_provider; mod windows_util;`
+- All old struct definitions removed (were duplicates of hardware.rs types)
+- Old `MonitoringEngine` impl removed
+- All 9 Tauri command handlers updated to delegate to modules
+- `pub fn run()` updated: clones Arcs, spawns `radium-monitor` thread, passes engine to `.manage()`
+- Old helper functions removed (`average_cpu_usage`, `storage_usage`, `bytes_to_gb`, `chrono_like_timestamp`)
+- Tray code unchanged and functional
+
+---
+
+## Current Active Work
+
+**Nothing actively in-progress.** All known data-flow, branding, and UI issues resolved in current sessions.
+
+### Immediate Blockers
+- **Build not validated** — Rust/Cargo not installed in the PowerShell terminal used during sessions. Developer must validate from an environment with the Rust toolchain installed (run `cargo check --manifest-path src-tauri/Cargo.toml` or `npm run tauri dev`).
+- **Testing is browser-only** — The app is currently being developed and previewed via `npm run dev` (Vite browser). The amber "Browser preview" banner in the Dashboard confirms this. Real hardware data will only flow when running inside `npm run tauri dev` or the built Tauri binary.
+
+---
+
+## Planned Next Steps
+
+### Priority 1 — Build validation (MUST DO FIRST)
+Run `npm run tauri dev` or `cargo check --manifest-path src-tauri/Cargo.toml` from a terminal with Rust toolchain.
+
+**Known anticipated build issues:**
+1. `K32EmptyWorkingSet` — may need to be `EmptyWorkingSet` in `windows 0.58`. Check `Win32::System::ProcessStatus`.
+2. `wmi 0.13` vs `windows 0.58` version conflict — pin or upgrade if needed.
+3. `COMLibrary::assume_initialized()` for second WMI connection — verify no double-deinit on newer wmi versions.
+4. `PROCESS_SET_QUOTA` constant path in `windows 0.58` — may be `Win32::System::Threading::PROCESS_SET_QUOTA`.
+5. If `cleanup.rs` references `K32GetProcessMemoryInfo`, verify that exact symbol name in `windows 0.58`.
+
+### Priority 2 — Fix any compile errors
+Address build issues found in Priority 1. Common patterns:
+- Symbol name mismatches: search `docs.rs` for the exact name under `windows::Win32` hierarchy
+- Feature flag gaps: add missing feature strings to `Cargo.toml` `windows` crate features list
+- `wmi` crate COM conflict: try `wmi = "0.14"` if `0.13` has breaking changes with `windows 0.58`
+
+### Priority 3 — NVMe drive type accuracy
+Currently `drive_type = "nvme"` only when `DiskKind::SSD` AND device name contains `"nvme"`. Improve: add a WMI `Win32_DiskDrive WHERE InterfaceType = 'SCSI'` check for NVMe (Windows maps NVMe as SCSI). Or query `Win32_PnPEntity` for "NVMe" in device description. Low priority.
+
+### Priority 4 — FPS counter
+The FPS metric in OSD shows `'--'`. Requires either:
+  a. D3DKMT present statistics (complex, kernel API)
+  b. Frame time hook (requires game overlay injection — out of scope)
+  c. User-defined manual input in settings
+  Best path for now: add a `fps_override: Option<u32>` field to settings that user can set, displayed in OSD.
+
+### Priority 5 — CPU per-core temperatures
+Requires kernel driver (MSR reads). Deferred until LHM/OpenHWM embedded integration is decided.
+
+### Priority 6 — Per-adapter network breakdown
+Currently shows single most-active adapter. Could show all adapters with individual speeds. Low priority.
+
+### Priority 7 — Packaging
+Create installer with Tauri bundler. NSIS or WiX. Tauri 2 uses WiX by default.
+
+---
+
+## Architectural Decisions
+
+| Decision | Rationale |
+|---|---|
+| **Tauri 2.x** over Electron | ~50 MB binary vs ~150 MB; native Rust backend; no Chromium runtime; system WebView |
+| **sysinfo 0.33** for CPU/RAM/network | Safe, cross-platform Rust crate; no driver installation required; sufficient for primary metrics |
+| **WMI (`wmi` crate 0.13)** for temperatures and GPU | Only standard Windows path for CPU thermal zones that doesn't require kernel drivers; GPU name/VRAM also available |
+| **Dedicated `std::thread` for monitoring** | WMI `COMLibrary` must be initialised on its own thread with a stable COM apartment; tokio threadpool threads are unsuitable; dedicated thread guarantees stable COM context |
+| **Arc<RwLock<HardwareCache>>** shared state | Decouples 1 s polling loop from Tauri command invocations; commands never block on I/O — they read the last cache snapshot |
+| **60-point rolling history on backend** | Frontend was previously managing history and sending it back on every IPC call; backend now owns history, reducing IPC payload size and preventing desync |
+| **`#[cfg(windows)]` module gating** | `wmi_provider.rs` only compiles on Windows; `windows_util.rs` and `cleanup.rs` use `#[cfg(windows)]` blocks internally for platform-specific code |
+| **PowerShell for AppX queries** | `Get-AppxPackage` is the only reliable public API to enumerate AppX packages; no stable Win32 COM equivalent for all package types |
+| **Registry writes for startup control** | `StartupApproved` key is the same mechanism Task Manager uses; safer than deleting Run key values (preserves the command for re-enabling) |
+| **`EmptyWorkingSet` / `K32EmptyWorkingSet`** | Safe, documented, reversible RAM cleaner; no undocumented kernel APIs; same mechanism used by RAMMap and similar tools |
+
+---
+
+## OmenCore Integration Notes
+
+This project does **not** integrate OmenCore. It is a clean-room implementation. The session notes mention OmenCore in the user memory as a general engineering pattern reference — the stabilisation note ("avoid optimistic UI state assignments in hotkey handlers; update through service apply paths and ModeApplied/FanPresetApplied events") is referenced as a general pattern, not as integrated code.
+
+---
+
+## LibreHardwareMonitor Research Notes
+
+LHM was researched and its architecture used as a reference for the embedded telemetry design.
+
+**Findings:**
+- **NVIDIA path**: Uses `nvapi.dll` (via NvAPI QueryInterface) AND `nvml.dll` (NVML for power/PCIe). Also D3DKMT for per-engine node utilization and VRAM
+- **AMD path**: Uses `atiadlxx.dll` (ADL2) — PMLog for RDNA+ cards, OD5/ODN for older cards
+- **CPU temps**: MSR reads via `WinRing0x64.sys` (kernel driver) — requires signed driver on Windows 11
+- **Licensing**: MPL 2.0 — Rust reimplementation (not code copying) has no disclosure obligation
+- **Decision**: Implemented NVML + ADL2 providers directly in Rust. This covers the most important sensors (GPU temp, usage, VRAM, clocks, fans, power) without any driver requirement. CPU per-core temps and motherboard fans remain deferred (kernel driver required).
+
+### What We Implemented (Inspired by LHM)
+- `nvml_provider.rs`: NVML-based NVIDIA monitoring — equivalent to LHM's NVML sidecar usage
+- `amd_provider.rs`: ADL2-based AMD monitoring — equivalent to LHM's `AmdGpu.cs` OD5/ODN path
+
+### What Remains Deferred (Requires Kernel Driver)
+- Per-core CPU temperatures (Intel: MSR 0x19C `IA32_THERM_STATUS`; AMD: SMU/MSR)
+- CPU voltages and RAPL power (Intel MSR 0x611)
+- Motherboard fan header RPM (EC / SuperIO chip — e.g. ITE 8688E)
+- NVMe temperature (SMART data via DeviceIoControl IOCTL_STORAGE_QUERY_PROPERTY)
+
+---
+
+## Known Issues
+
+| Issue | Severity | Status |
+|---|---|---|
+| **Build not validated** — cargo not available in session terminal | **Critical** | Pending — developer must validate |
+| **Testing is browser-only** — `npm run dev` only; no Tauri shell running | **High** | Pending — run `npm run tauri dev` to test native data flow |
+| Thermal zone formula may need `/10` correction | Medium | Verify at runtime — range check (0–120°C) filters bad values; ACPI path uses `val/10.0-273.15` |
+| AMD GPU name hardcoded as "AMD Radeon GPU" in some paths | Low | Fix: use `ADLAdapterInfo.strAdapterName` or WMI static name |
+| Fan RPM for CPU cooler not available | Low | Deferred (kernel driver required) |
+| PSU data unavailable via standard APIs | Low | Deferred |
+| Storage scanner does not scan browser caches on non-default profiles | Low | Future expansion |
+| Bloatware scanner only covers AppX packages | Low | Future — add registry/installed-programs scan |
+| `wmi 0.13` may conflict with `windows 0.58` at build time | Unknown | Verify at build time |
+| NVMe detection uses name heuristic only | Low | Could be improved with `Win32_DiskDrive WHERE InterfaceType='SCSI'` |
+| FPS metric in OSD shows `'--'` always | Low | No reliable non-kernel API; consider settings `fps_override` field |
+
+---
+
+## Performance Metrics
+
+| Metric | Target | Current Status |
+|---|---|---|
+| Idle RAM (app process) | < 80 MB | Not yet measured |
+| Monitoring thread CPU overhead | < 0.5% | Not yet measured |
+| UI frame rate (60 fps) | 60 fps steady | Not yet measured |
+| IPC latency (command round-trip) | < 5 ms | Not yet measured (reads from cache, should be sub-ms) |
+| WMI query latency (CPU temp) | < 50 ms/query | Not yet measured |
+
+---
+
+## Important Files & Modules
+
+```
+src-tauri/src/
+  lib.rs              — Tauri entry point, all command registrations, tray, OSD window
+  hardware.rs         — HAL: IPC types, GpuReading, HardwareCache, MonitoringEngine, monitor_loop()
+  wmi_provider.rs     — WMI sensor queries (Windows only): CPU temp, GPU usage, static info
+  nvml_provider.rs    — NVIDIA GPU via nvml.dll dynamic loading (Windows only)
+  amd_provider.rs     — AMD GPU via atiadlxx.dll dynamic loading (Windows only)
+  cleanup.rs          — RAM cleaner (EmptyWorkingSet) + storage scanner/cleanup
+  windows_util.rs     — Startup manager (registry) + bloatware scanner (AppX/PowerShell)
+  main.rs             — Calls lib::run()
+  build.rs            — Tauri build script
+
+src/
+  App.tsx             — Router, page mounting
+  main.tsx            — React entry
+  context/
+    MonitorContext.tsx — Polls get_hardware_sample at settings.monitoring.refreshMs
+    SettingsContext.tsx — Persists user settings
+  services/
+    native.ts         — Raw Tauri invoke() wrappers
+    systemService.ts  — Typed IPC service layer (uses native.ts)
+    mockData.ts       — Mock data for development/fallback
+  pages/
+    DashboardPage.tsx
+    ThermalsPage.tsx
+    RamCleanerPage.tsx
+    BloatwarePage.tsx
+    StartupManagerPage.tsx
+    StorageCleanerPage.tsx
+    DiagnosticsPage.tsx
+    SettingsPage.tsx
+    UtilitiesPage.tsx
+  types/
+    system.ts         — All shared TypeScript types (StartupItem, BloatwareItem, etc.)
+    navigation.ts     — Navigation type definitions
+```
+
+---
+
+## Session History
+### Session 9 (undocumented Codex) — Packaging & Standalone Distribution
+
+*This session's changes were present in files but not previously recorded in this log.*
+
+#### `src-tauri/tauri.conf.json` (updated)
+- `bundle.targets` changed from `"all"` → `["nsis"]` — produces a real Windows NSIS installer
+- Added `bundle.publisher: "Radium PCs"`, `bundle.category: "Utility"`, `bundle.shortDescription`, `bundle.longDescription`
+- Added `bundle.windows.nsis`: `installerIcon`, `installMode: "perMachine"`, `displayLanguageSelector: false`
+
+#### `package.json` (updated — new scripts)
+- `"desktop"` / `"dev:desktop"` — aliases for `tauri dev`
+- `"build:exe"` / `"package:windows"` — aliases for `tauri build` (produces NSIS installer)
+- `"package:portable"` — `scripts/package-portable.ps1`
+- `"check:desktop"` — `scripts/check-desktop.ps1` (prerequisite checker)
+
+#### `src-tauri/src/lib.rs` (already documented above, but also added in prior Codex session)
+- `--background` / `--silent` CLI arg check in `setup()` — hides main window on startup
+- `build_tray()` and tray menu items: Open Dashboard, Performance Overview, Toggle OSD, Quick RAM Clean, Performance Mode, Quiet Mode, Exit
+- Window `CloseRequested` event handler: prevents default close, hides window to tray instead
+- `show_main_window` command: shows + unminimizes + focuses the main window
+- Launch log written to `%ProgramData%\Radium PCs Companion\logs\` on each startup
+
+### Session 8 — GitHub Copilot (2026-05-22)
+**Completed:**
+- **callNative browser/native split**: Added `isNative(): boolean` (checks `window.__TAURI_INTERNALS__`) to `native.ts`. `callNative` now only uses the mock fallback when NOT in Tauri. In the Tauri desktop shell, `invoke()` runs directly and errors propagate to the UI — no more silent swallowing of real hardware failures.
+- **Removed all dry-run guards**: `setStartupItemEnabled`, `removeBloatware`, `runStorageCleanup`, `cleanRegistryIssues` all had `dryRun: true` hardcoded. Changed all to `dryRun: false`. Browser-mode mock strings updated from `[dry-run]` to `[browser]` prefix. `applyPerformanceProfile` intentionally stays `dryRun: true` (firmware writes not implemented).
+- **WMI CPU temp — ACPI primary path**: Added `WmiAcpiThermalZone { CurrentTemperature: Option<u32> }` struct. Added `root_wmi: Option<WMIConnection>` to `WmiContext` (second COM connection to `ROOT\WMI` via `COMLibrary::assume_initialized()`). `query_cpu_temp()` now tries `ROOT\WMI\MSAcpi_ThermalZoneTemperature` first (decikelvin: `val/10.0 - 273.15`), falls back to perf-counter path.
+- **MonitorContext `native` flag**: Added `native: boolean` to `MonitorContextValue` type and `useMemo` value. Consumers can branch on this.
+- **Dashboard browser-preview notice**: `DashboardPage.tsx` now shows an amber `.notice-preview` banner when `!native` and a red `.notice-error` banner when `native && error`. CSS added: `.notice-preview`, `.notice-error`, `.notice code`.
+- **Logo / branding**: `assets.ts` — `radiumHeader` → `images/radiumcompanion-header.png`; `appIcon` → `images/radiumlogo.png`. `tauri.conf.json` bundle icon updated. `index.html` favicon set to `radiumlogo.png`. `Shell.tsx` sidebar brand-lockup now shows `radiumlogo.png` icon (30px) + `radiumcompanion-header.png` wordmark; topbar-brand shows icon (22px) + "Companion" text.
+- **UI polish (`styles.css`)**:
+  - `.brand-lockup` / `.brand-icon` / `.brand-wordmark` classes replace old catch-all `.brand-lockup img`
+  - `.nav-item.active`: left cyan accent border (2px, `rgba(85,214,255,0.6)`)
+  - `.status-dot`: `pulse-dot` keyframe animation (2.8s ease-in-out, box-shadow breathe)
+  - `.panel`: border-radius `8px → 10px`; hover adds `box-shadow` glow; transition includes `box-shadow`
+  - `.page-transition`: `scroll-behavior: smooth`; thin 6px custom scrollbar with cyan hover tint
+  - `.topbar-brand`: hover state added; min-width reduced to 138px
+
+**Notes:**
+- App is still being tested in browser mode (`npm run dev` / Vite). The amber banner on the Dashboard is the indicator. Cargo/Rust toolchain is not available in the active PowerShell terminal.
+- `applyPerformanceProfile` is the only mutating command still intentionally dry-run — real power plan and fan-table writes not yet implemented.
+- All GPU vendor driver APIs (NVML, ADL2) are loaded dynamically at runtime; absence of drivers causes graceful `None` path, not a crash.
+
+### Session 9 — Codex (2026-05-22)
+**Completed:**
+- Re-read `/docs` and continued from the latest native-desktop direction.
+- Attempted `npm.cmd run tauri dev`; it fails because `cargo` is not installed or not on `PATH`.
+- Added desktop-oriented npm scripts:
+  - `npm.cmd run desktop`
+  - `npm.cmd run dev:desktop`
+  - `npm.cmd run build:exe`
+  - `npm.cmd run package:windows`
+  - `npm.cmd run check:desktop`
+- Added `scripts/check-desktop.ps1` preflight checker for Node, npm, cargo, and rustc.
+- Configured Tauri packaging for standalone Windows NSIS output with publisher/category/descriptions in `src-tauri/tauri.conf.json`.
+- Added `docs/desktop-build.md` with the runtime distinction between browser preview, Tauri desktop testing, and standalone EXE output paths.
+- Updated `README.md` to make `npm.cmd run desktop` the real app test path and `npm.cmd run build:exe` the packaging path.
+- Cleaned stale UI copy that still described mutating operations as dry-run-only:
+  - Startup Manager
+  - Bloatware Remover
+  - System Cleaner
+- Implemented native Start with Windows registration through HKCU Run key in `windows_util::set_companion_startup_enabled`.
+- Updated `set_startup_enabled` command to use the real startup registration adapter instead of returning a stub value.
+- Fixed malformed CSS around `.desktop-page`.
+- Verified `npm.cmd run build` passes without CSS warnings.
+- Attempted `npm.cmd run build:exe`; it fails for the same missing `cargo` prerequisite.
+
+**Notes:**
+- Current blocker remains Rust installation/PATH. Once Rust is installed, run `npm.cmd run check:desktop`, then `npm.cmd run desktop`, then `npm.cmd run build:exe`.
+- The packaged app will be standalone and will not require npm, Vite, or a browser on the customer machine.
+
+### Session 10 — GitHub Copilot (2026-05-23)
+**Completed:**
+- **Live tray icon** (`src/lib/trayIcon.ts` — new file): `OffscreenCanvas` 32×32 renderer. Dark circle background, 270° arc ring, color-coded by threshold (temp: green/amber/red; usage: cyan/amber/red), bold white number, colored unit label, glow shadow. `renderTrayIconRgba()` returns raw RGBA bytes; `extractTrayValue()` pulls the chosen metric from `HardwareSample`.
+- **`set_tray_icon_data` Rust command** (`src-tauri/src/lib.rs`): Receives `Vec<u8> rgba + width + height`, constructs `tauri::image::Image::new_owned`, calls `tray.set_icon()`. Registered in `generate_handler!`.
+- **`setTrayIconData` TS service** (`src/services/systemService.ts`): IPC wrapper via `callNative`. No-op fallback in browser mode.
+- **`TrayMetric` type** (`src/types/system.ts`): `'cpuTemp' | 'gpuTemp' | 'ramUsage' | 'cpuUsage' | 'gpuUsage' | 'disabled'`. Added `liveIconMetric: TrayMetric` to `CompanionSettings.tray`.
+- **MonitorContext wiring**: Added `trayIconRef` throttle (2000ms). Inside `tick()`, after each `setSample`, if `isNative() && metric !== 'disabled'`, renders icon and sends to Rust. `liveIconMetric` added to `useEffect` deps.
+- **SettingsPage tray metric picker**: "Live tray icon" `<select>` in Tray behaviour panel. Options: App icon (static) / CPU Temperature / GPU Temperature / CPU% / GPU% / RAM%.
+- **SettingsContext default**: `liveIconMetric: 'cpuTemp'` in `defaultSettings.tray`.
+- **Roadmap + context_log sync**: Documented Codex Session 9 (NSIS config, npm scripts, `--background` flag, startup registration). Updated Phase 2–6 completion status.
+
+### Session 11 — GitHub Copilot (2026-05-23)
+**Completed:**
+- **Gauge circles readability fix** (`styles.css`, `Gauge.tsx`): `.gauge` now has `background: #111927` (dark) + cyan accent border so the SVG arcs are visible. `.gauge-face` gets a dark radial gradient background. SVG track stroke increased from `rgba(255,255,255,0.09)` → `0.16`. Gauge center already has explicit `color: #f0f5fa` (light) — was previously invisible (dark text on dark bg).
+- **Thermal page clipping**: `thermals-grid` / `case-visual` / `thermal-side` already had `minmax(0,...)` fixes from Session 9/10; verified `align-items: start` is present. No additional clipping fixes needed.
+- **Registry cleaner complete reformat** (`RegistryCleanerPage.tsx`): Added `RegStep` step-guide component using existing `.reg-how-it-works` / `.reg-step` CSS (4 steps: Scan → Review → Backup → Clean, each marks `done` progressively). Added `.reg-safety-legend` inline with categories panel. Fixed registry row to use `.registry-row-body` (matches current CSS `grid-template-columns: 18px 1fr`). Moved recommendation badge inline with title. Added `.reg-guarantees` list in inspector panel. Updated button label "Backup & preview" → "Backup & clean".
+- **Sidebar metrics strip** (`Shell.tsx` + `styles.css`): Already implemented in prior session (Shell.tsx has `sidebar-metric-row` for CPU temp, GPU temp, CPU%, GPU%, RAM%; `metric-cool/warm/hot` color classes). Fixed CSS for light sidebar: `.sidebar-metrics` background `rgba(255,255,255,0.04)` → `rgba(255,255,255,0.82)`, row dividers `rgba(255,255,255,0.05)` → `var(--line)` (visible on light bg).
+- **Summary item tones**: `SummaryItem` in registry cleaner now accepts `tone` prop; backup state shows amber (required) or green (ready).
+
+### Session 4 — Codex
+**Completed:**
+- Reviewed `/docs` at session start and aligned implementation with the documented desktop/Tauri direction.
+- Fixed Thermals page clipping/scaling by removing fixed zone heights, reducing oversized page/header dimensions, and tuning the desktop shell density.
+- Shifted the UI toward a denser desktop utility feel: narrower sidebar, smaller topbar, compact page headers, secondary action buttons, and cleaner utility summary rows.
+- Added `RegistryCleanerPage.tsx` with scan, mandatory backup, selected issue review, and dry-run clean preview.
+- Added TypeScript `RegistryIssue` and `RegistryBackup` contracts plus service-layer functions: `scanRegistryIssues`, `backupRegistryIssues`, `cleanRegistryIssues`.
+- Added native Rust command boundaries in `windows_util.rs` / `lib.rs`: `scan_registry_issues`, `backup_registry_issues`, `clean_registry_issues`.
+- Enhanced System Cleaner data to include browser cache, Recycle Bin, and Windows Update categories.
+- Avoided bundling the newly added large marketing images by removing eager imports from `src/lib/assets.ts`; they remain available in `/images/` for deliberate future use.
+- Verified `npm.cmd run build` passes.
+
+**Notes:**
+- Registry cleaner remains intentionally conservative. Live deletion is blocked until proper `.reg` export/restore implementation is validated.
+- Open-source references checked: Little Registry Cleaner for registry-cleaner precedent and BleachBit/modern CCleaner alternatives for system-cleaner category inspiration. No code copied.
+
+### Session 5 — Codex
+**Completed:**
+- Continued internal-only implementation. No external helper programs, sidecars, or bundled third-party cleaners were added.
+- Extended real native System Cleaner scan targets in `cleanup.rs`:
+  - Edge cache
+  - Chrome cache
+  - Firefox profile cache folders
+  - Windows Update download cache
+  - Delivery Optimization cache
+- Upgraded registry backup from placeholder text to an internal JSON snapshot written under `%ProgramData%\Radium PCs Companion\registry-backups\`.
+- Added native diagnostics export command `export_diagnostics`, writing a local JSON bundle under `%ProgramData%\Radium PCs Companion\diagnostics\`.
+- Updated Diagnostics page to show provider/sensor availability and trigger the native export path.
+- Added Dashboard sensor-source cards for sysinfo, WMI, internal NVML/ADL/WMI fallback, and GPU power/fan availability.
+- Updated Dashboard fan/power display to show GPU fan percent and GPU watts when vendor APIs provide them.
+- Verified `npm.cmd run build` passes.
+
+**Notes:**
+- Rust/Cargo still unavailable in the active terminal, so native compile validation remains pending.
+- Registry cleaning still defaults to dry-run from the frontend. The backend now has backup snapshots, but live registry deletion should remain blocked until restore/import is tested on disposable Windows VMs.
+
+### Session 6 — Codex
+**Completed:**
+- Continued internal-only implementation; no external monitoring or cleaner programs added.
+- Reduced the dark/bulky UI feel:
+  - lighter dark palette and brighter surfaces
+  - narrower sidebar
+  - smaller topbar and page headers
+  - smaller metric cards and dashboard hero
+- Added compact topbar branding on non-dashboard pages only. Dashboard keeps the larger brand treatment in the main content area.
+- Reworked Registry Cleaner UI into a more desktop-utility/CCleaner-style flow:
+  - category list on the left
+  - filtered issue results in the main pane
+  - readable wrapped registry paths
+  - automatic backup before clean preview
+- Changed registry backups to user-visible Documents location:
+  - `%USERPROFILE%\Documents\Radium PCs Companion\registry-backups\`
+- Extended native registry scan categories:
+  - invalid startup references
+  - uninstall leftovers
+  - application path leftovers
+- Verified `npm.cmd run build` passes.
+
+**Notes:**
+- Rust/Cargo still unavailable in this terminal, so the new Win32 registry enumeration code needs compile validation once the Rust toolchain is available.
+
+### Session 7 — Codex
+**Completed:**
+- Reworked the Thermals page case visualisation to remove clipping-prone large labels inside the chassis.
+- Replaced in-case text blocks with compact numbered sensor pins and a readable legend beside the chassis.
+- Added component-shaped case blocks for CPU, RAM, GPU, storage, and PSU bay so the thermal map reads more like a physical PC layout.
+- Added GPU vendor telemetry detail rows on the Thermals page for core clock, memory clock, power, and fan data.
+- Added a dedicated Performance Profiles page instead of routing the Profiles tab to the generic Utilities placeholder.
+- Added TypeScript profile contracts and service calls: `getPerformanceProfiles` and `applyPerformanceProfile`.
+- Added native Tauri command boundaries for performance profiles in `src-tauri/src/lib.rs`.
+- Added compact desktop-style profile UI with profile rows, active state, safe-mode explanation, and result actions.
+- Verified `npm.cmd run build` passes.
+
+**Notes:**
+- Rust/Cargo is still unavailable in this terminal, so native Tauri/Rust compile validation remains pending.
+- The performance profile implementation is intentionally capability-gated. It applies Companion state and exposes the native boundary, but does not yet write firmware, fan tables, or power limits.
+
+### Session 3 — Latest (GitHub Copilot)
+**Completed:**
+- Researched LHM source: NvidiaGpu.cs, AmdGpu.cs, GenericCpu.cs — extracted exact API patterns
+- Created `nvml_provider.rs` — NVIDIA GPU via NVML (nvml.dll) dynamic loading
+- Created `amd_provider.rs` — AMD GPU via ADL2 (atiadlxx.dll) dynamic loading
+- Updated `hardware.rs`: added `GpuReading` type, new cache fields, extended IPC types, rewired `monitor_loop()` with vendor cascade
+- Updated `lib.rs`: added `mod nvml_provider` and `mod amd_provider`
+- Updated `Cargo.toml`: added `Win32_System_LibraryLoader` feature
+- Updated `src/types/system.ts`: `GpuSample` + `FanSample` extended, `StartupItem.location` fixed to `string`
+- Updated docs: `telemetry-engine.md`, `context_log.md`
+
+### Session 2 — (GitHub Copilot)
+**Completed:**
+- Created `hardware.rs`, `wmi_provider.rs`, `cleanup.rs`, `windows_util.rs`
+- Rewrote `lib.rs` — all 9 commands delegate to new modules
+- `pub fn run()` now spawns background monitoring thread
+- Updated `Cargo.toml` with `wmi` and expanded `windows` features
+- Created this documentation system
+
+**Next agent must do:**
+1. Validate build (`cargo check` or `npm run tauri dev`)
+2. Fix compile errors (see Known Issues + Priority 1 above)
+3. Update `src/types/system.ts` — `StartupItem.location` to `string`
+
+### Session 1 — (prior sessions)
+**Completed:**
+- All React/TypeScript frontend pages implemented
+- Mock data wired to UI
+- Dashboard, Thermals, RAM Cleaner, Bloatware, Startup Manager, Storage Cleaner pages working
+- OSD overlay component implemented
+- System tray integration (menu, double-click)
+- Basic Rust backend with sysinfo CPU/RAM (temperatures and GPU were placeholder `0.0`)

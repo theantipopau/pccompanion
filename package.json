@@ -1,0 +1,37 @@
+{
+  "name": "radium-pcs-companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Premium Windows companion utility for Radium PCs custom gaming and workstation systems.",
+  "scripts": {
+    "dev": "vite",
+    "desktop": "tauri dev",
+    "dev:desktop": "tauri dev",
+    "build": "tsc && vite build",
+    "build:exe": "tauri build",
+    "package:windows": "tauri build",
+    "package:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1",
+    "check:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-desktop.ps1",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}
