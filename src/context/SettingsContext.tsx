@@ -9,13 +9,16 @@ const defaultSettings: CompanionSettings = {
   theme: 'radium-dark',
   tray: {
     minimizeToTray: true,
+    minimizeOnMinimize: true,
     startWithWindows: false,
+    startMinimized: true,
     silentBackground: true,
     showLiveTooltip: true,
     liveIconMetric: 'cpuTemp' as const,
   },
   overlay: {
     enabled: false,
+    launchOnStartup: false,
     clickThrough: true,
     preset: 'corner-widget',
     opacity: 0.86,
@@ -24,6 +27,7 @@ const defaultSettings: CompanionSettings = {
     metrics: ['cpuTemp', 'cpuUsage', 'gpuTemp', 'gpuUsage', 'ramUsage', 'vramUsage', 'fps'],
   },
   monitoring: {
+    launchOnStartup: true,
     refreshMs: 1400,
     backgroundRefreshMs: 2600,
     historyLimit: 60,

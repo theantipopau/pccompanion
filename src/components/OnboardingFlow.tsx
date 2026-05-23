@@ -8,14 +8,14 @@ type OnboardingFlowProps = {
 const stages = [
   {
     id: 'identity',
-    title: 'Welcome To Radium Command Center',
-    text: 'This system is now paired to the premium Radium PCs software identity for monitoring, optimization, and support workflows.',
+    title: 'Welcome To Radium Command Centre',
+    text: 'This system is now paired to the premium Radium PCs software identity for monitoring, optimisation, and support workflows.',
     icon: Sparkles,
   },
   {
     id: 'discovery',
     title: 'Hardware Discovery Sequence',
-    text: 'Telemetry providers initialize in layers for CPU, GPU, memory, storage, and network surfaces while preserving low system overhead.',
+    text: 'Telemetry providers initialise in layers for CPU, GPU, memory, storage, and network surfaces while preserving low system overhead.',
     icon: CircuitBoard,
   },
   {
@@ -42,7 +42,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       >
         <span className="eyebrow">First launch</span>
         <h2>Premium OEM Onboarding</h2>
-        <p>Command Center initialization has completed. Review the platform pillars below before entering the live dashboard.</p>
+        <p>Command Centre initialisation has completed. Review the platform pillars below before entering the live dashboard.</p>
         <div className="onboarding-steps">
           {stages.map((stage, index) => {
             const Icon = stage.icon;
@@ -66,7 +66,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           })}
         </div>
         <div className="onboarding-actions">
-          <button className="primary-button" onClick={onComplete}>Enter Command Center</button>
+          <button className="primary-button" onClick={onComplete}>Enter Command Centre</button>
         </div>
       </motion.div>
     </motion.div>

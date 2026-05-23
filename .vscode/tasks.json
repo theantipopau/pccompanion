@@ -1,0 +1,298 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build-exe-fresh",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"build:exe"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "kill-radium-proc",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Stop-Process -Force"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "desktop-log-smoke",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"desktop"
+			],
+			"isBackground": true
+		},
+		{
+			"label": "verify-runtime-log",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$exe='F:\\radiumpcs\\src-tauri\\target\\release\\radium_pcs_companion.exe'; if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList '--background' -WindowStyle Hidden | Out-Null; Start-Sleep -Seconds 2; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 3 Id,ProcessName,StartTime | Format-Table -AutoSize; $logRoot=Join-Path $env:ProgramData 'Radium PCs Companion\\logs'; $latest=Get-ChildItem $logRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Host ('LATEST_LOG=' + $latest.FullName); Get-Content $latest.FullName -Tail 50 } } else { Write-Host 'RELEASE_EXE_MISSING' }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "verify-runtime-log",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& { $exe=\"F:\\radiumpcs\\src-tauri\\target\\release\\radium_pcs_companion.exe\"; if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList \"--background\" -WindowStyle Hidden | Out-Null; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 3 Id,ProcessName,StartTime | Format-Table -AutoSize; $logRoot=Join-Path $env:ProgramData \"Radium PCs Companion\\logs\"; $latest=Get-ChildItem $logRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Host (\"LATEST_LOG=\" + $latest.FullName); Get-Content $latest.FullName -Tail 50 } } else { Write-Host \"RELEASE_EXE_MISSING\" } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "verify-runtime-log-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& { $exe=\"F:\\radiumpcs\\src-tauri\\target\\release\\radium_pcs_companion.exe\"; if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList \"--background\" -WindowStyle Hidden | Out-Null; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 3 Id,ProcessName,StartTime | Format-Table -AutoSize; $logRoot=Join-Path $env:ProgramData \"Radium PCs Companion\\logs\"; $latest=Get-ChildItem $logRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Host (\"LATEST_LOG=\" + $latest.FullName); Get-Content $latest.FullName -Tail 50 } } else { Write-Host \"RELEASE_EXE_MISSING\" } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "verify-runtime-log-3",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& { $exe='F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe'; if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList '--background' -WindowStyle Hidden | Out-Null; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 3 Id,ProcessName,StartTime | Format-Table -AutoSize; $logRoot=Join-Path $env:ProgramData 'Radium PCs Companion/logs'; $latest=Get-ChildItem $logRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Host ('LATEST_LOG=' + $latest.FullName); Get-Content $latest.FullName -Tail 50 } } else { Write-Host 'RELEASE_EXE_MISSING' } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "verify-runtime-log-4",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& { $exe=\"F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe\"; if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList \"--background\" -WindowStyle Hidden | Out-Null; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 3 Id,ProcessName,StartTime | Format-Table -AutoSize; $logRoot=Join-Path $env:ProgramData \"Radium PCs Companion/logs\"; $latest=Get-ChildItem $logRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Host (\"LATEST_LOG=\" + $latest.FullName); Get-Content $latest.FullName -Tail 50 } } else { Write-Host \"RELEASE_EXE_MISSING\" } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "verify-runtime-log-5",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& { if (Test-Path \"F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe\") { Start-Process -FilePath \"F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe\" -ArgumentList \"--background\" -WindowStyle Hidden | Out-Null; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 3 Id,ProcessName,StartTime | Format-Table -AutoSize; $logRoot=Join-Path $env:ProgramData \"Radium PCs Companion/logs\"; $latest=Get-ChildItem $logRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Host (\"LATEST_LOG=\" + $latest.FullName); Get-Content $latest.FullName -Tail 50 } } else { Write-Host \"RELEASE_EXE_MISSING\" } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "verify-runtime-log-6",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"& { $root=\"C:\\ProgramData\\Radium PCs Companion\\logs\"; if (Test-Path \"$root\") { Get-ChildItem -Path \"$root\" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 3 FullName,LastWriteTime,Length | Format-Table -AutoSize; $latest=(Get-ChildItem -Path \"$root\" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName; Write-Output \"LATEST_LOG_PATH=$latest\"; if ($latest) { Get-Content -Path \"$latest\" -Tail 40 } } else { Write-Output \"LOG_FOLDER_MISSING\" } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-lifecycle-smoke",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"scripts/pre_release_lifecycle_smoke.ps1"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-process-audit",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime,Path | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-kill-radium",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Stop-Process -Name radium_pcs_companion -Force -ErrorAction SilentlyContinue; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-process-audit-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime,SessionId,Path | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-stop-dev-daemons",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Stop-Process -Name node,cargo,radium_pcs_companion -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-force-kill-pid",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$p=Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) { taskkill /PID $p.Id /F | Out-String | Write-Output }; Get-Process radium_pcs_companion -ErrorAction SilentlyContinue | Select-Object Id,StartTime | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-artifact-audit",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$setup='F:/radiumpcs/src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe'; $exe='F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe'; Get-Item $exe,$setup | Select-Object FullName,Length,LastWriteTime | Format-Table -AutoSize; (Get-Item $setup).VersionInfo | Select-Object FileVersion,ProductVersion,FileDescription,ProductName | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-cargo-check",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"check",
+				"--manifest-path",
+				"src-tauri/Cargo.toml"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-artifact-audit-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"scripts/pre_release_artifact_audit.ps1"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-npm-build",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"build"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-registry-audit",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$paths=@('HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/*','HKLM:/Software/Microsoft/Windows/CurrentVersion/Uninstall/*'); foreach($p in $paths){ Get-ItemProperty $p -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*Radium PCs Companion*' } | Select-Object PSPath,DisplayName,DisplayVersion,Publisher,UninstallString,InstallLocation | Format-Table -AutoSize }; Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Run' -ErrorAction SilentlyContinue | Select-Object 'Radium PCs Companion' | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pre-release-registry-audit-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"scripts/pre_release_registry_audit.ps1"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "log-tail-runtime-launch",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$runtime='C:/Users/Charlotte Hurley/AppData/Local/com.radiumpcs.companion/logs/Radium PCs Companion.log'; if (Test-Path $runtime) { Write-Output ('RUNTIME_LOG=' + $runtime); Get-Content $runtime -Tail 140 }; $launchRoot='C:/ProgramData/Radium PCs Companion/logs'; if (Test-Path $launchRoot) { $latest=Get-ChildItem $launchRoot -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latest) { Write-Output ('LATEST_LAUNCH_LOG=' + $latest.FullName); Get-Content $latest.FullName -Tail 80 } }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "quick-build-after-cleaner-fixes",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"build"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "quick-cargo-check-after-cleaner-fixes",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"check",
+				"--manifest-path",
+				"src-tauri/Cargo.toml"
+			],
+			"isBackground": false
+		}
+	]
+}

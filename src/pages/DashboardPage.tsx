@@ -32,15 +32,24 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const hardwareTheme = (systemInfo?.gpuVendor && systemInfo.gpuVendor !== 'unknown')
     ? systemInfo.gpuVendor
     : (systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : 'unknown');
-  const deviceName = systemInfo?.motherboard || systemInfo?.windows || 'Device identity pending';
-  const telemetryHeadline = loading
-    ? 'Telemetry calibrating'
+  const normalizeIdentity = (value?: string | null) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/query|detect|pending|unknown/i.test(trimmed)) return null;
+    return trimmed;
+  };
+  const deviceName = normalizeIdentity(systemInfo?.motherboard)
+    || normalizeIdentity(systemInfo?.windows)
+    || 'System identity pending';
+  const telemetryHeadline = loading || !sample
+    ? 'Telemetry querying'
     : nominal
       ? 'Telemetry stable'
       : 'Telemetry partially degraded';
   const telemetrySubline = sample
-    ? `Provider-backed hardware monitoring · ${sampleAgeLabel}`
-    : 'Provider-backed hardware monitoring';
+    ? `Provider ${gpuProvider} · ${sampleAgeLabel}`
+    : 'Waiting for first telemetry sample';
   const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : null;
   const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : null;
   const boardVendorAsset = oemLogoForText(systemInfo?.motherboard ?? '');

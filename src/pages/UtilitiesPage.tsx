@@ -7,7 +7,7 @@ const modules = [
   { title: 'Performance profiles', icon: Rocket, text: 'Quiet, balanced, creator, and gaming modes with reversible service and power-plan changes.' },
   { title: 'Startup manager', icon: TimerReset, text: 'Implemented as a dedicated module with publisher, impact, and dry-run reversible toggles.' },
   { title: 'Storage cleaner', icon: HardDrive, text: 'Implemented as a dedicated module for temp files, shader caches, logs, and owner-reviewed downloads.' },
-  { title: 'Network optimization', icon: Network, text: 'Adapter visibility, latency checks, DNS profile groundwork, and no dubious registry hacks.' },
+  { title: 'Network optimisation', icon: Network, text: 'Adapter visibility, latency checks, DNS profile groundwork, and no dubious registry hacks.' },
   { title: 'RGB integration', icon: Palette, text: 'Vendor capability abstraction ready for OpenRGB or native SDK adapters.' },
   { title: 'Benchmark page', icon: Activity, text: 'Repeatable local diagnostics with exportable results and thermal context.' },
   { title: 'Game mode', icon: Gamepad2, text: 'Future per-game detection and profile switching without background bloat.' },

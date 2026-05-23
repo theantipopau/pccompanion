@@ -381,7 +381,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             <button title="Settings" className="icon-button" onClick={() => onNavigate('settings')}>
               <Settings size={17} />
             </button>
-            <button title="Minimize to tray" className="icon-button" onClick={handleMinimize}>
+            <button title="Minimise to tray" className="icon-button" onClick={handleMinimize}>
               <Minimize2 size={17} />
             </button>
           </div>

@@ -1,8 +1,9 @@
 import { Bell, Gauge, MonitorDot, Palette, Power, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
-import { setStartupEnabled } from '../services/systemService';
+import { setStartupMode } from '../services/systemService';
 import type { OverlayPreset, TrayMetric } from '../types/system';
 
 const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
@@ -15,6 +16,7 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
 ];
 
 export function SettingsPage() {
+  const { sample, systemInfo, native } = useMonitor();
   const { settings, updateSettings, resetSettings } = useSettings();
   const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
 
@@ -47,11 +49,26 @@ export function SettingsPage() {
             onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, minimizeToTray: checked } }))}
           />
           <Toggle
+            label="Minimise to tray on minimise"
+            checked={settings.tray.minimizeOnMinimize}
+            onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, minimizeOnMinimize: checked } }))}
+          />
+          <Toggle
             label="Start with Windows"
             checked={settings.tray.startWithWindows}
             onChange={(checked) => {
               updateSettings((current) => ({ ...current, tray: { ...current.tray, startWithWindows: checked } }));
-              void setStartupEnabled(checked);
+              void setStartupMode(checked, settings.tray.startMinimized);
+            }}
+          />
+          <Toggle
+            label="Start minimised"
+            checked={settings.tray.startMinimized}
+            onChange={(checked) => {
+              updateSettings((current) => ({ ...current, tray: { ...current.tray, startMinimized: checked } }));
+              if (settings.tray.startWithWindows) {
+                void setStartupMode(true, checked);
+              }
             }}
           />
           <Toggle
@@ -92,6 +109,11 @@ export function SettingsPage() {
             label="Enable overlay"
             checked={settings.overlay.enabled}
             onChange={(checked) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, enabled: checked } }))}
+          />
+          <Toggle
+            label="Launch overlay on startup"
+            checked={settings.overlay.launchOnStartup}
+            onChange={(checked) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, launchOnStartup: checked } }))}
           />
           <Toggle
             label="Click-through native window"
@@ -135,6 +157,11 @@ export function SettingsPage() {
             </div>
             <Gauge size={19} />
           </div>
+          <Toggle
+            label="Launch monitoring on startup"
+            checked={settings.monitoring.launchOnStartup}
+            onChange={(checked) => updateSettings((current) => ({ ...current, monitoring: { ...current.monitoring, launchOnStartup: checked } }))}
+          />
           <Slider
             label="Foreground refresh"
             min={750}
@@ -204,6 +231,30 @@ export function SettingsPage() {
         <Panel className="settings-panel wide">
           <div className="panel-heading">
             <div>
+              <span className="eyebrow">Telemetry</span>
+              <h2>Live data availability</h2>
+            </div>
+            <Gauge size={19} />
+          </div>
+          {!native && (
+            <p className="subtle">Browser preview mode is active. Run desktop mode to verify live hardware channels.</p>
+          )}
+          <div className="sensor-source-grid">
+            <SensorSource label="CPU load / RAM / disks" value="sysinfo" live={!!sample} />
+            <SensorSource label="CPU temperature" value="WMI thermal zone / OEM fallback" live={sample?.cpu.temperature != null} />
+            <SensorSource
+              label="GPU sensors"
+              value={systemInfo?.gpuVendor === 'nvidia' ? 'NVML internal' : systemInfo?.gpuVendor === 'amd' ? 'AMD ADL internal' : systemInfo?.gpuVendor === 'intel' ? 'WMI (usage only)' : 'WMI fallback'}
+              live={(sample?.gpu.temperature != null) || (sample?.gpu.usage ?? 0) > 0}
+              hint={systemInfo?.gpuVendor === 'intel' ? 'Intel Arc: usage via WMI only. Temp, fans, and power require IGCL support.' : undefined}
+            />
+            <SensorSource label="GPU power / fans" value="Vendor driver API" live={sample?.gpu.powerWatts != null || sample?.gpu.fanPct != null || sample?.fans.some((fan) => fan.rpm != null) === true} />
+          </div>
+        </Panel>
+
+        <Panel className="settings-panel wide">
+          <div className="panel-heading">
+            <div>
               <span className="eyebrow">Native integration</span>
               <h2>Production groundwork</h2>
             </div>
@@ -215,6 +266,17 @@ export function SettingsPage() {
           </div>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function SensorSource({ label, value, live, hint }: { label: string; value: string; live: boolean; hint?: string }) {
+  return (
+    <div className={live ? 'sensor-source live' : 'sensor-source pending'}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{live ? 'Live' : 'Pending'}</small>
+      {hint && <p className="sensor-hint">{hint}</p>}
     </div>
   );
 }

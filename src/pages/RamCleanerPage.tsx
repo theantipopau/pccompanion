@@ -31,13 +31,13 @@ export function RamCleanerPage() {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Optimizer"
+        eyebrow="Optimiser"
         title="Memory"
         description="Live RAM stats and safe standby-list cleanup. Never terminates processes — only releases kernel-managed caches and idle working sets."
         action={
           <button className="primary-button" onClick={runCleanup} disabled={running}>
             {running ? <RotateCcw size={17} className="spin" /> : <Sparkles size={17} />}
-            <span>{running ? 'Optimizing' : 'Optimize RAM'}</span>
+            <span>{running ? 'Optimising' : 'Optimise RAM'}</span>
           </button>
         }
       />
@@ -92,7 +92,7 @@ export function RamCleanerPage() {
             </div>
           </div>
           <p style={{ marginTop: 14 }}>
-            Optimization releases the Windows standby list and asks idle process working sets to trim.
+            Optimisation releases the Windows standby list and asks idle process working sets to trim.
             Active games and creative apps are not affected.
           </p>
           <div className="timeline">
@@ -120,7 +120,7 @@ export function RamCleanerPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Action log</span>
-              <h2>Last optimization</h2>
+              <h2>Last optimisation</h2>
             </div>
           </div>
           <pre>{result ? result.message : 'No RAM cleanup has been run in this session.'}</pre>

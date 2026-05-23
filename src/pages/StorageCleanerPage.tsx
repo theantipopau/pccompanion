@@ -73,7 +73,7 @@ export function StorageCleanerPage() {
       <PageHeader
         eyebrow="Utilities"
         title="System Cleaner"
-        description="Analyze temporary files, browser caches, shader caches, Windows Update leftovers, logs, and recycle bin space with review-first cleanup."
+        description="Analyse temporary files, browser caches, shader caches, Windows Update leftovers, logs, and recycle bin space with review-first cleanup."
         action={
           <div className="button-row">
             <button className="secondary-button" onClick={selectSafe} disabled={busy || items.length === 0}>

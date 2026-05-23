@@ -31,10 +31,10 @@ function gradeFromScore(score: number): PerformanceScore['grade'] {
 
 function summaryFromScore(score: number): string {
   if (score >= 90) return 'Excellent thermal and workload headroom for sustained premium profiles.';
-  if (score >= 80) return 'Strong performance profile with minor optimization opportunities.';
-  if (score >= 70) return 'Balanced operating state with moderate optimization headroom.';
+  if (score >= 80) return 'Strong performance profile with minor optimisation opportunities.';
+  if (score >= 70) return 'Balanced operating state with moderate optimisation headroom.';
   if (score >= 60) return 'Usable state with clear opportunities to improve stability and responsiveness.';
-  return 'Constrained state. Recommend thermal, memory, and storage optimization first.';
+  return 'Constrained state. Recommend thermal, memory, and storage optimisation first.';
 }
 
 function scoreThermals(sample: HardwareSample): ScorePillar {

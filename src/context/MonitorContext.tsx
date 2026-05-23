@@ -44,6 +44,12 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
     let disposed = false;
     let timeoutId = 0;
 
+    if (!settings.monitoring.launchOnStartup) {
+      setLoading(false);
+      setError(null);
+      return () => undefined;
+    }
+
     async function tick() {
       try {
         const next = await getHardwareSample(historyRef.current);
@@ -56,6 +62,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
           consecutiveErrorsRef.current = 0;
           if (settings.tray.showLiveTooltip) {
             const trayMetric = settings.tray.liveIconMetric;
+            const provider = next.gpu.provider ? next.gpu.provider.toUpperCase() : 'UNKNOWN';
             const trayLabel = trayMetric === 'disabled'
               ? 'Static'
               : trayMetric === 'cpuTemp'
@@ -69,7 +76,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
               : `RAM ${pct(next.memory.usage)}`;
 
             void setTrayStatus({
-              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} · NET ${next.network.downMbps.toFixed(0)} Mbps\nTray ${trayLabel}\nDouble-click: Open · Menu: OSD, RAM clean, modes`,
+              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} · NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} · Telemetry ${next.state}\nTray ${trayLabel}\nDouble-click: Open · Menu: OSD, RAM clean, modes`,
               mode: settings.experience.performanceMode,
               overlayEnabled: settings.overlay.enabled,
             });
@@ -111,6 +118,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
     settings.monitoring.refreshMs,
     settings.monitoring.backgroundRefreshMs,
     settings.monitoring.historyLimit,
+    settings.monitoring.launchOnStartup,
     settings.monitoring.temperatureUnit,
     settings.tray.showLiveTooltip,
     settings.tray.liveIconMetric,

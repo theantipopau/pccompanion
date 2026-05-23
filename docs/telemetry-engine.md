@@ -87,6 +87,22 @@ The dashboard presentation has been tightened so telemetry provenance remains vi
 
 This keeps the UI commercially polished while preserving diagnostic honesty.
 
+### Premium Visual Identity Pass (Latest)
+
+Presentation was upgraded for premium desktop feel without altering telemetry collection semantics.
+
+- Dashboard now applies hardware-aware accent themes by detected vendor family.
+- Hero identity fields surface platform context earlier in the flow.
+- System Passport metadata rows were switched from placeholder labels to system-derived runtime identity values.
+- OSD overlay visuals were refined for readability and restrained stream overlay presence.
+
+No changes were made to:
+
+- provider load order,
+- capability state generation,
+- diagnostics export schema,
+- monitoring poll cadence.
+
 ### Diagnostics Readability Pass (Commercial Polish)
 
 The diagnostics UI was refined for faster support comprehension without altering backend contracts.

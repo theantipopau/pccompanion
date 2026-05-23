@@ -74,6 +74,7 @@ export function mockHardwareSample(existingHistory: MetricPoint[] = []): Hardwar
       clockMhz: Math.round(wave(4850, 340, 2.9, 0.4)),
     },
     gpu: {
+      provider: 'mock',
       temperature: gpuTemp,
       usage: gpuUsage,
       vramUsedGb: Number((wave(6.8, 1.3, 4.4, 0.8)).toFixed(1)),
