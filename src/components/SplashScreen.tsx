@@ -60,6 +60,9 @@ export function SplashScreen({ steps, onComplete }: SplashScreenProps) {
             );
           })}
         </div>
+        <div className="splash-progress" aria-hidden="true">
+          <span style={{ width: `${((activeStep + 1) / steps.length) * 100}%` }} />
+        </div>
       </motion.div>
     </motion.div>
   );

@@ -269,9 +269,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
               <Tooltip content={<DashboardTooltip />} />
-              <Area isAnimationActive={animateCharts} type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={2} dot={false} name="CPU %" />
-              <Area isAnimationActive={animateCharts} type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={2} dot={false} name="GPU %" />
-              <Line isAnimationActive={animateCharts} type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={2} dot={false} name="RAM %" />
+              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={2} dot={false} name="CPU %" />
+              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={2} dot={false} name="GPU %" />
+              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={2} dot={false} name="RAM %" />
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
@@ -292,7 +292,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <XAxis dataKey="time" hide />
               <YAxis hide />
               <Tooltip content={<DashboardTooltip />} />
-              <Line isAnimationActive={animateCharts} type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.4} dot={false} name="Download Mbps" />
+              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.4} dot={false} name="Download Mbps" />
             </LineChart>
           </ResponsiveContainer>
         </Panel>

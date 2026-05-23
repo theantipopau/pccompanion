@@ -49,6 +49,7 @@
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 340ms;
+  --dur-press: 80ms;
 }
 
 *,
@@ -110,6 +111,23 @@ textarea,
 select {
   font: inherit;
   color: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(255, 122, 0, 0.42);
+  outline-offset: 2px;
 }
 
 .app-shell {
@@ -210,7 +228,8 @@ select {
   cursor: pointer;
   font-size: 12px;
   text-align: left;
-  transition: border-color 140ms cubic-bezier(0.2, 0, 0.13, 1), background 140ms cubic-bezier(0.2, 0, 0.13, 1), color 140ms cubic-bezier(0.2, 0, 0.13, 1);
+  transform: translateZ(0);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .nav-item span {
@@ -222,6 +241,11 @@ select {
   border-color: rgba(255, 122, 0, 0.16);
   background: rgba(255, 122, 0, 0.07);
   color: #d8e8f2;
+  transform: translateX(1px);
+}
+
+.nav-item:active {
+  transform: translateX(0) scale(0.992);
 }
 
 .nav-item.active {
@@ -419,6 +443,7 @@ select {
   background: linear-gradient(180deg, rgba(10, 14, 22, 0.96), rgba(8, 11, 17, 0.9));
   backdrop-filter: blur(24px) saturate(1.2);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 12px rgba(0, 0, 0, 0.18);
+  transition: border-color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
 }
 
 .dashboard-topbar {
@@ -437,12 +462,17 @@ select {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
   cursor: pointer;
-  transition: 160ms ease;
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .topbar-brand:hover {
   border-color: rgba(255, 122, 0, 0.28);
   background: rgba(255, 122, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.topbar-brand:active {
+  transform: translateY(0) scale(0.992);
 }
 
 .topbar-brand .brand-icon {
@@ -476,12 +506,13 @@ select {
   color: var(--muted);
   font-size: 13px;
   cursor: text;
-  transition: border-color 180ms ease, background 180ms ease;
+  transition: border-color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
 
 .search-field:focus-within {
   border-color: rgba(255, 122, 0, 0.4);
   background: rgba(255, 122, 0, 0.06);
+  box-shadow: 0 0 0 1px rgba(255, 122, 0, 0.18);
 }
 
 .search-input {
@@ -514,12 +545,16 @@ select {
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
-  transition: 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-press) var(--ease-out);
 }
 
 .search-clear:hover {
   background: rgba(255, 255, 255, 0.18);
   color: var(--text);
+}
+
+.search-clear:active {
+  transform: scale(0.94);
 }
 
 .search-results {
@@ -534,6 +569,7 @@ select {
   background: rgba(8, 12, 20, 0.97);
   backdrop-filter: blur(24px) saturate(1.2);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  transform-origin: top center;
 }
 
 .search-result-item {
@@ -549,13 +585,14 @@ select {
   font-size: 12.5px;
   cursor: pointer;
   text-align: left;
-  transition: 140ms ease;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .search-result-item:hover {
   border-color: rgba(255, 122, 0, 0.24);
   background: rgba(255, 122, 0, 0.12);
   color: var(--cyan);
+  transform: translateX(1px);
 }
 
 .search-result-item.active {
@@ -594,13 +631,18 @@ select {
   font-size: 10.5px;
   font-weight: 600;
   text-decoration: none;
-  transition: 160ms ease;
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .topbar-support-link:hover {
   border-color: rgba(255, 143, 31, 0.44);
   background: rgba(255, 143, 31, 0.14);
   color: var(--cyan);
+  transform: translateY(-1px);
+}
+
+.topbar-support-link:active {
+  transform: translateY(0) scale(0.992);
 }
 
 .tray-preview {
@@ -765,7 +807,7 @@ select {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.07);
   cursor: pointer;
-  transition: 180ms cubic-bezier(0.2, 0, 0.13, 1);
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .icon-button {
@@ -779,6 +821,12 @@ select {
   transform: translateY(-1px);
   border-color: rgba(255, 122, 0, 0.36);
   background: rgba(255, 122, 0, 0.1);
+}
+
+.icon-button:active,
+.primary-button:active,
+.secondary-button:active {
+  transform: translateY(0) scale(0.985);
 }
 
 .primary-button {
@@ -816,12 +864,13 @@ select {
   color: var(--text);
   background: rgba(255, 255, 255, 0.07);
   cursor: pointer;
-  transition: 180ms cubic-bezier(0.2, 0, 0.13, 1);
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .secondary-button:hover:not(:disabled) {
   border-color: rgba(255, 122, 0, 0.3);
   background: rgba(255, 122, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .secondary-button:disabled {
@@ -841,6 +890,8 @@ select {
   height: calc(100vh - 50px);
   overflow: auto;
   scroll-behavior: smooth;
+  contain: layout paint;
+  will-change: transform, opacity;
 }
 
 .page-transition::-webkit-scrollbar {
@@ -1631,6 +1682,7 @@ select {
   border-radius: 8px;
   color: var(--text);
   font-size: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .notice code {
@@ -1656,6 +1708,14 @@ select {
 .notice-preview,
 .notice-error {
   backdrop-filter: blur(8px);
+}
+
+.notice-preview {
+  border-color: rgba(245, 200, 107, 0.26);
+}
+
+.notice-error {
+  border-color: rgba(255, 109, 109, 0.28);
 }
 
 .score-panel {
@@ -2647,11 +2707,31 @@ select {
   gap: 10px;
   min-height: 38px;
   color: #6f7b89;
-  transition: color 180ms ease;
+  opacity: 0.64;
+  transition: color var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
 
 .splash-step.active {
   color: #e8f2f8;
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.splash-progress {
+  width: 100%;
+  height: 4px;
+  margin-top: 14px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.splash-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 122, 0, 0.95), rgba(132, 240, 140, 0.85));
+  transition: width 280ms var(--ease-out);
 }
 
 .onboarding-backdrop {
@@ -2740,8 +2820,23 @@ select {
   border-radius: 6px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
   background-size: 220% 100%;
-  animation: shimmer 1.35s ease-in-out infinite;
+  animation: shimmer 1.5s var(--ease-in-out) infinite;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.diagnostics-loading-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.diagnostics-skeleton-line {
+  width: 100%;
+  height: 14px;
+}
+
+.export-status-ok {
+  color: #d4f1da;
 }
 
 .text-line {
@@ -2769,6 +2864,7 @@ select {
   transform-origin: top left;
   user-select: none;
   overflow: hidden;
+  transition: box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 
 .osd-grip {
@@ -2786,6 +2882,7 @@ select {
   text-transform: uppercase;
   cursor: move;
   backdrop-filter: blur(6px);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .osd-grip svg {
@@ -2839,6 +2936,7 @@ select {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  text-rendering: geometricPrecision;
 }
 
 .osd-metric small {
@@ -4102,6 +4200,17 @@ select {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

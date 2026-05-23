@@ -23,7 +23,15 @@ import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { optimizeRam, setCloseToTray, setOverlayWindow, showMainWindow } from './services/systemService';
+import {
+  exportDiagnostics,
+  optimizeRam,
+  restartMonitoringEngine,
+  setCloseToTray,
+  setMinimizeToTrayOnMinimize,
+  setOverlayWindow,
+  showMainWindow,
+} from './services/systemService';
 import type { NavItem } from './types/navigation';
 
 const navItems: NavItem[] = [
@@ -139,6 +147,16 @@ function CompanionApp() {
     listenSafely('tray://quiet-mode', () => {
       updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceMode: 'quiet' } }));
     });
+    listenSafely('tray://export-diagnostics', () => {
+      void exportDiagnostics();
+    });
+    listenSafely('tray://restart-monitoring', () => {
+      void restartMonitoringEngine();
+      updateSettings((current) => ({
+        ...current,
+        monitoring: { ...current.monitoring, launchOnStartup: true },
+      }));
+    });
 
     return () => disposers.forEach((dispose) => dispose());
   }, [updateSettings]);
@@ -148,8 +166,21 @@ function CompanionApp() {
   }, [settings.overlay.enabled, settings.overlay.clickThrough]);
 
   useEffect(() => {
+    if (settings.overlay.launchOnStartup && !settings.overlay.enabled) {
+      updateSettings((current) => ({
+        ...current,
+        overlay: { ...current.overlay, enabled: true },
+      }));
+    }
+  }, [settings.overlay.enabled, settings.overlay.launchOnStartup, updateSettings]);
+
+  useEffect(() => {
     void setCloseToTray(settings.tray.minimizeToTray);
   }, [settings.tray.minimizeToTray]);
+
+  useEffect(() => {
+    void setMinimizeToTrayOnMinimize(settings.tray.minimizeOnMinimize);
+  }, [settings.tray.minimizeOnMinimize]);
 
   return (
     <>
@@ -158,15 +189,15 @@ function CompanionApp() {
           <motion.main
             key={activeView}
             className="page-transition"
-            initial={{ opacity: 0, x: 26, y: 3, scale: 0.986, filter: 'blur(3px)' }}
-            animate={{ opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, x: -20, y: -2, scale: 0.992, filter: 'blur(2px)' }}
+            initial={settings.experience.animations ? { opacity: 0, x: 18, y: 2, scale: 0.992, filter: 'blur(1.5px)' } : false}
+            animate={settings.experience.animations ? { opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' } : { opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={settings.experience.animations ? { opacity: 0, x: -12, y: -1, scale: 0.996, filter: 'blur(1px)' } : { opacity: 0 }}
             transition={{
-              x: { type: 'spring', stiffness: 240, damping: 28, mass: 0.64 },
-              y: { type: 'spring', stiffness: 220, damping: 26, mass: 0.64 },
-              opacity: { duration: 0.22, ease: [0.2, 0, 0.13, 1] },
-              scale: { duration: 0.2, ease: [0.2, 0, 0.13, 1] },
-              filter: { duration: 0.2, ease: [0.2, 0, 0.13, 1] },
+              x: { type: 'spring', stiffness: 250, damping: 30, mass: 0.6 },
+              y: { type: 'spring', stiffness: 230, damping: 28, mass: 0.62 },
+              opacity: { duration: settings.experience.animations ? 0.2 : 0.01, ease: [0.2, 0, 0.13, 1] },
+              scale: { duration: settings.experience.animations ? 0.18 : 0.01, ease: [0.2, 0, 0.13, 1] },
+              filter: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.2, 0, 0.13, 1] },
             }}
           >
             <ErrorBoundary>

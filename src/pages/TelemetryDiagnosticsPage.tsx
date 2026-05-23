@@ -3,6 +3,7 @@ import { ArrowRight, BadgeInfo, CheckCircle2, ClipboardList, Download, RefreshCw
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { Skeleton } from '../components/Skeleton';
 import { exportDiagnostics, getTelemetryDiagnostics } from '../services/systemService';
 import type { DiagnosticsExport, TelemetryDiagnosticsSnapshot } from '../types/system';
 
@@ -88,6 +89,8 @@ export function TelemetryDiagnosticsPage() {
     }, { live: 0, partial: 0, staged: 0, unsupported: 0 });
   }, [snapshot]);
 
+  const diagnosticsPending = !snapshot && busy;
+
   return (
     <div className="page">
       <PageHeader
@@ -141,7 +144,16 @@ export function TelemetryDiagnosticsPage() {
             </div>
             <BadgeInfo size={18} />
           </div>
-          {snapshot?.sensorDiscovery ? (
+          {diagnosticsPending ? (
+            <div className="diagnostics-loading-grid" aria-hidden="true">
+              <Skeleton className="text-line diagnostics-skeleton-line" />
+              <Skeleton className="text-line diagnostics-skeleton-line" />
+              <Skeleton className="text-line diagnostics-skeleton-line" />
+              <Skeleton className="text-line diagnostics-skeleton-line" />
+              <Skeleton className="text-line diagnostics-skeleton-line" />
+              <Skeleton className="text-line diagnostics-skeleton-line" />
+            </div>
+          ) : snapshot?.sensorDiscovery ? (
             <>
               <div className="discovery-summary-grid">
                 <div>
@@ -452,7 +464,7 @@ export function TelemetryDiagnosticsPage() {
             </div>
             <div>
               <span>Status</span>
-              <strong>{exportResult?.message ?? 'Use Generate OEM report to create a support bundle.'}</strong>
+              <strong className={exportResult ? 'export-status-ok' : ''}>{exportResult?.message ?? 'Use Generate OEM report to create a support bundle.'}</strong>
             </div>
             <div>
               <span>Sections</span>

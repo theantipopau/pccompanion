@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer } from 'lucide-react';
+import { Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
 import { pct, temp } from '../lib/format';
@@ -26,12 +26,12 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const operationsEmail = 'operations@radiumpcs.com.au';
   const businessHours = 'Mon-Fri, 9:30am-5:30pm';
   const storeAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
-  const abn = '55 644 890 013';
   const supportSubject = 'Radium PCs Companion Support';
-  const { sample, native } = useMonitor();
+  const { sample } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dashboardActive = activeView === 'dashboard';
   const compactShell = settings.experience.compactMode;
+  const motionEnabled = settings.experience.animations;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -169,11 +169,14 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     }
     return { Icon: Cpu, label: `${pct(value ?? 0)} ${metric.replace('Usage', '').toUpperCase()}` };
   })();
+  const telemetrySummary = sample
+    ? `${sample.state.toUpperCase()} · ${sample.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI'}`
+    : 'INITIALISING · PROVIDER PENDING';
 
   async function handleMinimize() {
     try {
       const window = getCurrentWindow();
-      if (settings.tray.minimizeToTray) {
+      if (settings.tray.minimizeOnMinimize) {
         await window.hide();
       } else {
         await window.minimize();
@@ -204,8 +207,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                     onClick={() => onNavigate(item.id)}
                     aria-current={active ? 'page' : undefined}
                     title={item.label}
-                    whileHover={{ x: active ? 0 : 2 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={motionEnabled ? { x: active ? 0 : 2 } : undefined}
+                    whileTap={motionEnabled ? { scale: 0.975 } : undefined}
                     transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
                   >
                     <Icon size={16} />
@@ -214,7 +217,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                       <motion.span
                         className="nav-active-pip"
                         layoutId="nav-active-pip"
-                        transition={{ duration: 0.2, ease: [0.2, 0, 0.13, 1] }}
+                        transition={{ duration: motionEnabled ? 0.2 : 0, ease: [0.2, 0, 0.13, 1] }}
                       />
                     )}
                   </motion.button>
@@ -263,14 +266,6 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             </strong>
           </div>
         </div>
-        <div className="sidebar-status">
-          <span className={native ? 'status-dot' : 'status-dot status-dot-preview'} />
-          <div>
-            <strong>{native ? `${settings.experience.performanceMode} mode` : 'Browser preview'}</strong>
-            <span>{native ? 'Live hardware data' : 'Run: npm run desktop'}</span>
-          </div>
-        </div>
-
         <div className="sidebar-contact">
           <span className="sidebar-metrics-label">Radium PCs Contact</span>
           <a className="sidebar-contact-link" href={companyWebsite} target="_blank" rel="noreferrer noopener">
@@ -303,7 +298,6 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               <Building2 size={13} />
               <span>{storeAddress}</span>
             </div>
-            <div className="sidebar-contact-meta">ABN {abn}</div>
           </div>
         </div>
       </aside>
@@ -329,6 +323,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                 onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
                 placeholder="Search… ⌃K"
                 aria-label="Search modules"
+                spellCheck={false}
               />
               {searchQuery && (
                 <button
@@ -374,6 +369,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             <div className="tray-preview" title="Live tray icon preview">
               <trayPreview.Icon size={15} />
               <span>{trayPreview.label}</span>
+              <small>{telemetrySummary}</small>
             </div>
             <button
               title="Toggle OSD"
@@ -381,9 +377,6 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               onClick={() => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, enabled: !current.overlay.enabled } }))}
             >
               <Layers size={17} />
-            </button>
-            <button title="Notifications" className="icon-button">
-              <Bell size={17} />
             </button>
             <button title="Settings" className="icon-button" onClick={() => onNavigate('settings')}>
               <Settings size={17} />
