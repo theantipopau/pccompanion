@@ -25,6 +25,17 @@ export function BloatwarePage() {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)));
   }
 
+  function selectSafeDetected() {
+    setItems((current) => current.map((item) => ({
+      ...item,
+      selected: item.detected && item.risk === 'low',
+    })));
+  }
+
+  function clearSelection() {
+    setItems((current) => current.map((item) => ({ ...item, selected: false })));
+  }
+
   async function runRemoval() {
     setBusy(true);
     try {
@@ -55,6 +66,14 @@ export function BloatwarePage() {
         description="A modular, review-first cleanup surface with native desktop execution, restore groundwork, and clear risk categories."
         action={
           <div className="button-row">
+            <button className="secondary-button" onClick={selectSafeDetected} disabled={busy || items.length === 0}>
+              <ShieldCheck size={17} />
+              <span>Select safe</span>
+            </button>
+            <button className="secondary-button" onClick={clearSelection} disabled={busy || selected.length === 0}>
+              <CheckCircle2 size={17} />
+              <span>Clear selection</span>
+            </button>
             <button className="secondary-button" onClick={runRestore} disabled={busy || selected.length === 0}>
               <ShieldCheck size={17} />
               <span>{busy ? 'Working' : `Restore ${selected.length} selected`}</span>

@@ -15,14 +15,40 @@ export function StorageCleanerPage() {
   const reclaimable = selected.reduce((sum, item) => sum + item.sizeGb, 0);
 
   useEffect(() => {
-    scanStorageCleanup().then((result) => {
-      setItems(result);
-      setBusy(false);
-    });
+    let cancelled = false;
+    async function load() {
+      try {
+        const result = await scanStorageCleanup();
+        if (!cancelled) {
+          setItems(result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : 'Unknown scan error';
+          setLog([`[error] Storage scan failed: ${message}`]);
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function toggle(id: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)));
+  }
+
+  function selectSafe() {
+    setItems((current) => current.map((item) => ({ ...item, selected: item.safe })));
+  }
+
+  function clearSelection() {
+    setItems((current) => current.map((item) => ({ ...item, selected: false })));
   }
 
   async function runCleanup() {
@@ -49,10 +75,20 @@ export function StorageCleanerPage() {
         title="System Cleaner"
         description="Analyze temporary files, browser caches, shader caches, Windows Update leftovers, logs, and recycle bin space with review-first cleanup."
         action={
-          <button className="primary-button" onClick={runCleanup} disabled={busy || selected.length === 0}>
-            <Trash2 size={17} />
-            <span>{busy ? 'Scanning' : `Clean ${gb(reclaimable)}`}</span>
-          </button>
+          <div className="button-row">
+            <button className="secondary-button" onClick={selectSafe} disabled={busy || items.length === 0}>
+              <ShieldCheck size={17} />
+              <span>Select safe</span>
+            </button>
+            <button className="secondary-button" onClick={clearSelection} disabled={busy || selected.length === 0}>
+              <CheckCircle2 size={17} />
+              <span>Clear selection</span>
+            </button>
+            <button className="primary-button" onClick={runCleanup} disabled={busy || selected.length === 0}>
+              <Trash2 size={17} />
+              <span>{busy ? 'Scanning' : `Clean ${gb(reclaimable)}`}</span>
+            </button>
+          </div>
         }
       />
       <div className="cleaner-shell">

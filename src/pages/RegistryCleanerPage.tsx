@@ -34,6 +34,14 @@ export function RegistryCleanerPage() {
     setIssues((current) => current.map((issue) => (issue.id === id ? { ...issue, selected: !issue.selected } : issue)));
   }
 
+  function selectSafeIssues() {
+    setIssues((current) => current.map((issue) => ({ ...issue, selected: issue.safe })));
+  }
+
+  function clearSelection() {
+    setIssues((current) => current.map((issue) => ({ ...issue, selected: false })));
+  }
+
   async function createBackup() {
     setBusy(true);
     try {
@@ -80,6 +88,14 @@ export function RegistryCleanerPage() {
         description="Scans for orphaned startup entries, dead uninstall references, broken file associations, and stale application paths. Every clean is preceded by an automatic backup."
         action={
           <div className="button-row">
+            <button className="secondary-button" onClick={selectSafeIssues} disabled={busy || issues.length === 0}>
+              <ShieldCheck size={17} />
+              <span>Select safe</span>
+            </button>
+            <button className="secondary-button" onClick={clearSelection} disabled={busy || selected.length === 0}>
+              <Circle size={17} />
+              <span>Clear selection</span>
+            </button>
             <button className="secondary-button" onClick={restoreBackup} disabled={busy || !backup}>
               <ShieldCheck size={17} />
               <span>Restore backup</span>
@@ -148,7 +164,7 @@ export function RegistryCleanerPage() {
             <FileWarning size={19} />
           </div>
           {visibleIssues.length === 0 ? (
-            <div className="reg-empty">No issues found in this category.</div>
+            <div className="reg-empty">No actionable issues found in this category.</div>
           ) : (
             <div className="registry-list">
               {visibleIssues.map((issue) => (

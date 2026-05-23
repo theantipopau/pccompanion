@@ -430,20 +430,6 @@ pub fn scan_registry_issues() -> Vec<RegistryIssue> {
         issues.extend(scan_app_path_leftovers());
     }
 
-    if issues.is_empty() {
-        issues.push(RegistryIssue {
-            id: "sample-uninstall-leftover".to_string(),
-            hive: "HKLM".to_string(),
-            key_path: r"Software\Microsoft\Windows\CurrentVersion\Uninstall".to_string(),
-            value_name: "DisplayIcon".to_string(),
-            category: "Uninstall leftover".to_string(),
-            severity: "low".to_string(),
-            selected: false,
-            safe: true,
-            description: "No verified registry issues were found. Sample row shows the scanner contract.".to_string(),
-        });
-    }
-
     issues
 }
 

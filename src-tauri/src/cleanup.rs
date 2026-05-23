@@ -5,6 +5,8 @@
 
 use serde::Serialize;
 
+const HEAVY_SCAN_MAX_ENTRIES: usize = 40_000;
+
 // ─── RAM Cleaner ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
@@ -266,7 +268,7 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
     // ----- Windows Update / Delivery Optimization caches -----
     let update_cache = std::path::Path::new(r"C:\Windows\SoftwareDistribution\Download");
     if update_cache.exists() {
-        let size = dir_size(update_cache);
+        let (size, estimated) = dir_size_estimate(update_cache, HEAVY_SCAN_MAX_ENTRIES);
         items.push(StorageCleanupItem {
             id: "windows-update-cache".to_string(),
             name: "Windows Update download cache".to_string(),
@@ -275,13 +277,17 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             category: "Windows Update".to_string(),
             selected: false,
             safe: true,
-            description: "Downloaded update payloads. Safe after updates finish; live cleanup may require administrator rights.".to_string(),
+            description: if estimated {
+                "Downloaded update payloads. Size is estimated for performance on very large cache trees; live cleanup may require administrator rights.".to_string()
+            } else {
+                "Downloaded update payloads. Safe after updates finish; live cleanup may require administrator rights.".to_string()
+            },
         });
     }
 
     let delivery_cache = std::path::Path::new(r"C:\ProgramData\Microsoft\Windows\DeliveryOptimization\Cache");
     if delivery_cache.exists() {
-        let size = dir_size(delivery_cache);
+        let (size, estimated) = dir_size_estimate(delivery_cache, HEAVY_SCAN_MAX_ENTRIES);
         items.push(StorageCleanupItem {
             id: "delivery-optimization-cache".to_string(),
             name: "Delivery Optimization cache".to_string(),
@@ -290,7 +296,11 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             category: "Windows Update".to_string(),
             selected: false,
             safe: true,
-            description: "Windows peer/update cache. Safe to review and clean when downloads are idle.".to_string(),
+            description: if estimated {
+                "Windows peer/update cache. Size is estimated for performance on very large cache trees. Safe to review and clean when downloads are idle.".to_string()
+            } else {
+                "Windows peer/update cache. Safe to review and clean when downloads are idle.".to_string()
+            },
         });
     }
 
@@ -298,7 +308,7 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
     if let Ok(profile) = std::env::var("USERPROFILE") {
         let downloads = std::path::Path::new(&profile).join("Downloads");
         if downloads.exists() {
-            let size = dir_size(&downloads);
+            let (size, estimated) = dir_size_estimate(&downloads, HEAVY_SCAN_MAX_ENTRIES);
             items.push(StorageCleanupItem {
                 id: "user-downloads".to_string(),
                 name: "User Downloads (review)".to_string(),
@@ -307,13 +317,17 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
                 category: "Downloads".to_string(),
                 selected: false,
                 safe: false,
-                description: "Personal download folder. Review manually before deletion to avoid losing installers/documents.".to_string(),
+                description: if estimated {
+                    "Personal download folder. Size is estimated for performance. Review manually before deletion to avoid losing installers/documents.".to_string()
+                } else {
+                    "Personal download folder. Review manually before deletion to avoid losing installers/documents.".to_string()
+                },
             });
         }
     }
 
     // ----- Recycle Bin -----
-    let recycle_estimate = estimate_recycle_bin_bytes();
+    let (recycle_estimate, recycle_estimated) = estimate_recycle_bin_bytes();
     if recycle_estimate > 0 {
         items.push(StorageCleanupItem {
             id: "recycle-bin".to_string(),
@@ -323,7 +337,11 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             category: "Recycle Bin".to_string(),
             selected: true,
             safe: true,
-            description: "Files already marked for deletion. Safe to empty when you no longer need to restore them.".to_string(),
+            description: if recycle_estimated {
+                "Files already marked for deletion. Size is estimated for performance on large recycle stores. Safe to empty when you no longer need to restore them.".to_string()
+            } else {
+                "Files already marked for deletion. Safe to empty when you no longer need to restore them.".to_string()
+            },
         });
     }
 
@@ -391,6 +409,41 @@ pub fn dir_size(path: &std::path::Path) -> u64 {
     size
 }
 
+fn dir_size_estimate(path: &std::path::Path, max_entries: usize) -> (u64, bool) {
+    let mut budget = max_entries;
+    let size = dir_size_limited(path, &mut budget);
+    (size, budget == 0)
+}
+
+fn dir_size_limited(path: &std::path::Path, budget: &mut usize) -> u64 {
+    if *budget == 0 {
+        return 0;
+    }
+
+    let mut size = 0u64;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if *budget == 0 {
+                break;
+            }
+            *budget = budget.saturating_sub(1);
+
+            let p = entry.path();
+            if p.is_symlink() {
+                continue;
+            }
+            if p.is_file() {
+                if let Ok(meta) = p.metadata() {
+                    size += meta.len();
+                }
+            } else if p.is_dir() {
+                size += dir_size_limited(&p, budget);
+            }
+        }
+    }
+    size
+}
+
 /// Delete all direct children of `path` (not the directory itself).
 /// Returns total bytes freed.
 fn delete_dir_contents(path: &std::path::Path) -> std::io::Result<u64> {
@@ -418,24 +471,27 @@ fn bytes_to_gb_u64(bytes: u64) -> f32 {
     bytes as f32 / 1_073_741_824.0
 }
 
-fn estimate_recycle_bin_bytes() -> u64 {
+fn estimate_recycle_bin_bytes() -> (u64, bool) {
     #[cfg(windows)]
     {
         // Each volume has a hidden $Recycle.Bin root.
         let mut total = 0u64;
+        let mut estimated = false;
         for drive in b'A'..=b'Z' {
             let root = format!("{}:\\$Recycle.Bin", drive as char);
             let p = std::path::Path::new(&root);
             if p.exists() {
-                total += dir_size(p);
+                let (size, was_estimated) = dir_size_estimate(p, HEAVY_SCAN_MAX_ENTRIES);
+                total += size;
+                estimated |= was_estimated;
             }
         }
-        total
+        (total, estimated)
     }
 
     #[cfg(not(windows))]
     {
-        0
+        (0, false)
     }
 }
 
