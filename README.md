@@ -245,6 +245,24 @@ Validation after this pass:
   - `src-tauri/target/release/radium_pcs_companion.exe`
   - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
 
+## Information Density, Viewport Optimisation And Desktop Ergonomics (Latest)
+
+This pass focused on practical desktop telemetry density while preserving all backend/provider architecture:
+
+- Rebalanced dashboard spacing rhythm (smaller panel paddings, tighter hero spacing, reduced card and gauge footprint).
+- Reduced visual-card, grade-tile, and runtime-chip heights to reclaim above-the-fold space.
+- Reduced chart heights in the Dashboard live graph and throughput panels to lower vertical demand.
+- Fixed medium-desktop dashboard breakpoint behavior (`<=1500px`) so key surfaces no longer collapse to a full-width vertical stack.
+- Kept clear hierarchy: hero + primary telemetry + health + core trend remain visible sooner in common desktop windowed layouts.
+
+Validation after this pass:
+
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
 ## Quick Start
 
 ```powershell

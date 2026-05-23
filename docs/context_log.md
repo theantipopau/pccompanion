@@ -138,6 +138,34 @@
 
 ---
 
+### Phase: Information Density, Viewport Optimisation & Desktop Ergonomics (2026-05-23)
+
+#### Scope guardrails applied
+- Frontend-only density/ergonomics pass.
+- No telemetry provider changes.
+- No diagnostics contract changes.
+- No tray/startup/lifecycle architecture changes.
+
+#### Layout and density outcomes
+- Tightened dashboard spacing scale (panel padding, inter-panel gaps, hero rail spacing, card internals).
+- Reduced hero-side visual and grade tile vertical footprint to reclaim dashboard fold-space.
+- Reduced gauge footprint and metric-card min-heights to improve telemetry density without dropping readability.
+- Reduced dashboard chart heights (primary trend and network throughput) to avoid oversized vertical stacking.
+- Reworked `@media (max-width: 1500px)` dashboard layout from forced full-width stacking to a 6-column medium-desktop grid:
+  - hero remains prominent,
+  - key metric cards retain compact multi-column placement,
+  - health + trend panels preserve hierarchy without unnecessary full-width collapse.
+
+#### Validation evidence captured in this phase
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
+
+---
+
 ### Phase: Final Reliability + Hardware-Telemetry Audit Pass (2026-05-23)
 
 ### Phase: Real Hardware Validation & Commercial Readiness (2026-05-23)

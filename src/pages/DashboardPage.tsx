@@ -253,7 +253,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
             <span className="subtle">48 samples</span>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={history}>
               <defs>
                 <linearGradient id="cpuFill" x1="0" y1="0" x2="0" y2="1">
@@ -286,7 +286,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               ? <WifiIcon size={18} />
               : <EthernetIcon size={18} />}
           </div>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={168}>
             <LineChart data={history}>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="time" hide />
