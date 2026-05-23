@@ -11,7 +11,7 @@ import { StatePill } from '../components/StatePill';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
-import { assets } from '../lib/assets';
+import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
 
 type DashboardPageProps = {
@@ -19,7 +19,6 @@ type DashboardPageProps = {
 };
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
-  const companyWebsite = 'https://radiumpcs.com.au';
   const { systemInfo, sample, loading, error, native } = useMonitor();
   const { settings } = useSettings();
   const history = sample?.history ?? [];
@@ -42,11 +41,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const telemetrySubline = sample
     ? `Provider-backed hardware monitoring · ${sampleAgeLabel}`
     : 'Provider-backed hardware monitoring';
+  const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : null;
+  const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : null;
+  const boardVendorAsset = oemLogoForText(systemInfo?.motherboard ?? '');
   const compactIdentityPills = [
-    { key: 'cpu', label: systemInfo?.cpu ?? 'CPU detecting' },
-    { key: 'gpu', label: systemInfo?.gpu ?? 'GPU detecting' },
+    { key: 'cpu', label: systemInfo?.cpu ?? 'CPU detecting', icon: cpuVendorAsset },
+    { key: 'gpu', label: systemInfo?.gpu ?? 'GPU detecting', icon: oemLogoForText(systemInfo?.gpu ?? '') ?? gpuVendorAsset },
     { key: 'os', label: systemInfo?.windows ?? 'OS detecting' },
-    { key: 'provider', label: `${gpuProvider} Provider` },
+    { key: 'provider', label: `${gpuProvider} Provider`, icon: gpuVendorAsset },
     { key: 'lanes', label: `Telemetry ${activeChannels}/4` },
     { key: 'support', label: `Support ${nominal ? 'Ready' : 'Degraded'} · ${performanceScore.grade}` },
   ];
@@ -106,11 +108,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 <span><MonitorUp size={13} /> Provider: {gpuProvider}</span>
                 <span><Gauge size={13} /> Lanes: {activeChannels}/4</span>
               </div>
-              <div className="hero-links">
-                <a href={companyWebsite} target="_blank" rel="noreferrer noopener">Radium PCs</a>
-                <button className="secondary-button" onClick={() => onNavigate?.('passport')}>System Passport</button>
-                <button className="secondary-button" onClick={() => onNavigate?.('profiles')}>Performance Profiles</button>
-              </div>
               <motion.div
                 className="hero-telemetry-ribbon"
                 initial={animateCharts ? { opacity: 0, y: 10 } : false}
@@ -136,7 +133,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="hero-side-rail">
               <div className="hero-status-pills" aria-label="Detected identity and telemetry status">
                 {compactIdentityPills.map((pill) => (
-                  <span key={pill.key} className="hero-status-pill" title={pill.label}>{pill.label}</span>
+                  <span key={pill.key} className="hero-status-pill" title={pill.label}>
+                    {pill.icon && <img src={pill.icon} alt="" aria-hidden="true" />}
+                    <span>{pill.label}</span>
+                  </span>
                 ))}
               </div>
             </div>
@@ -160,6 +160,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             : 'Awaiting scan'}
           progress={sample?.cpu.temperature ?? 0}
           tone="cyan"
+          vendorAssetSrc={cpuVendorAsset}
+          vendorAssetAlt={`${systemInfo?.cpuVendor ?? 'CPU'} logo`}
         />
         <MetricCard
           className="metric-primary metric-gpu"
@@ -171,6 +173,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             : 'Awaiting scan'}
           progress={sample?.gpu.temperature ?? 0}
           tone="green"
+          vendorAssetSrc={oemLogoForText(systemInfo?.gpu ?? '') ?? gpuVendorAsset}
+          vendorAssetAlt={`${systemInfo?.gpuVendor ?? 'GPU'} logo`}
         />
         <MetricCard
           className="metric-primary metric-ram"
@@ -180,6 +184,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           detail={sample ? `${pct(sample.memory.usage)} · low-overhead monitor cache` : 'Awaiting scan'}
           progress={sample?.memory.usage ?? 0}
           tone="amber"
+          vendorAssetSrc={boardVendorAsset}
+          vendorAssetAlt="Mainboard vendor logo"
         />
         <MetricCard
           className="metric-secondary metric-network"
@@ -209,6 +215,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="score-panel-body">
             <strong>{performanceScore.value}</strong>
             <p>{performanceScore.summary}</p>
+            <div className="score-mini-metrics">
+              <span>Provider {gpuProvider}</span>
+              <span>Telemetry {activeChannels}/4</span>
+              <span>{nominal ? 'Runtime nominal' : 'Degraded runtime'}</span>
+            </div>
           </div>
         </Panel>
 
@@ -220,25 +231,25 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
             <span className="subtle">48 samples</span>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={198}>
             <AreaChart data={history}>
               <defs>
                 <linearGradient id="cpuFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff7a00" stopOpacity={0.34} />
-                  <stop offset="95%" stopColor="#ff7a00" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#ff7a00" stopOpacity={0.26} />
+                  <stop offset="95%" stopColor="#ff7a00" stopOpacity={0.01} />
                 </linearGradient>
                 <linearGradient id="gpuFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#84f08c" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#84f08c" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#84f08c" stopOpacity={0.24} />
+                  <stop offset="95%" stopColor="#84f08c" stopOpacity={0.01} />
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
               <Tooltip content={<DashboardTooltip />} />
-              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={2} dot={false} name="CPU %" />
-              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={2} dot={false} name="GPU %" />
-              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={2} dot={false} name="RAM %" />
+              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={1.8} dot={false} name="CPU %" />
+              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={1.8} dot={false} name="GPU %" />
+              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={1.9} dot={false} name="RAM %" />
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
@@ -253,13 +264,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               ? <WifiIcon size={18} />
               : <EthernetIcon size={18} />}
           </div>
-          <ResponsiveContainer width="100%" height={168}>
+          <ResponsiveContainer width="100%" height={146}>
             <LineChart data={history}>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="time" hide />
               <YAxis hide />
               <Tooltip content={<DashboardTooltip />} />
-              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.4} dot={false} name="Download Mbps" />
+              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.05} dot={false} name="Download Mbps" />
             </LineChart>
           </ResponsiveContainer>
         </Panel>

@@ -263,6 +263,29 @@ Validation after this pass:
   - `src-tauri/target/release/radium_pcs_companion.exe`
   - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
 
+## Telemetry Visualisation, OEM Identity Assets And Dashboard Instrumentation Refinement (Latest)
+
+This phase focused on telemetry-layer polish only (no backend/provider architecture changes):
+
+- Refined circular gauges with thinner arcs, reduced glow, tighter typography, and a more instrumentation-grade visual profile.
+- Rebalanced right-side thermal and telemetry cards with denser spacing and cleaner hierarchy for faster scanning.
+- Added compact vendor identity surfaces in telemetry cards and System Passport using integrated OEM assets from `/images`.
+- Expanded frontend OEM asset registry (Radeon, MSI, ASRock, ASUS, Intel Arc, AMD, Intel, NVIDIA) and contextual vendor-logo selection.
+- Reduced visual noise in telemetry modules (calmer gradients/glows, tighter chart lines, denser chart containers, cleaner metric rhythm).
+- Compressed OEM readiness panel footprint while adding concise contextual telemetry chips.
+- Preserved all telemetry bindings, provider diagnostics, tray/startup lifecycle behavior, and diagnostics contracts.
+
+Validation after this pass:
+
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path Cargo.toml` passed (from `src-tauri`).
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Responsive smoke checks (dashboard telemetry surfaces) reported:
+  - no horizontal overflow at 1366x820, 1600x900, 1920x1080, 2560x1440, 3440x1440,
+  - no status-pill clipping at the same sizes.
+
 ## Quick Start
 
 ```powershell

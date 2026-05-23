@@ -186,6 +186,38 @@
   - `src-tauri/target/release/radium_pcs_companion.exe`
   - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
 
+---
+
+### Phase: Telemetry Visualisation, OEM Identity Assets & Dashboard Instrumentation Refinement (2026-05-23)
+
+#### Scope guardrails applied
+- Frontend telemetry-visual pass only.
+- No telemetry provider pipeline replacement.
+- No diagnostics/export contract redesign.
+- No tray/startup/installer lifecycle architecture changes.
+
+#### Telemetry and OEM presentation outcomes
+- Gauge module refined to smaller instrumentation footprint (thinner arcs, tighter center typography, reduced glow intensity, cleaner tick/readout balance).
+- Dashboard telemetry cards rebalanced for higher density and scanability (tighter internals, lower noise, improved metric rhythm).
+- Added contextual vendor asset integration in telemetry cards and identity surfaces using local `/images` OEM/vendor PNGs.
+- Expanded frontend vendor-asset mapping to include Radeon, MSI, ASRock, ASUS, Intel Arc, AMD, Intel, and NVIDIA variants.
+- Score/readiness panel compacted and augmented with concise runtime telemetry context chips for higher information value per area.
+- Chart treatment tightened (reduced container heights, calmer fill opacity, thinner line weights) for workstation-style readability.
+- System Passport hardware identity now includes compact OEM vendor strip for integrated hardware branding continuity.
+
+#### Responsiveness and glanceability checks
+- Browser smoke checks across 1366x820, 1600x900, 1920x1080, 2560x1440, and 3440x1440 showed:
+  - no horizontal overflow,
+  - no status-pill clipping,
+  - reduced hero telemetry footprint versus prior phase.
+
+#### Validation evidence captured in this phase
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path Cargo.toml` passed from `src-tauri`.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
 
 ---
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
+import { oemLogoForText, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
 import { getHardwareCapabilities } from '../services/systemService';
 import type { HardwareCapability } from '../types/system';
@@ -11,6 +12,18 @@ export function SystemPassportPage() {
   const { systemInfo, sample, native } = useMonitor();
   const [capabilities, setCapabilities] = useState<HardwareCapability[]>([]);
   const score = computePerformanceScore(sample);
+  const liveCapabilities = capabilities.filter((capability) => capability.state === 'live').length;
+  const cpuLogo = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : null;
+  const gpuLogo = oemLogoForText(systemInfo?.gpu ?? '') || (systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : null);
+  const boardLogo = oemLogoForText(systemInfo?.motherboard ?? '');
+  const passportIdSeed = `${systemInfo?.cpu ?? 'cpu'}|${systemInfo?.gpu ?? 'gpu'}|${systemInfo?.bios ?? 'bios'}`;
+  const passportId = `RDM-${passportIdSeed
+    .split('')
+    .reduce((acc, char) => ((acc * 33) ^ char.charCodeAt(0)) >>> 0, 5381)
+    .toString(16)
+    .toUpperCase()
+    .slice(0, 8)}`;
+  const validationState = sample?.state === 'valid' ? 'Validated runtime profile' : sample?.state === 'degraded' ? 'Partial telemetry profile' : 'Telemetry baseline pending';
 
   useEffect(() => {
     let disposed = false;
@@ -49,10 +62,11 @@ export function SystemPassportPage() {
 
       <div className="passport-grid">
         <Panel className="passport-hero">
+          <div className="passport-ambient" aria-hidden="true" />
           <div className="passport-hero-top">
             <div>
               <span className="eyebrow">Identity status</span>
-              <h2>Build profile verified</h2>
+              <h2>Ownership profile calibrated</h2>
               <p>{score.summary}</p>
             </div>
             <div className="passport-grade-badge">Grade {score.grade}</div>
@@ -75,6 +89,11 @@ export function SystemPassportPage() {
               <h2>Hardware identity</h2>
             </div>
             <BadgeCheck size={18} />
+          </div>
+          <div className="passport-vendor-strip" aria-label="OEM identity assets">
+            {cpuLogo && <img src={cpuLogo} alt="CPU vendor" />}
+            {gpuLogo && <img src={gpuLogo} alt="GPU vendor" />}
+            {boardLogo && <img src={boardLogo} alt="Mainboard OEM" />}
           </div>
           <dl className="passport-dl">
             <dt><Cpu size={15} /> CPU</dt>
@@ -99,12 +118,12 @@ export function SystemPassportPage() {
             <Award size={18} />
           </div>
           <div className="passport-metadata-grid">
-            <PassportField label="Passport ID" value="RDM-LOCAL-PENDING" />
-            <PassportField label="System Serial" value="Pending OEM integration" />
-            <PassportField label="Build Batch" value="Pending manufacturing feed" />
-            <PassportField label="QC Seal" value="Pending validation workflow" />
-            <PassportField label="Image Revision" value="Companion Phase 1 OEM" />
-            <PassportField label="Support Tier" value="Radium Premium Care" />
+            <PassportField label="Passport ID" value={passportId} />
+            <PassportField label="Validation state" value={validationState} />
+            <PassportField label="Telemetry confidence" value={`${liveCapabilities} live capability lanes`} />
+            <PassportField label="Support tier" value={sample?.state === 'valid' ? 'Radium Premium Care' : 'Radium Guided Support'} />
+            <PassportField label="Firmware summary" value={systemInfo?.bios ?? 'Firmware metadata pending'} />
+            <PassportField label="Build identity" value={`${systemInfo?.windows ?? 'Windows'} · ${score.grade} profile`} />
           </div>
         </Panel>
 

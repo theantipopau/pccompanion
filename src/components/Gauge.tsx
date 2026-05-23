@@ -33,7 +33,7 @@ export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
   // Color thresholds
   const color    = pct >= 0.85 ? '#ff6d6d' : pct >= 0.65 ? '#f5c86b' : '#55d6ff';
   const colorEnd = pct >= 0.85 ? '#ff9999' : pct >= 0.65 ? '#fad482' : '#84f0c4';
-  const glow     = pct >= 0.85 ? 'rgba(255,109,109,0.7)' : pct >= 0.65 ? 'rgba(245,200,107,0.7)' : 'rgba(85,214,255,0.7)';
+  const glow     = pct >= 0.85 ? 'rgba(255,109,109,0.36)' : pct >= 0.65 ? 'rgba(245,200,107,0.34)' : 'rgba(85,214,255,0.34)';
 
   // Gradient endpoint coordinates
   const [gx1, gy1] = ptRaw(START);
@@ -55,14 +55,14 @@ export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
 
           {/* Outer bezel ring */}
           <circle cx={CX} cy={CY} r={44} fill="none"
-            stroke="rgba(255,255,255,0.04)" strokeWidth={0.75} />
+            stroke="rgba(255,255,255,0.035)" strokeWidth={0.65} />
 
           {/* Track arc */}
           <path
             d={arc(START, START + SWEEP, true)}
             fill="none"
-            stroke="rgba(255,255,255,0.13)"
-            strokeWidth={6}
+            stroke="rgba(255,255,255,0.11)"
+            strokeWidth={4.6}
             strokeLinecap="round"
           />
 
@@ -72,7 +72,7 @@ export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
             const [tx, ty] = ptRaw(deg);
             const active = pct > 0.02 && t <= pct + 0.01;
             return (
-              <circle key={t} cx={tx} cy={ty} r={1.6}
+              <circle key={t} cx={tx} cy={ty} r={1.25}
                 fill={active ? color : 'rgba(255,255,255,0.18)'} />
             );
           })}
@@ -83,11 +83,17 @@ export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
               d={arc(START, fillEnd, large)}
               fill="none"
               stroke={`url(#${gradId})`}
-              strokeWidth={6}
+              strokeWidth={4.6}
               strokeLinecap="round"
-              style={{ filter: `drop-shadow(0 0 6px ${glow})` }}
+              style={{ filter: `drop-shadow(0 0 3.5px ${glow})` }}
             />
           )}
+
+          {/* Needle marker */}
+          {pct > 0.01 && (() => {
+            const [mx, my] = ptRaw(fillEnd, R + 0.1);
+            return <circle cx={mx} cy={my} r={1.25} fill={colorEnd} opacity={0.95} />;
+          })()}
         </svg>
 
         <div className="gauge-center">

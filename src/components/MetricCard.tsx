@@ -11,17 +11,34 @@ type MetricCardProps = {
   tone?: 'cyan' | 'green' | 'amber' | 'red';
   progress?: number;
   className?: string;
+  vendorAssetSrc?: string | null;
+  vendorAssetAlt?: string;
 };
 
-export function MetricCard({ label, value, detail, icon: Icon, tone = 'cyan', progress = 0, className }: MetricCardProps) {
+export function MetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone = 'cyan',
+  progress = 0,
+  className,
+  vendorAssetSrc,
+  vendorAssetAlt,
+}: MetricCardProps) {
   const animatedProgress = useAnimatedNumber(progress);
 
   return (
     <Panel className={`metric-card tone-${tone}${className ? ` ${className}` : ''}`}>
       <div className="metric-card-head">
         <span>{label}</span>
-        <div className="metric-icon">
-          <Icon size={16} />
+        <div className="metric-head-right">
+          {vendorAssetSrc && (
+            <img className="metric-vendor-badge" src={vendorAssetSrc} alt={vendorAssetAlt ?? `${label} vendor`} />
+          )}
+          <div className="metric-icon">
+            <Icon size={16} />
+          </div>
         </div>
       </div>
       <strong>{value}</strong>
