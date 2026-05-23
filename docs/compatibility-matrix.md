@@ -1,7 +1,9 @@
 # Real Hardware Validation Matrix
 
 Last updated: 2026-05-23
-Phase: Real Hardware Validation and Commercial Readiness
+Phase: Pre-Release Candidate Sweep and GitHub Release Preparation
+
+Release target: 0.1.0-pre
 
 ## Status Legend
 
@@ -63,12 +65,20 @@ Phase: Real Hardware Validation and Commercial Readiness
 
 ## Validation Commands Run In This Phase
 
+- `npm.cmd run build` passed.
 - `cargo check --manifest-path src-tauri/Cargo.toml` passed.
 - `npm.cmd run build:exe` passed (includes `npm run build` as `beforeBuildCommand`).
-- Installer output confirmed at `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0_x64-setup.exe`.
+- Installer output confirmed at `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`.
 
 ## Lifecycle and Installer Smoke Notes
 
 - Tray registration verified from launch log entries under `%ProgramData%\Radium PCs Companion\logs`.
 - Background launch and process checks are task-shell quoting sensitive in this workspace; validation was recorded from successful build output and runtime logs.
 - Uninstall flow remains pending manual machine pass in this phase.
+
+## Pre-Release Readiness Summary
+
+- Build and packaging pipeline: ready.
+- Telemetry transparency and degraded-state messaging: ready.
+- Full external hardware matrix: pending additional tester machines.
+- Interactive installer/uninstaller walkthrough: partially complete (artifact and registration validated; full uninstall UX pass pending dedicated manual run).

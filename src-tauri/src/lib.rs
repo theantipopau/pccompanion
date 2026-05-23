@@ -200,6 +200,7 @@ fn export_diagnostics(
     let created_at = diagnostics.created_at.clone();
     let export_dir = diagnostics_dir();
     let _ = std::fs::create_dir_all(&export_dir);
+    prune_old_files(&export_dir, "diagnostics-", ".json", 40);
     let path = export_dir.join(format!("diagnostics-{}.json", chrono_like_file_stamp()));
     let startup_enabled = crate::windows_util::is_companion_startup_enabled();
     let close_to_tray = runtime
@@ -639,6 +640,8 @@ fn create_launch_log() -> Option<std::path::PathBuf> {
         return None;
     }
 
+    prune_old_files(&dir, "companion-launch-", ".log", 60);
+
     let path = dir.join(format!("companion-launch-{}.log", chrono_like_file_stamp()));
     let mut file = std::fs::OpenOptions::new()
         .create_new(true)
@@ -666,6 +669,39 @@ fn chrono_like_file_stamp() -> String {
         .unwrap_or_default()
         .as_secs()
         .to_string()
+}
+
+fn prune_old_files(dir: &std::path::Path, prefix: &str, suffix: &str, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+
+    let mut files = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = path.file_name()?.to_str()?;
+            if !name.starts_with(prefix) || !name.ends_with(suffix) {
+                return None;
+            }
+            let modified = entry
+                .metadata()
+                .ok()
+                .and_then(|meta| meta.modified().ok())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            Some((path, modified))
+        })
+        .collect::<Vec<_>>();
+
+    if files.len() <= keep {
+        return;
+    }
+
+    files.sort_by_key(|(_, modified)| *modified);
+    let to_delete = files.len().saturating_sub(keep);
+    for (path, _) in files.into_iter().take(to_delete) {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {

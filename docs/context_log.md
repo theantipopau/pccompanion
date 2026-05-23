@@ -99,6 +99,55 @@
 
 ---
 
+### Phase: Pre-Release Candidate Sweep & GitHub Release Preparation (2026-05-23)
+
+#### Scope and stability guardrails
+- No architecture redesign.
+- No risky provider-expansion changes.
+- Focused on version alignment, regression confidence, logging hygiene, lifecycle evidence, and release documentation quality.
+
+#### Versioning alignment
+- `package.json` version set to `0.1.0-pre`.
+- `src-tauri/Cargo.toml` version set to `0.1.0-pre`.
+- `src-tauri/tauri.conf.json` version set to `0.1.0-pre`.
+- Installer artifact now emits pre-release naming:
+  - `Radium PCs Companion_0.1.0-pre_x64-setup.exe`.
+
+#### Diagnostics/logging hardening
+- Added bounded retention pruning in `src-tauri/src/lib.rs`:
+  - launch logs keep last 60,
+  - diagnostics exports keep last 40.
+- Diagnostics export already includes app metadata + lifecycle runtime state for support triage.
+
+#### Regression and validation evidence
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path Cargo.toml` passed via task (`pre-release-cargo-check`).
+- `npm.cmd run build:exe` passed with NSIS bundle output (`0.1.0-pre`).
+- Artifact metadata check confirms setup `FileVersion` and `ProductVersion` are `0.1.0-pre`.
+- Runtime log shows Dell telemetry limitation classification and warning-throttle cadence (~60s).
+
+#### Lifecycle/installer walkthrough status
+- Repeated launch/exit automation encountered host permission constraints:
+  - one `radium_pcs_companion` PID reported `Access is denied` on forced termination,
+  - repeated `Start-Process` occasionally returns `operation was canceled by the user` in task host.
+- This blocks full automated no-zombie validation in this environment; marked for manual elevated tester pass.
+- Registry audit script executed:
+  - uninstall registration entry not observed in current host context,
+  - startup Run value currently unset/blank in audited profile.
+
+#### Documentation readiness updates
+- README updated with pre-release target, installer/testing guidance, troubleshooting, and known limitations.
+- Compatibility matrix updated for pre-release phase naming and readiness summary.
+- Telemetry engine doc updated with pre-release stability notes.
+
+#### Remaining manual pre-release checks (required on tester machine)
+- Interactive install/uninstall walkthrough (shortcuts, ARP entry, uninstall cleanup).
+- Startup-with-Windows + start-minimized user-flow validation from Settings.
+- Tray restore/exit cycles with elevated-permission confirmation of zero lingering processes.
+- Diagnostics export trigger from UI and file-content spot-check on generated JSON.
+
+---
+
 #### Dell telemetry root-cause clarity
 - Added discovery `issueClassification` output for CPU package-temperature unavailability.
 - Added namespace-level inventory and matching class listing for:

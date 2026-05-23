@@ -166,6 +166,13 @@ Still pending in this phase:
 - hybrid GPU laptop scenarios,
 - Intel/AMD iGPU-only validation rows.
 
+### Pre-Release Candidate Stability Notes
+
+- Release target aligned to 0.1.0-pre.
+- Provider arbitration remains unchanged for this phase (stability-first, no risky provider expansion).
+- Diagnostics export now includes runtime lifecycle and build metadata so support can triage external tester reports faster.
+- Known limitations are intentionally explicit in UI and docs to avoid misleading telemetry expectations.
+
 ### LibreHardwareMonitor Research Notes (Why Driver Paths May Be Needed)
 
 LibreHardwareMonitor relies on deeper hardware access for many package-level and board-level sensors:

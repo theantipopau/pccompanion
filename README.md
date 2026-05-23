@@ -22,6 +22,16 @@ Main project marketing image: `images/radiumcompanion-marketing.png`.
 | Dell laptop CPU package temp (user-mode only) | Limited |
 | Optional embedded driver/provider path | Planned (staged) |
 
+## Pre-Release Candidate
+
+Current release candidate target:
+
+- Version: 0.1.0-pre
+- Channel: controlled public pre-release
+- Distribution: NSIS installer and release executable
+
+This phase focuses on regression prevention, lifecycle correctness, installer quality, and support transparency.
+
 ## Real Hardware Validation Matrix
 
 Compatibility tracking for this phase lives in:
@@ -195,6 +205,20 @@ Output:
 - Release binary: src-tauri/target/release/
 - NSIS installer: src-tauri/target/release/bundle/nsis/
 
+## Installer and Distribution
+
+- Primary artifact: `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Install mode: per-user or per-machine (`both`)
+- Startup registration: current-user Run entry, reversible from Settings
+
+Recommended external tester flow:
+
+1. Install from NSIS package.
+2. Launch app and verify tray registration.
+3. Open Diagnostics page and verify provider/degraded-state readability.
+4. Export diagnostics and attach JSON with issue reports.
+5. Uninstall and verify application removal and startup entry cleanup.
+
 Installer notes:
 
 - NSIS install mode is configured as `both` (per-user or per-machine).
@@ -212,10 +236,22 @@ Latest validation snapshot:
   - 2560x1440,
   - 3440x1440.
 
+Pre-release candidate sweep checks:
+
+- Telemetry diagnostics include provider states, confidence, namespace inventory, GPU inventory, and lifecycle metadata.
+- Dell degraded-state messaging uses explicit limitation classification (no silent blanks).
+- CPU unavailable warning logs are throttled to avoid spam.
+
 Latest packaging validation (interaction polish pass):
 
 - `npm.cmd run build:exe` completed end-to-end.
-- Output installer: `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0_x64-setup.exe`.
+- Output installer: `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`.
+
+Manual validation still required before broad external rollout:
+
+- full interactive installer and uninstall walkthrough,
+- startup-with-Windows and start-minimized end-to-end UX checks,
+- tray restore/exit loops on a host where process termination is not permission-constrained.
 
 ## Safety Model
 
@@ -223,6 +259,28 @@ Latest packaging validation (interaction polish pass):
 - No automatic cloud upload.
 - Browser mode uses mock data only.
 - Mutating operations are native-only and safety-gated.
+
+## Current Known Limitations
+
+- Dell Latitude 5330 and similar enterprise profiles may not expose package CPU temperature via user-mode WMI paths.
+- Intel Arc native telemetry provider remains staged; fallback channels are surfaced clearly.
+- Full hardware matrix validation is still pending for several desktop/laptop combinations listed in [docs/compatibility-matrix.md](docs/compatibility-matrix.md).
+- Some installer/uninstaller checks require interactive manual validation on tester machines (UAC, shortcuts, uninstall prompts).
+
+## Troubleshooting
+
+- No telemetry on startup:
+  - open Diagnostics, check provider states and degraded reasons,
+  - confirm vendor drivers are installed,
+  - export diagnostics bundle for support.
+- CPU temperature unavailable on Dell:
+  - this can be a platform exposure limit,
+  - verify issue classification and namespace inventory in Diagnostics,
+  - continue using CPU usage and other live channels.
+- Tray or startup behavior mismatch:
+  - confirm settings for close/minimize/startup toggles,
+  - restart monitoring engine from tray,
+  - relaunch app and re-check lifecycle state in export data.
 
 ## Embedded Provider Roadmap (Staged)
 
