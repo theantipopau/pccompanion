@@ -23,7 +23,7 @@ import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { optimizeRam, setOverlayWindow, showMainWindow } from './services/systemService';
+import { optimizeRam, setCloseToTray, setOverlayWindow, showMainWindow } from './services/systemService';
 import type { NavItem } from './types/navigation';
 
 const navItems: NavItem[] = [
@@ -146,6 +146,10 @@ function CompanionApp() {
   useEffect(() => {
     void setOverlayWindow(settings.overlay.enabled, settings.overlay.clickThrough);
   }, [settings.overlay.enabled, settings.overlay.clickThrough]);
+
+  useEffect(() => {
+    void setCloseToTray(settings.tray.minimizeToTray);
+  }, [settings.tray.minimizeToTray]);
 
   return (
     <>

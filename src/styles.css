@@ -160,19 +160,39 @@ button {
   position: relative;
 }
 
+.nav-group {
+  display: grid;
+  gap: 5px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nav-group-label {
+  padding: 0 8px;
+  color: #8ea4bb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .nav-item {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 36px;
+  min-height: 34px;
   padding: 0 10px 0 9px;
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 12px;
   text-align: left;
   transition: border-color 180ms cubic-bezier(0.2, 0, 0.13, 1),
               background   180ms cubic-bezier(0.2, 0, 0.13, 1),
@@ -405,7 +425,7 @@ button {
   align-items: center;
   justify-content: space-between;
   height: 52px;
-  padding: 0 16px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(10, 14, 22, 0.96), rgba(8, 11, 17, 0.9));
   backdrop-filter: blur(24px) saturate(1.2);
@@ -451,16 +471,16 @@ button {
 
 .search-wrapper {
   position: relative;
-  width: min(420px, 44vw);
+  width: min(360px, 40vw);
 }
 
 .search-field {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  height: 34px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.05);
@@ -567,7 +587,7 @@ button {
 .window-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -582,7 +602,7 @@ button {
   border-radius: 9px;
   background: rgba(85, 214, 255, 0.08);
   color: #d8e8f4;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   text-decoration: none;
   transition: 160ms ease;
@@ -604,8 +624,52 @@ button {
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   white-space: nowrap;
+}
+
+.compact-shell .sidebar {
+  padding-inline: 7px;
+}
+
+.compact-shell .brand-lockup {
+  min-height: 42px;
+  padding: 6px 8px;
+}
+
+.compact-shell .brand-wordmark {
+  max-width: 92px;
+  max-height: 26px;
+}
+
+.compact-shell .nav-group-label {
+  font-size: 9px;
+}
+
+.compact-shell .nav-item {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-height: 30px;
+  gap: 8px;
+  padding-inline: 8px;
+  font-size: 11px;
+}
+
+.compact-shell .sidebar-metrics,
+.compact-shell .sidebar-contact,
+.compact-shell .sidebar-status {
+  padding: 8px;
+}
+
+.compact-shell .sidebar-contact {
+  display: none;
+}
+
+.compact-shell .topbar {
+  padding-inline: 10px;
+}
+
+.compact-shell .search-wrapper {
+  width: min(300px, 36vw);
 }
 
 @media (max-width: 1360px) {
@@ -1831,6 +1895,51 @@ button {
   border: 1px solid rgba(85, 214, 255, 0.1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
+}
+
+.discovery-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.discovery-summary-grid > div,
+.discovery-hints {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(85, 214, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.discovery-summary-grid span,
+.discovery-hints span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.discovery-summary-grid strong,
+.discovery-hints strong {
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.discovery-hints {
+  margin-top: 10px;
+}
+
+.discovery-matrix .diagnostics-matrix-head,
+.discovery-matrix .diagnostics-matrix-row {
+  grid-template-columns: 110px minmax(180px, 1fr) 110px 90px 100px minmax(280px, 1.4fr);
+}
+
+.discovery-matrix .diagnostics-matrix-row {
+  min-height: 52px;
 }
 
 .diagnostics-matrix-row strong {
@@ -3921,6 +4030,24 @@ button {
   .nav-list {
     display: flex;
     overflow-x: auto;
+    gap: 8px;
+  }
+
+  .nav-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .nav-group + .nav-group {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .nav-group-label {
+    display: none;
   }
 
   .nav-item {
@@ -3997,6 +4124,10 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .discovery-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .diagnostics-hero-top {
     flex-direction: column;
   }
@@ -4028,6 +4159,10 @@ button {
   .diagnostics-stat-grid,
   .provider-cards,
   .export-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .discovery-summary-grid {
     grid-template-columns: 1fr;
   }
 

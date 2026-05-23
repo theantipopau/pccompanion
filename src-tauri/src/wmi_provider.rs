@@ -17,6 +17,7 @@ use crate::hardware::{bytes_to_gb, vendor_from_str, SystemInfo};
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct WmiThermalZone {
+    Name: Option<String>,
     Temperature: Option<u32>,
 }
 
@@ -25,7 +26,23 @@ struct WmiThermalZone {
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct WmiAcpiThermalZone {
+    InstanceName: Option<String>,
     CurrentTemperature: Option<u32>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct WmiComputerSystem {
+    Manufacturer: Option<String>,
+    Model: Option<String>,
+    SystemFamily: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct WmiClassName {
+    #[serde(rename = "__CLASS")]
+    class_name: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -78,6 +95,8 @@ pub struct WmiContext {
     pub cimv2: WMIConnection,
     /// `ROOT\WMI` — ACPI thermal zones (more reliable CPU temp on most systems).
     pub root_wmi: Option<WMIConnection>,
+    /// `ROOT\dcim\sysman` - optional Dell OEM namespace.
+    pub root_dcim_sysman: Option<WMIConnection>,
 }
 
 impl WmiContext {
@@ -90,8 +109,244 @@ impl WmiContext {
             let com2 = unsafe { COMLibrary::assume_initialized() };
             WMIConnection::with_namespace_path("ROOT\\WMI", com2).ok()
         };
-        Ok(Self { cimv2, root_wmi })
+        let root_dcim_sysman = {
+            let com3 = unsafe { COMLibrary::assume_initialized() };
+            WMIConnection::with_namespace_path("ROOT\\dcim\\sysman", com3).ok()
+        };
+        Ok(Self {
+            cimv2,
+            root_wmi,
+            root_dcim_sysman,
+        })
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MachineProfile {
+    pub manufacturer: String,
+    pub model: String,
+    pub system_family: String,
+    pub is_dell: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ThermalProbeRecord {
+    pub source: String,
+    pub query: String,
+    pub label: String,
+    pub raw_value: String,
+    pub value_c: Option<f32>,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ThermalDiscoveryData {
+    pub records: Vec<ThermalProbeRecord>,
+    pub dell_class_hints: Vec<String>,
+}
+
+pub fn query_machine_profile(ctx: &WmiContext) -> MachineProfile {
+    let res: Result<Vec<WmiComputerSystem>, _> = ctx
+        .cimv2
+        .raw_query("SELECT Manufacturer, Model, SystemFamily FROM Win32_ComputerSystem");
+
+    let mut profile = res
+        .ok()
+        .and_then(|rows| rows.into_iter().next())
+        .map(|row| MachineProfile {
+            manufacturer: row.Manufacturer.unwrap_or_default().trim().to_string(),
+            model: row.Model.unwrap_or_default().trim().to_string(),
+            system_family: row.SystemFamily.unwrap_or_default().trim().to_string(),
+            is_dell: false,
+        })
+        .unwrap_or_default();
+
+    let combined = format!(
+        "{} {} {}",
+        profile.manufacturer.to_lowercase(),
+        profile.model.to_lowercase(),
+        profile.system_family.to_lowercase()
+    );
+    profile.is_dell = combined.contains("dell") || combined.contains("alienware");
+    profile
+}
+
+pub fn collect_thermal_discovery(ctx: &WmiContext, machine: &MachineProfile) -> ThermalDiscoveryData {
+    let mut data = ThermalDiscoveryData {
+        records: Vec::new(),
+        dell_class_hints: Vec::new(),
+    };
+
+    if let Some(ref root_wmi) = ctx.root_wmi {
+        let acpi_query = "SELECT InstanceName, CurrentTemperature FROM MSAcpi_ThermalZoneTemperature";
+        match root_wmi.raw_query::<WmiAcpiThermalZone>(acpi_query) {
+            Ok(rows) => {
+                if rows.is_empty() {
+                    data.records.push(ThermalProbeRecord {
+                        source: "wmi-acpi".to_string(),
+                        query: acpi_query.to_string(),
+                        label: "MSAcpi_ThermalZoneTemperature".to_string(),
+                        raw_value: "none".to_string(),
+                        value_c: None,
+                        accepted: false,
+                        reason: "class available but returned no rows".to_string(),
+                    });
+                }
+
+                for row in rows {
+                    let label = row
+                        .InstanceName
+                        .unwrap_or_else(|| "ACPI thermal zone".to_string());
+                    match row.CurrentTemperature {
+                        Some(raw) => {
+                            let value_c = raw as f32 / 10.0 - 273.15;
+                            let accepted = (0.0..=120.0).contains(&value_c);
+                            data.records.push(ThermalProbeRecord {
+                                source: "wmi-acpi".to_string(),
+                                query: acpi_query.to_string(),
+                                label,
+                                raw_value: raw.to_string(),
+                                value_c: if accepted { Some(value_c) } else { None },
+                                accepted,
+                                reason: if accepted {
+                                    "accepted decikelvin thermal value".to_string()
+                                } else {
+                                    format!("rejected out-of-range ACPI value ({value_c:.1} C)")
+                                },
+                            });
+                        }
+                        None => {
+                            data.records.push(ThermalProbeRecord {
+                                source: "wmi-acpi".to_string(),
+                                query: acpi_query.to_string(),
+                                label,
+                                raw_value: "null".to_string(),
+                                value_c: None,
+                                accepted: false,
+                                reason: "CurrentTemperature missing".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                data.records.push(ThermalProbeRecord {
+                    source: "wmi-acpi".to_string(),
+                    query: acpi_query.to_string(),
+                    label: "MSAcpi_ThermalZoneTemperature".to_string(),
+                    raw_value: "query_error".to_string(),
+                    value_c: None,
+                    accepted: false,
+                    reason: format!("query failed: {err}"),
+                });
+            }
+        }
+
+        let dell_meta_query = "SELECT __CLASS FROM meta_class WHERE __CLASS LIKE 'Dell%'";
+        if let Ok(classes) = root_wmi.raw_query::<WmiClassName>(dell_meta_query) {
+            data.dell_class_hints = classes
+                .into_iter()
+                .filter_map(|entry| entry.class_name)
+                .collect();
+        }
+    } else {
+        data.records.push(ThermalProbeRecord {
+            source: "wmi-acpi".to_string(),
+            query: "ROOT\\WMI unavailable".to_string(),
+            label: "MSAcpi_ThermalZoneTemperature".to_string(),
+            raw_value: "namespace_unavailable".to_string(),
+            value_c: None,
+            accepted: false,
+            reason: "ROOT\\WMI connection unavailable".to_string(),
+        });
+    }
+
+    let perf_query =
+        "SELECT Name, Temperature FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation";
+    match ctx.cimv2.raw_query::<WmiThermalZone>(perf_query) {
+        Ok(rows) => {
+            if rows.is_empty() {
+                data.records.push(ThermalProbeRecord {
+                    source: "wmi-perf".to_string(),
+                    query: perf_query.to_string(),
+                    label: "ThermalZoneInformation".to_string(),
+                    raw_value: "none".to_string(),
+                    value_c: None,
+                    accepted: false,
+                    reason: "perf thermal class returned no rows".to_string(),
+                });
+            }
+
+            for row in rows {
+                let label = row.Name.unwrap_or_else(|| "Thermal zone".to_string());
+                match row.Temperature {
+                    Some(raw) => {
+                        let value_c = raw as f32 - 273.15;
+                        let accepted = (0.0..=120.0).contains(&value_c);
+                        data.records.push(ThermalProbeRecord {
+                            source: "wmi-perf".to_string(),
+                            query: perf_query.to_string(),
+                            label,
+                            raw_value: raw.to_string(),
+                            value_c: if accepted { Some(value_c) } else { None },
+                            accepted,
+                            reason: if accepted {
+                                "accepted kelvin thermal value".to_string()
+                            } else {
+                                format!("rejected out-of-range perf value ({value_c:.1} C)")
+                            },
+                        });
+                    }
+                    None => {
+                        data.records.push(ThermalProbeRecord {
+                            source: "wmi-perf".to_string(),
+                            query: perf_query.to_string(),
+                            label,
+                            raw_value: "null".to_string(),
+                            value_c: None,
+                            accepted: false,
+                            reason: "Temperature missing".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        Err(err) => {
+            data.records.push(ThermalProbeRecord {
+                source: "wmi-perf".to_string(),
+                query: perf_query.to_string(),
+                label: "ThermalZoneInformation".to_string(),
+                raw_value: "query_error".to_string(),
+                value_c: None,
+                accepted: false,
+                reason: format!("query failed: {err}"),
+            });
+        }
+    }
+
+    let dcim_status = if ctx.root_dcim_sysman.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
+    data.records.push(ThermalProbeRecord {
+        source: "dell-dcim".to_string(),
+        query: "ROOT\\dcim\\sysman".to_string(),
+        label: "Dell namespace probe".to_string(),
+        raw_value: dcim_status.to_string(),
+        value_c: None,
+        accepted: false,
+        reason: if ctx.root_dcim_sysman.is_some() {
+            "Dell DCIM namespace detected; class bindings not yet implemented".to_string()
+        } else if machine.is_dell {
+            "Dell system detected but DCIM namespace not present".to_string()
+        } else {
+            "Not a Dell/Alienware machine profile".to_string()
+        },
+    });
+
+    data
 }
 
 // ─── Static system info (queried once at startup) ───────────────────────────
@@ -378,6 +633,7 @@ fn query_storage_list(ctx: &WmiContext) -> Vec<String> {
 /// `Win32_PerfFormattedData_Counters_ThermalZoneInformation`.
 ///
 /// Returns the highest plausible temperature in °C, or `None` if unavailable.
+#[allow(dead_code)]
 pub fn query_cpu_temp(ctx: &WmiContext) -> Option<f32> {
     // --- Path 1: ROOT\WMI\MSAcpi_ThermalZoneTemperature (tenths of Kelvin) ---
     // More reliably populated on Intel and AMD systems via ACPI firmware.

@@ -42,7 +42,7 @@ export function SettingsPage() {
             <Bell size={19} />
           </div>
           <Toggle
-            label="Minimise to tray"
+            label="Minimise to tray (X button)"
             checked={settings.tray.minimizeToTray}
             onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, minimizeToTray: checked } }))}
           />
@@ -211,7 +211,7 @@ export function SettingsPage() {
           </div>
           <div className="integration-row">
             <SlidersHorizontal size={18} />
-            <span>Tray menu, OSD window creation, restore-safe cleanup, startup registration, and notifications are exposed as native command boundaries.</span>
+            <span>Tray menu, close-to-tray policy, OSD window creation, restore-safe cleanup, startup registration, and notifications are exposed as native command boundaries.</span>
           </div>
         </Panel>
       </div>

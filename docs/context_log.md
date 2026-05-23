@@ -42,8 +42,46 @@
 | EXE packaging config | ✅ Tauri NSIS bundle metadata configured |
 | Build validation | 🟨 `npm.cmd run build` + `cargo check` + `cargo test -q` passed; `cargo test` binary run still needs elevation |
 | Runtime validation | ✅ Packaged release EXE launched from `src-tauri/target/release/radium_pcs_companion.exe`; ProgramData logs show tray registration and background startup |
+| Dell thermal discovery report | ✅ Added per-source thermal probe attempts with accepted/rejected values, labels, and Dell namespace hints |
+| CPU temp limitation surfacing | ✅ CPU package telemetry now marks `driver_required` when user-mode channels are unavailable |
+| Close behavior control | ✅ Native close-to-tray behavior now follows Settings toggle via runtime command |
+| Sidebar compact grouping | ✅ Sidebar now supports grouped nav sections and compact-shell mode tied to settings |
 
 ---
+
+### Phase: Dell Telemetry Deep-Dive + Runtime UX Refinement (2026-05-23)
+
+#### Dell telemetry investigation
+- Added machine-profile detection (`manufacturer`, `model`, `family`, Dell profile flag) from WMI.
+- Added sensor discovery report pipeline in backend diagnostics:
+  - WMI ACPI thermal probes,
+  - WMI perf thermal probes,
+  - sysinfo component probes (label + raw + accepted/rejected reason),
+  - Dell namespace/class hint probes (`ROOT\\dcim\\sysman`, `Dell%` class hints when present).
+- Diagnostics snapshot and export now include full sensor discovery attempts.
+
+#### CPU package temperature state handling
+- When package temp remains unavailable, diagnostics now surfaces explicit `driver_required` state for CPU package telemetry on Dell-profile systems.
+- Support snapshot includes a clear note that user-mode probes can be insufficient for package sensors.
+
+#### Shell and topbar refinement
+- Sidebar reorganised into clean nav groups (`Monitor`, `Tuning`, `Maintenance`).
+- Added compact-shell behavior linked to Settings compact mode.
+- Tightened topbar/search/action density for a less bulky desktop utility feel.
+
+#### Close/minimise/quit behavior
+- Added native runtime close policy command (`set_close_to_tray`).
+- Window close now hides-to-tray only when enabled; otherwise close exits app.
+- Frontend syncs Settings tray toggle with native close policy.
+
+#### Validation target for this phase
+- Completed in-session validation after code/docs updates:
+  - `npm.cmd run build` completed successfully (`BUILD_DONE` marker captured).
+  - `cargo check --manifest-path src-tauri/Cargo.toml` completed successfully.
+  - Automated viewport smoke against `npm run dev` at 980x680, 1920x1080, 2560x1440, and 3440x1440 showed no horizontal overflow in shell, sidebar, or topbar containers.
+- Remaining manual verification to run on an interactive desktop session:
+  - tray menu `Exit` end-to-end confirmation (full process teardown after user click),
+  - diagnostics export spot-check from the running desktop app to confirm discovery-attempt payload content on target hardware.
 
 ## Completed Work
 

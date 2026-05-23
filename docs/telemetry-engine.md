@@ -86,6 +86,49 @@ The frontend diagnostics page renders a matrix with:
 
 This matrix is built from the backend snapshot returned by `get_telemetry_diagnostics` and exported via `export_diagnostics`.
 
+### Dell Laptop Temperature Investigation (Current)
+
+For systems where CPU package temperature remains missing (notably some Dell/Alienware laptops), the engine now emits a dedicated sensor discovery report instead of silently treating the channel as blank.
+
+Discovery report includes:
+
+- machine vendor/model/family and Dell profile detection,
+- ACPI thermal probe attempts,
+- perf-counter thermal probe attempts,
+- sysinfo component attempts (label + raw value + accepted/rejected reason),
+- Dell namespace/class hints where visible from user mode,
+- recommended action when package channel is unavailable.
+
+If no reliable package sensor is found, capability and provenance state now surface `driver_required` explicitly for CPU package telemetry.
+
+### LibreHardwareMonitor Research Notes (Why Driver Paths May Be Needed)
+
+LibreHardwareMonitor relies on deeper hardware access for many package-level and board-level sensors:
+
+- CPU package/MSR sensor paths for Intel and AMD package channels,
+- embedded controller access on supported board/laptop families,
+- Super I/O and LPC access for board thermals/fans,
+- model-specific mapping tables and low-level transport modules.
+
+In practice, this often depends on kernel-assisted I/O or privileged hardware access patterns beyond plain user-mode WMI.
+
+### Staged Embedded Provider Plan (No Unsafe Driver Yet)
+
+Phase A - Discovery hardening (current):
+- keep user-mode only,
+- export full discovery traces,
+- make limitation states explicit in UI.
+
+Phase B - Optional OEM provider abstraction:
+- add provider interface for optional embedded driver/runtime,
+- isolate high-privilege reads behind explicit capability and user consent,
+- keep current user-mode provider as default safe baseline.
+
+Phase C - Signed OEM path (future):
+- ship only signed and model-validated provider components,
+- maintain standalone packaging,
+- default to disabled until compatibility matrix is validated.
+
 ---
 
 ## Sensor Sources
@@ -230,6 +273,7 @@ pub struct TelemetryDiagnosticsSnapshot {
   pub sensors: Vec<SensorProvenance>,
   pub support_snapshot: Vec<String>,
   pub support_actions: Vec<String>,
+  pub sensor_discovery: SensorDiscoveryReport,
   pub hardware_identity: SystemInfo,
   pub sample: HardwareSample,
 }

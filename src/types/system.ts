@@ -218,6 +218,28 @@ export type SensorProvenance = {
   icon: string;
 };
 
+export type SensorDiscoveryAttempt = {
+  source: string;
+  query: string;
+  label: string;
+  rawValue: string;
+  valueC: number | null;
+  accepted: boolean;
+  reason: string;
+};
+
+export type SensorDiscoveryReport = {
+  machineVendor: string;
+  machineModel: string;
+  machineFamily: string;
+  isDell: boolean;
+  packageTempAvailable: boolean;
+  requiresDriver: boolean;
+  recommendedAction: string;
+  dellClassHints: string[];
+  attempts: SensorDiscoveryAttempt[];
+};
+
 export type TelemetryDiagnosticsSnapshot = {
   createdAt: string;
   overallState: string;
@@ -229,6 +251,7 @@ export type TelemetryDiagnosticsSnapshot = {
   sensors: SensorProvenance[];
   supportSnapshot: string[];
   supportActions: string[];
+  sensorDiscovery: SensorDiscoveryReport;
   hardwareIdentity: SystemInfo;
   sample: HardwareSample;
 };
@@ -241,6 +264,7 @@ export type DiagnosticsExport = {
   providerCount: number;
   capabilityCount: number;
   sensorCount: number;
+  discoveryAttemptCount: number;
 };
 
 export type PerformanceProfileId = 'quiet' | 'balanced' | 'gaming' | 'creator';

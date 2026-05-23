@@ -136,6 +136,78 @@ export function TelemetryDiagnosticsPage() {
         <Panel className="diagnostics-panel wide">
           <div className="panel-heading">
             <div>
+              <span className="eyebrow">Sensor discovery report</span>
+              <h2>Thermal probe attempts, labels, and rejected values</h2>
+            </div>
+            <BadgeInfo size={18} />
+          </div>
+          {snapshot?.sensorDiscovery ? (
+            <>
+              <div className="discovery-summary-grid">
+                <div>
+                  <span>Machine</span>
+                  <strong>{snapshot.sensorDiscovery.machineVendor} {snapshot.sensorDiscovery.machineModel}</strong>
+                </div>
+                <div>
+                  <span>Family</span>
+                  <strong>{snapshot.sensorDiscovery.machineFamily || 'Unknown'}</strong>
+                </div>
+                <div>
+                  <span>Dell profile</span>
+                  <strong>{snapshot.sensorDiscovery.isDell ? 'Detected' : 'Not detected'}</strong>
+                </div>
+                <div>
+                  <span>CPU package temp</span>
+                  <strong>{snapshot.sensorDiscovery.packageTempAvailable ? 'Available' : 'Unavailable'}</strong>
+                </div>
+              </div>
+              {!snapshot.sensorDiscovery.packageTempAvailable && (
+                <div className={snapshot.sensorDiscovery.requiresDriver ? 'validation-card degraded' : 'validation-card partial'}>
+                  <strong>CPU package temperature is not available from current user-mode sources.</strong>
+                  <p>{snapshot.sensorDiscovery.recommendedAction}</p>
+                </div>
+              )}
+              {snapshot.sensorDiscovery.dellClassHints.length > 0 && (
+                <div className="discovery-hints">
+                  <span>Dell WMI class hints</span>
+                  <strong>{snapshot.sensorDiscovery.dellClassHints.join(' · ')}</strong>
+                </div>
+              )}
+              <div className="diagnostics-matrix discovery-matrix">
+                <div className="diagnostics-matrix-head">
+                  <span>Source</span>
+                  <span>Label</span>
+                  <span>Raw</span>
+                  <span>Accepted</span>
+                  <span>Value C</span>
+                  <span>Reason</span>
+                </div>
+                {snapshot.sensorDiscovery.attempts.map((attempt, index) => (
+                  <motion.div
+                    key={`${attempt.source}-${attempt.label}-${index}`}
+                    className="diagnostics-matrix-row"
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.14, delay: index * 0.01 }}
+                  >
+                    <span>{attempt.source}</span>
+                    <span>{attempt.label}</span>
+                    <span>{attempt.rawValue}</span>
+                    <span className={attempt.accepted ? 'state-chip live' : 'state-chip blocked'}>{attempt.accepted ? 'yes' : 'no'}</span>
+                    <span>{attempt.valueC == null ? 'N/A' : `${attempt.valueC.toFixed(1)} C`}</span>
+                    <span>{attempt.reason}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p>Sensor discovery snapshot unavailable.</p>
+          )}
+        </Panel>
+
+        <Panel className="diagnostics-panel wide">
+          <div className="panel-heading">
+            <div>
               <span className="eyebrow">Provider orchestration</span>
               <h2>Load order, binding state, and active provider</h2>
             </div>
@@ -321,7 +393,7 @@ export function TelemetryDiagnosticsPage() {
             </div>
             <div>
               <span>Coverage</span>
-              <strong>{exportResult ? `${exportResult.providerCount} providers · ${exportResult.capabilityCount} capabilities · ${exportResult.sensorCount} sensors` : 'Live snapshot pending'}</strong>
+              <strong>{exportResult ? `${exportResult.providerCount} providers · ${exportResult.capabilityCount} capabilities · ${exportResult.sensorCount} sensors · ${exportResult.discoveryAttemptCount} discovery probes` : 'Live snapshot pending'}</strong>
             </div>
           </div>
         </Panel>
@@ -378,6 +450,9 @@ function validateSnapshot(snapshot: TelemetryDiagnosticsSnapshot): ValidationRes
   if (liveSensors === 0) issues.push('No live sensor groups are currently visible.');
   if (driverRequired > 0) issues.push(`${driverRequired} capability area(s) require a driver-backed implementation.`);
   if (blocked > 0) issues.push(`${blocked} capability area(s) are safety-blocked until validated.`);
+  if (!snapshot.sensorDiscovery.packageTempAvailable) {
+    issues.push('CPU package temperature is not available from current user-mode probes.');
+  }
 
   const status: ValidationResult['status'] = issues.length === 0 ? 'healthy' : issues.length <= 2 ? 'partial' : 'degraded';
   return {

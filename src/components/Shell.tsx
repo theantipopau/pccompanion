@@ -31,6 +31,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const { sample, native } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dashboardActive = activeView === 'dashboard';
+  const compactShell = settings.experience.compactMode;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -103,6 +104,21 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
 
   const searchResults = [...pageResults, ...actionResults].slice(0, 9);
 
+  const navGroups: Array<{ label: string; ids: string[] }> = [
+    { label: 'Monitor', ids: ['dashboard', 'thermals', 'processes', 'passport', 'diagnostics'] },
+    { label: 'Tuning', ids: ['profiles', 'optimizer', 'utilities'] },
+    { label: 'Maintenance', ids: ['cleanup', 'registry', 'startup', 'storage', 'settings'] },
+  ];
+
+  const groupedNavItems = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.ids
+        .map((id) => navItems.find((item) => item.id === id))
+        .filter((item): item is NavItem => Boolean(item)),
+    }))
+    .filter((group) => group.items.length > 0);
+
   useEffect(() => {
     setActiveSearchIndex(0);
   }, [searchQuery]);
@@ -168,39 +184,44 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary">
+    <div className={compactShell ? 'app-shell compact-shell' : 'app-shell'}>
+      <aside className={compactShell ? 'sidebar compact' : 'sidebar'} aria-label="Primary">
         <div className="brand-lockup">
           <img className="brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
           <img className="brand-wordmark" src={assets.radiumHeader} alt="Radium PCs Companion" />
         </div>
         <nav className="nav-list">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = item.id === activeView;
-            return (
-              <motion.button
-                key={item.id}
-                className={active ? 'nav-item active' : 'nav-item'}
-                onClick={() => onNavigate(item.id)}
-                aria-current={active ? 'page' : undefined}
-                title={item.label}
-                whileHover={{ x: active ? 0 : 2 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-                {active && (
-                  <motion.span
-                    className="nav-active-pip"
-                    layoutId="nav-active-pip"
-                    transition={{ duration: 0.2, ease: [0.2, 0, 0.13, 1] }}
-                  />
-                )}
-              </motion.button>
-            );
-          })}
+          {groupedNavItems.map((group) => (
+            <div key={group.label} className="nav-group">
+              <span className="nav-group-label">{group.label}</span>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = item.id === activeView;
+                return (
+                  <motion.button
+                    key={item.id}
+                    className={active ? 'nav-item active' : 'nav-item'}
+                    onClick={() => onNavigate(item.id)}
+                    aria-current={active ? 'page' : undefined}
+                    title={item.label}
+                    whileHover={{ x: active ? 0 : 2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
+                  >
+                    <Icon size={16} />
+                    <span>{item.label}</span>
+                    {active && (
+                      <motion.span
+                        className="nav-active-pip"
+                        layoutId="nav-active-pip"
+                        transition={{ duration: 0.2, ease: [0.2, 0, 0.13, 1] }}
+                      />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Live sensor strip — shown on all pages so temps are always visible */}

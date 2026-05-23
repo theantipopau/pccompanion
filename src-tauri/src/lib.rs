@@ -13,6 +13,7 @@ mod windows_util;
 use serde::Deserialize;
 use std::io::Write;
 use std::sync::Arc;
+use std::sync::Mutex;
 use log::LevelFilter;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -32,6 +33,18 @@ struct TrayStatus {
     overlay_enabled: bool,
 }
 
+struct AppRuntimeState {
+    close_to_tray: Mutex<bool>,
+}
+
+impl Default for AppRuntimeState {
+    fn default() -> Self {
+        Self {
+            close_to_tray: Mutex::new(true),
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DiagnosticsExport {
@@ -42,6 +55,7 @@ struct DiagnosticsExport {
     provider_count: usize,
     capability_count: usize,
     sensor_count: usize,
+    discovery_attempt_count: usize,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -193,12 +207,27 @@ fn export_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> Diagnostics
             "Provider orchestration".to_string(),
             "Capability matrix".to_string(),
             "Sensor provenance".to_string(),
+            "Sensor discovery report".to_string(),
             "Support tooling".to_string(),
         ],
         provider_count: diagnostics.providers.len(),
         capability_count: diagnostics.capabilities.len(),
         sensor_count: diagnostics.sensors.len(),
+        discovery_attempt_count: diagnostics.sensor_discovery.attempts.len(),
     }
+}
+
+#[tauri::command]
+fn set_close_to_tray(
+    enabled: bool,
+    runtime: tauri::State<'_, AppRuntimeState>,
+) -> Result<(), String> {
+    let mut close_to_tray = runtime
+        .close_to_tray
+        .lock()
+        .map_err(|_| "Close behavior state lock poisoned".to_string())?;
+    *close_to_tray = enabled;
+    Ok(())
 }
 
 #[tauri::command]
@@ -428,6 +457,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(engine)
+        .manage(AppRuntimeState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(LevelFilter::Info)
@@ -438,8 +468,21 @@ pub fn run() {
         .on_window_event(|window, event| {
             if window.label() == "main" {
                 if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    let close_to_tray = window
+                        .app_handle()
+                        .state::<AppRuntimeState>()
+                        .close_to_tray
+                        .lock()
+                        .map(|flag| *flag)
+                        .unwrap_or(true);
+
+                    if close_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        api.prevent_close();
+                        window.app_handle().exit(0);
+                    }
                 }
             }
         })
@@ -470,6 +513,7 @@ pub fn run() {
             show_main_window,
             set_startup_enabled,
             set_overlay_window,
+            set_close_to_tray,
             scan_startup_items,
             set_startup_item_enabled,
             scan_storage_cleanup,

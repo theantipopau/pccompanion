@@ -68,6 +68,10 @@ export async function setStartupEnabled(enabled: boolean): Promise<boolean> {
   return callNative<boolean>('set_startup_enabled', { enabled }, async () => enabled);
 }
 
+export async function setCloseToTray(enabled: boolean): Promise<void> {
+  return callNative<void>('set_close_to_tray', { enabled }, async () => undefined);
+}
+
 export async function showMainWindow(): Promise<void> {
   return callNative<void>('show_main_window', undefined, async () => undefined);
 }
@@ -121,10 +125,11 @@ export async function exportDiagnostics(): Promise<DiagnosticsExport> {
     path: 'Browser preview only',
     createdAt: new Date().toLocaleString(),
     message: 'Native diagnostics export is available in the Tauri desktop app.',
-    sections: ['System identity', 'Telemetry sample', 'Capability registry', 'Provider orchestration'],
+    sections: ['System identity', 'Telemetry sample', 'Capability registry', 'Provider orchestration', 'Sensor discovery report'],
     providerCount: 3,
     capabilityCount: 3,
     sensorCount: 4,
+    discoveryAttemptCount: 5,
   }));
 }
 
@@ -159,6 +164,27 @@ export async function getTelemetryDiagnostics(): Promise<TelemetryDiagnosticsSna
     ],
     supportSnapshot: ['Local export only', 'No automatic upload', 'Owner consent required for sharing'],
     supportActions: ['Support Snapshot', 'Generate OEM Report', 'Validate System Health'],
+    sensorDiscovery: {
+      machineVendor: 'Preview',
+      machineModel: 'Browser sandbox',
+      machineFamily: 'Web',
+      isDell: false,
+      packageTempAvailable: false,
+      requiresDriver: false,
+      recommendedAction: 'Run desktop mode to gather hardware sensor discovery probes.',
+      dellClassHints: [],
+      attempts: [
+        {
+          source: 'wmi-acpi',
+          query: 'Desktop-only',
+          label: 'MSAcpi_ThermalZoneTemperature',
+          rawValue: 'preview',
+          valueC: null,
+          accepted: false,
+          reason: 'Browser mode has no hardware access',
+        },
+      ],
+    },
     hardwareIdentity: mockSystemInfo(),
     sample: mockHardwareSample([]),
   }));

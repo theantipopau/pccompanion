@@ -182,6 +182,32 @@ pub struct SensorProvenance {
 
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct SensorDiscoveryAttempt {
+    pub source: String,
+    pub query: String,
+    pub label: String,
+    pub raw_value: String,
+    pub value_c: Option<f32>,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SensorDiscoveryReport {
+    pub machine_vendor: String,
+    pub machine_model: String,
+    pub machine_family: String,
+    pub is_dell: bool,
+    pub package_temp_available: bool,
+    pub requires_driver: bool,
+    pub recommended_action: String,
+    pub dell_class_hints: Vec<String>,
+    pub attempts: Vec<SensorDiscoveryAttempt>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct TelemetryDiagnosticsSnapshot {
     pub created_at: String,
     pub overall_state: String,
@@ -193,6 +219,7 @@ pub struct TelemetryDiagnosticsSnapshot {
     pub sensors: Vec<SensorProvenance>,
     pub support_snapshot: Vec<String>,
     pub support_actions: Vec<String>,
+    pub sensor_discovery: SensorDiscoveryReport,
     pub hardware_identity: SystemInfo,
     pub sample: HardwareSample,
 }
@@ -216,6 +243,7 @@ pub struct HardwareCache {
     pub provider_diagnostics: Vec<ProviderDiagnostics>,
     pub provider_warnings: Vec<String>,
     pub provider_errors: Vec<String>,
+    pub sensor_discovery: SensorDiscoveryReport,
     pub gpu_temp: Option<f32>,
     pub gpu_usage: f32,
     pub gpu_vram_used_gb: f32,
@@ -468,12 +496,22 @@ impl MonitoringEngine {
         let gpu_provider = c.gpu_provider.to_lowercase();
 
         let mut caps = Vec::new();
+        let driver_required = c.sensor_discovery.requires_driver;
         caps.push(HardwareCapability {
             id: "cpu-package".to_string(),
             label: "CPU package telemetry".to_string(),
-            state: if c.cpu_temp.is_some() { "live" } else { "partial" }.to_string(),
+            state: if c.cpu_temp.is_some() {
+                "live"
+            } else if driver_required {
+                "driver_required"
+            } else {
+                "partial"
+            }
+            .to_string(),
             detail: if c.cpu_temp.is_some() {
                 "WMI ACPI thermal + sysinfo load active".to_string()
+            } else if driver_required {
+                "Package temperature not exposed via user-mode WMI/sysinfo on this machine".to_string()
             } else {
                 "Load active; temperature channel unavailable".to_string()
             },
@@ -582,6 +620,7 @@ impl MonitoringEngine {
                 "Generate OEM Report".to_string(),
                 "Validate System Health".to_string(),
             ],
+            sensor_discovery: cache.sensor_discovery.clone(),
             hardware_identity: system_info,
             sample,
         }
@@ -758,19 +797,56 @@ fn build_sensor_provenance(
     let gpu_native = gpu_provider == "NVML" || gpu_provider == "ADL2";
     let gpu_fallback = gpu_provider == "WMI fallback";
     let intel_staged = cache.intel_igcl_loaded && cache.gpu_vendor.to_lowercase() == "intel";
+    let cpu_requires_driver = cache.sensor_discovery.requires_driver;
 
     let mut sensors = vec![
         SensorProvenance {
             id: "cpu-temp".to_string(),
             sensor: "CPU Temp".to_string(),
-            provider: "WMI ACPI".to_string(),
+            provider: "WMI ACPI + sysinfo component scan".to_string(),
             provider_state: if cache.cpu_temp.is_some() { "loaded".to_string() } else { "degraded".to_string() },
-            state: if cache.cpu_temp.is_some() { "live".to_string() } else { "partial".to_string() },
-            confidence: confidence_from_state(if cache.cpu_temp.is_some() { "live" } else { "partial" }, "WMI", true),
-            telemetry_quality: if cache.cpu_temp.is_some() { "Package thermal channel".to_string() } else { "Fallback thermal channel only".to_string() },
-            fallback_status: if cache.cpu_temp.is_some() { "No fallback needed".to_string() } else { "Sysinfo CPU usage still live".to_string() },
-            notes: "Thermal zone temperature is filtered to avoid false positives.".to_string(),
-            oem_support_status: "Supported with fallback".to_string(),
+            state: if cache.cpu_temp.is_some() {
+                "live".to_string()
+            } else if cpu_requires_driver {
+                "driver_required".to_string()
+            } else {
+                "partial".to_string()
+            },
+            confidence: confidence_from_state(
+                if cache.cpu_temp.is_some() {
+                    "live"
+                } else if cpu_requires_driver {
+                    "driver_required"
+                } else {
+                    "partial"
+                },
+                "WMI",
+                true,
+            ),
+            telemetry_quality: if cache.cpu_temp.is_some() {
+                "Package thermal channel".to_string()
+            } else if cpu_requires_driver {
+                "No package channel in user-mode probes".to_string()
+            } else {
+                "Fallback thermal channel only".to_string()
+            },
+            fallback_status: if cache.cpu_temp.is_some() {
+                "No fallback needed".to_string()
+            } else if cpu_requires_driver {
+                "Driver-backed provider likely required".to_string()
+            } else {
+                "Sysinfo CPU usage still live".to_string()
+            },
+            notes: if cache.cpu_temp.is_some() {
+                "Thermal zone temperature is filtered to avoid false positives.".to_string()
+            } else {
+                cache.sensor_discovery.recommended_action.clone()
+            },
+            oem_support_status: if cpu_requires_driver {
+                "Driver required".to_string()
+            } else {
+                "Supported with fallback".to_string()
+            },
             icon: "thermometer".to_string(),
         },
         SensorProvenance {
@@ -898,6 +974,13 @@ fn build_support_snapshot(
         format!("Support confidence: {}", if sample.cpu.temperature.is_some() && sample.gpu.temperature.is_some() { "high" } else { "medium" }),
     ];
 
+    if cache.sensor_discovery.requires_driver {
+        items.push(
+            "CPU package temperature likely requires OEM/driver-assisted access (driver path not enabled in this build)."
+                .to_string(),
+        );
+    }
+
     if cache.provider_errors.is_empty() {
         items.push("No provider errors cached.".to_string());
     } else {
@@ -983,6 +1066,11 @@ pub fn monitor_loop(
             }
         }
     };
+
+    #[cfg(windows)]
+    let machine_profile_opt = wmi_opt
+        .as_ref()
+        .map(crate::wmi_provider::query_machine_profile);
 
     // One-shot vendor GPU provider init (Windows only).
     // Priority: NVML (NVIDIA) → AMD ADL → Intel IGCL groundwork → WMI fallback.
@@ -1128,70 +1216,11 @@ pub fn monitor_loop(
 
         // --- CPU temperature: WMI paths first, then sysinfo Components fallback ---
         #[cfg(windows)]
-        let cpu_temp: Option<f32> = {
-            let wmi_temp = wmi_opt
-                .as_ref()
-                .and_then(|ctx| crate::wmi_provider::query_cpu_temp(ctx));
-            if wmi_temp.is_some() {
-                wmi_temp
-            } else {
-                // Fallback: sysinfo Components (works on some Intel systems
-                // where WMI thermal zones are empty but PDH counters are live).
-                let components = Components::new_with_refreshed_list();
-                let sysinfo_temp = {
-                    let prefer_cpu_labels = |label: &str| {
-                        let l = label.to_lowercase();
-                        l.contains("cpu")
-                            || l.contains("core")
-                            || l.contains("package")
-                            || l.contains("tdie")
-                            || l.contains("tctl")
-                            || l.contains("acpi")
-                            || l.contains("thermal")
-                            || l.contains("zone")
-                            || l.contains("platform")
-                            || l.contains("pch")
-                    };
-                    let is_plausible_temp = |value: f32| (0.0..=120.0).contains(&value);
-
-                    let preferred = components
-                        .iter()
-                        .filter(|c| prefer_cpu_labels(c.label()))
-                        .filter_map(|c| c.temperature())
-                        .filter(|temp| is_plausible_temp(*temp))
-                        .reduce(f32::max);
-
-                    if preferred.is_some() {
-                        preferred
-                    } else {
-                        components
-                            .iter()
-                            .filter(|c| {
-                                let l = c.label().to_lowercase();
-                                !l.contains("battery")
-                                    && !l.contains("charger")
-                                    && !l.contains("adapter")
-                                    && !l.contains("unknown")
-                            })
-                            .filter_map(|c| c.temperature())
-                            .filter(|temp| is_plausible_temp(*temp))
-                            .reduce(f32::max)
-                    }
-                };
-                if sysinfo_temp.is_none() {
-                    log::warn!(
-                        "CPU temperature unavailable: WMI thermal zones and sysinfo components \
-                         both returned None. App may need elevated privileges or vendor thermal \
-                         drivers (e.g. Dell Command Monitor) to read sensors on this machine."
-                    );
-                } else {
-                    log::debug!("CPU temp via sysinfo Components: {:?} °C", sysinfo_temp);
-                }
-                sysinfo_temp
-            }
-        };
+        let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
+            discover_cpu_temperature(wmi_opt.as_ref(), machine_profile_opt.as_ref());
         #[cfg(not(windows))]
-        let cpu_temp: Option<f32> = None;
+        let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
+            (None, SensorDiscoveryReport::default());
 
         // --- GPU reading: NVML > AMD ADL > IGCL > WMI fallback (Windows only) ---
         #[cfg(windows)]
@@ -1255,6 +1284,7 @@ pub fn monitor_loop(
             c.state = state.to_string();
             c.cpu_usage = tick.cpu_usage;
             c.cpu_temp = cpu_temp;
+            c.sensor_discovery = sensor_discovery;
             c.cpu_clock_mhz = tick.cpu_clock_mhz;
             c.ram_used_gb = tick.ram_used_gb;
             c.ram_total_gb = tick.ram_total_gb;
@@ -1321,6 +1351,159 @@ pub fn monitor_loop(
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+#[cfg(windows)]
+fn discover_cpu_temperature(
+    wmi_ctx: Option<&crate::wmi_provider::WmiContext>,
+    machine_profile: Option<&crate::wmi_provider::MachineProfile>,
+) -> (Option<f32>, SensorDiscoveryReport) {
+    let mut attempts: Vec<SensorDiscoveryAttempt> = Vec::new();
+    let mut wmi_max_temp: Option<f32> = None;
+    let mut dell_class_hints = Vec::new();
+
+    let (machine_vendor, machine_model, machine_family, is_dell) = if let Some(profile) = machine_profile {
+        (
+            profile.manufacturer.clone(),
+            profile.model.clone(),
+            profile.system_family.clone(),
+            profile.is_dell,
+        )
+    } else {
+        (
+            "Unknown".to_string(),
+            "Unknown".to_string(),
+            "Unknown".to_string(),
+            false,
+        )
+    };
+
+    if let Some(ctx) = wmi_ctx {
+        let wmi_discovery = crate::wmi_provider::collect_thermal_discovery(
+            ctx,
+            &crate::wmi_provider::MachineProfile {
+                manufacturer: machine_vendor.clone(),
+                model: machine_model.clone(),
+                system_family: machine_family.clone(),
+                is_dell,
+            },
+        );
+        for entry in wmi_discovery.records {
+            if entry.accepted {
+                wmi_max_temp = Some(match wmi_max_temp {
+                    Some(current) => current.max(entry.value_c.unwrap_or(current)),
+                    None => entry.value_c.unwrap_or_default(),
+                });
+            }
+            attempts.push(SensorDiscoveryAttempt {
+                source: entry.source,
+                query: entry.query,
+                label: entry.label,
+                raw_value: entry.raw_value,
+                value_c: entry.value_c,
+                accepted: entry.accepted,
+                reason: entry.reason,
+            });
+        }
+        dell_class_hints = wmi_discovery.dell_class_hints;
+    } else {
+        attempts.push(SensorDiscoveryAttempt {
+            source: "wmi".to_string(),
+            query: "WMI context initialization".to_string(),
+            label: "ROOT\\CIMV2 / ROOT\\WMI".to_string(),
+            raw_value: "unavailable".to_string(),
+            value_c: None,
+            accepted: false,
+            reason: "WMI initialization failed on this runtime".to_string(),
+        });
+    }
+
+    let components = Components::new_with_refreshed_list();
+    let mut sysinfo_candidate_temp: Option<f32> = None;
+    for component in components.iter() {
+        let label = component.label().to_string();
+        let label_lower = label.to_lowercase();
+        let preferred_label = label_lower.contains("cpu")
+            || label_lower.contains("core")
+            || label_lower.contains("package")
+            || label_lower.contains("tdie")
+            || label_lower.contains("tctl")
+            || label_lower.contains("acpi")
+            || label_lower.contains("thermal")
+            || label_lower.contains("zone")
+            || label_lower.contains("platform")
+            || label_lower.contains("pch");
+
+        let disallowed_label = label_lower.contains("battery")
+            || label_lower.contains("charger")
+            || label_lower.contains("adapter")
+            || label_lower.contains("unknown");
+
+        let maybe_temp = component.temperature();
+        let accepted = maybe_temp
+            .map(|temp| (0.0..=120.0).contains(&temp) && !disallowed_label)
+            .unwrap_or(false);
+        if accepted && preferred_label {
+            let value = maybe_temp.unwrap_or_default();
+            sysinfo_candidate_temp = Some(match sysinfo_candidate_temp {
+                Some(current) => current.max(value),
+                None => value,
+            });
+        }
+
+        attempts.push(SensorDiscoveryAttempt {
+            source: "sysinfo-component".to_string(),
+            query: "Components::new_with_refreshed_list".to_string(),
+            label,
+            raw_value: maybe_temp
+                .map(|temp| format!("{temp:.2}"))
+                .unwrap_or_else(|| "null".to_string()),
+            value_c: if accepted { maybe_temp } else { None },
+            accepted,
+            reason: if maybe_temp.is_none() {
+                "component has no temperature value".to_string()
+            } else if disallowed_label {
+                "rejected non-CPU-oriented component label".to_string()
+            } else if !preferred_label {
+                "label not in preferred CPU/package pattern".to_string()
+            } else {
+                "accepted plausible sysinfo thermal value".to_string()
+            },
+        });
+    }
+
+    let cpu_temp = if wmi_max_temp.is_some() {
+        wmi_max_temp
+    } else {
+        sysinfo_candidate_temp
+    };
+
+    if cpu_temp.is_none() {
+        log::warn!(
+            "CPU temperature unavailable: all WMI and sysinfo discovery probes were rejected or empty."
+        );
+    }
+
+    let requires_driver = cpu_temp.is_none() && is_dell;
+    let report = SensorDiscoveryReport {
+        machine_vendor,
+        machine_model,
+        machine_family,
+        is_dell,
+        package_temp_available: cpu_temp.is_some(),
+        requires_driver,
+        recommended_action: if cpu_temp.is_some() {
+            "CPU package temperature is available through user-mode telemetry paths.".to_string()
+        } else if is_dell {
+            "No reliable package temperature channel found. This Dell system likely needs an OEM/driver-backed provider for package sensors.".to_string()
+        } else {
+            "No reliable package temperature channel found. Continue with WMI/sysinfo fallback and collect discovery report for model-specific tuning.".to_string()
+        },
+        dell_class_hints,
+        attempts,
+    };
+
+    (cpu_temp, report)
+}
 
 pub fn bytes_to_gb(bytes: u64) -> f32 {
     bytes as f32 / 1_073_741_824.0
