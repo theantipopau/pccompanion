@@ -59,6 +59,57 @@
 
 ---
 
+### Phase: Premium Visual Identity & Dashboard Presentation (2026-05-23)
+
+#### Scope guardrails applied
+- Frontend-only presentation pass (no backend or telemetry architecture changes).
+- Preserved provider arbitration, diagnostics contracts, tray lifecycle behavior, and cleanup operation logic.
+
+#### UI implementation highlights
+- Added hardware-aware dashboard hero theming keyed to detected vendor family.
+- Added hero identity chips for immediate platform context (OS, board, GPU, CPU).
+- Added support-readiness grade tile in dashboard hero (uses existing performance score output).
+- Reworked System Passport metadata rows to derive from live system context instead of pending placeholders.
+- Refined OSD overlay readability (border, typography, grip treatment, row hover microinteractions).
+- Added restrained ambient depth layers and improved notice/loading surface polish.
+
+#### Validation evidence captured in this phase
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
+---
+
+### Phase: Dashboard Layout, Composition & Visual Hierarchy Refinement (2026-05-23)
+
+#### Scope guardrails applied
+- Layout/composition-only frontend pass.
+- No telemetry engine, diagnostics contract, provider arbitration, or lifecycle architecture changes.
+
+#### UI composition outcomes
+- Converted dashboard layout to stronger hierarchy with explicit primary and secondary telemetry grouping.
+- Reduced hero dead space by tightening top-section padding, logo scale, telemetry chips, and gauge footprint.
+- Reworked hero into a compact system identity and telemetry overview with runtime state/provider context.
+- Added a restrained right-rail visual treatment to avoid placeholder-banner feel while staying lightweight.
+- Rebalanced grid proportions for improved above-the-fold telemetry density and reduced horizontal emptiness.
+- Improved health/readiness context presentation and vendor identity integration.
+
+#### Log review notes (latest test)
+- No crash stack traces observed in latest runtime tail.
+- Dell CPU package-temperature limitation warnings continue at expected cadence with explicit classification (`missing_or_invalid_wmi_class`).
+- One log-tail task remains quoting-fragile in this workspace when paths include spaces; direct quoted PowerShell invocation works.
+
+#### Validation evidence captured in this phase
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
+---
+
 ### Phase: Final Reliability + Hardware-Telemetry Audit Pass (2026-05-23)
 
 ### Phase: Real Hardware Validation & Commercial Readiness (2026-05-23)

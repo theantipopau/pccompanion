@@ -185,6 +185,44 @@ Latest pass focused on refinement, not redesign:
 - Improved diagnostics readability with quieter headers, tighter matrix rows, and clearer copy for support interpretation.
 - Kept existing telemetry, tray, startup, and diagnostics architecture unchanged.
 
+## Premium Visual Identity And Dashboard Presentation (Latest)
+
+Latest visual pass elevates presentation quality while keeping all backend behavior unchanged:
+
+- Hardware-aware dashboard hero accents now adapt by detected vendor family (Intel, AMD, NVIDIA).
+- Dashboard system identity chips now surface core platform details directly in the hero for faster operator context.
+- Support-readiness grade tile adds immediate status framing without changing telemetry scoring logic.
+- System Passport identity metadata now uses live system-derived values (no placeholder pending labels).
+- OSD overlay typography, spacing, border treatment, and hover behavior were refined for cleaner streamer-grade readability.
+- Loading and notice surfaces gained restrained depth treatment and improved contrast rhythm.
+
+Validation after this visual phase:
+
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
+## Dashboard Layout, Composition And Visual Hierarchy Refinement (Latest)
+
+This pass focuses on layout quality and telemetry readability without changing backend architecture:
+
+- Reduced oversized hero empty space by tightening hero spacing, logo scale, and telemetry grouping.
+- Reframed top section into a compact System Identity and Telemetry Overview composition.
+- Added stronger hierarchy between primary telemetry (CPU/GPU/RAM) and secondary telemetry (network and contextual panels).
+- Rebalanced dashboard grid proportions for better above-the-fold density and less dead horizontal space.
+- Improved system-health framing with compact state, provider context, telemetry lane summary, and freshness indicator.
+- Refined vendor/logo integration and right-side hero visual treatment for a more intentional OEM presentation.
+
+Validation after this pass:
+
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
 ## Quick Start
 
 ```powershell

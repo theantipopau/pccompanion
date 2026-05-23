@@ -1,4 +1,4 @@
-import { Cpu, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, PlugZap, ShieldCheck, Thermometer, Zap } from 'lucide-react';
+import { Cpu, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Thermometer, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge as RadialGauge } from '../components/Gauge';
@@ -13,6 +13,7 @@ import { useSettings } from '../hooks/useSettings';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
 import { assets, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
+import type { Vendor } from '../types/system';
 
 type DashboardPageProps = {
   onNavigate?: (view: string) => void;
@@ -20,18 +21,43 @@ type DashboardPageProps = {
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const companyWebsite = 'https://radiumpcs.com.au';
-  const phone = '1300 935 884';
-  const salesEmail = 'sales@radiumpcs.com.au';
-  const supportEmail = 'support@radiumpcs.com.au';
-  const operationsEmail = 'operations@radiumpcs.com.au';
-  const businessHours = 'Mon-Fri, 9:30am-5:30pm';
-  const storeAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
-  const abn = '55 644 890 013';
   const { systemInfo, sample, loading, error, native } = useMonitor();
   const { settings } = useSettings();
   const history = sample?.history ?? [];
   const animateCharts = settings.experience.animations;
   const performanceScore = computePerformanceScore(sample);
+  const gpuProvider = sample?.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI';
+  const nominal = sample?.state === 'valid';
+  const sampleAgeMs = sample ? Math.max(0, Date.now() - sample.timestamp) : null;
+  const sampleAgeLabel = sampleAgeMs == null ? 'Awaiting feed' : sampleAgeMs < 2000 ? 'Live now' : `${Math.round(sampleAgeMs / 1000)}s ago`;
+  const activeChannels = [sample?.cpu.temperature != null, sample?.gpu.temperature != null, !!sample, !!sample].filter(Boolean).length;
+  const hardwareTheme = (systemInfo?.gpuVendor && systemInfo.gpuVendor !== 'unknown')
+    ? systemInfo.gpuVendor
+    : (systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : 'unknown');
+  const systemIdentity = [
+    { label: 'Platform', value: systemInfo?.windows ?? 'Detecting OS' },
+    { label: 'Mainboard', value: systemInfo?.motherboard ?? 'Detecting board' },
+    { label: 'GPU', value: systemInfo?.gpu ?? 'Detecting graphics' },
+    { label: 'CPU', value: systemInfo?.cpu ?? 'Detecting processor' },
+  ];
+  const vendorBadges = (() => {
+    if (!systemInfo) return [] as Array<{ key: string; label: string; vendor: Vendor }>;
+    const cpuVendor = systemInfo.cpuVendor;
+    const gpuVendor = systemInfo.gpuVendor;
+
+    if (cpuVendor !== 'unknown' && cpuVendor === gpuVendor) {
+      return [{ key: `shared-${cpuVendor}`, label: 'CPU/GPU', vendor: cpuVendor }];
+    }
+
+    const badges: Array<{ key: string; label: string; vendor: Vendor }> = [];
+    if (cpuVendor !== 'unknown') {
+      badges.push({ key: `cpu-${cpuVendor}`, label: 'CPU', vendor: cpuVendor });
+    }
+    if (gpuVendor !== 'unknown') {
+      badges.push({ key: `gpu-${gpuVendor}`, label: 'GPU', vendor: gpuVendor });
+    }
+    return badges;
+  })();
   const heroSignals = [
     { id: 'cpu', label: 'CPU', value: sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.cpu.usage) : 'Pending' },
     { id: 'gpu', label: 'GPU', value: sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.gpu.usage) : 'Pending' },
@@ -43,21 +69,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     <div className="page">
       <PageHeader
         eyebrow="Radium PCs Companion"
-        title="Command Center"
-        description="Live system telemetry, build identity, and practical tuning tools in one local-first control surface."
+        title="Dashboard"
+        description="Overview of your system's performance."
         action={(
           <div className="dashboard-header-actions">
             <StatePill state={sample?.state ?? (loading ? 'inactive' : 'unavailable')} />
+            <span className="badge badge-dim">GPU provider {gpuProvider}</span>
             <button className="secondary-button" onClick={() => onNavigate?.('diagnostics')}>
               <ShieldCheck size={16} />
               <span>Telemetry Diagnostics</span>
             </button>
-            <a className="primary-button" href={companyWebsite} target="_blank" rel="noreferrer noopener">
-              Book a Build Consultation
-            </a>
-            <a className="secondary-button" href={`mailto:${supportEmail}`}>
-              Contact Support
-            </a>
           </div>
         )}
       />
@@ -73,33 +94,37 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         </div>
       )}
 
-      <div className="dashboard-grid">
+      <div className={`dashboard-grid dashboard-theme-${hardwareTheme}`}>
         <Panel className="hero-monitor">
+          <div className="hero-ambient" aria-hidden="true" />
           <div className="hero-monitor-top">
             <div>
               <div className="dashboard-brandmark" aria-label="Radium branding">
                 <img className="dashboard-brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
                 <img src={assets.radiumHeader} alt="Radium PCs Companion" />
               </div>
-              <span className="eyebrow">System health</span>
-              <h2>{loading ? 'Scanning hardware' : 'Performance steady'}</h2>
-              <p>Polling is throttled for low overhead and chart updates are sampled for smooth rendering.</p>
+              <span className="eyebrow">System identity and telemetry overview</span>
+              <h2>{loading ? 'Scanning hardware' : nominal ? 'Hardware runtime calibrated' : 'Telemetry channels partially degraded'}</h2>
+              <p>
+                Live provider-backed data with explicit channel confidence. Missing sensors stay visible as degraded states.
+              </p>
+              <div className="hero-identity-grid">
+                {systemIdentity.map((identity) => (
+                  <div key={identity.label} className="hero-identity-chip">
+                    <span>{identity.label}</span>
+                    <strong>{identity.value}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="hero-runtime-meta">
+                <span><ShieldCheck size={13} /> State: {(sample?.state ?? 'inactive').toUpperCase()}</span>
+                <span><MonitorUp size={13} /> Provider: {gpuProvider}</span>
+                <span><Gauge size={13} /> Telemetry lanes: {activeChannels}/4</span>
+              </div>
               <div className="hero-links">
-                <a href={companyWebsite} target="_blank" rel="noreferrer noopener">Visit radiumpcs.com.au</a>
-                <a href={`tel:${phone.replace(/\s+/g, '')}`}>Call {phone}</a>
-                <a href={`mailto:${salesEmail}`}>Sales</a>
-                <a href={`mailto:${supportEmail}`}>Support</a>
-                <a href={`mailto:${operationsEmail}`}>Operations</a>
-              </div>
-              <div className="hero-business-meta">
-                <span>{storeAddress}</span>
-                <span>{businessHours}</span>
-                <span>ABN {abn}</span>
-              </div>
-              <div className="hero-why-strip" aria-label="Why choose Radium PCs">
-                <span>Australian custom PC specialists</span>
-                <span>Performance-first builds and tuning</span>
-                <span>Local post-sale support and upgrades</span>
+                <a href={companyWebsite} target="_blank" rel="noreferrer noopener">Radium PCs</a>
+                <button className="secondary-button" onClick={() => onNavigate?.('passport')}>System Passport</button>
+                <button className="secondary-button" onClick={() => onNavigate?.('profiles')}>Performance Profiles</button>
               </div>
               <motion.div
                 className="hero-telemetry-ribbon"
@@ -122,9 +147,31 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 ))}
               </motion.div>
             </div>
-            <div className="vendor-logos">
-              {systemInfo && <img src={vendorLogo(systemInfo.cpuVendor)} alt={systemInfo.cpuVendor} />}
-              {systemInfo && <img src={vendorLogo(systemInfo.gpuVendor)} alt={systemInfo.gpuVendor} />}
+
+            <div className="hero-side-rail">
+              <div className="hero-visual-card" aria-hidden="true">
+                <div className="hero-visual-mesh" />
+                <div className="hero-visual-core" />
+                <div className="hero-silhouette" />
+              </div>
+              <div className="hero-grade-tile">
+                <span>System health</span>
+                <strong>{nominal ? 'Nominal' : 'Degraded'}</strong>
+                <small>{sampleAgeLabel}</small>
+              </div>
+              <div className="hero-grade-tile hero-grade-tile-score">
+                <span>Support readiness</span>
+                <strong>{performanceScore.grade}</strong>
+                <small>{nominal ? 'Live telemetry stable' : 'Degraded channels surfaced'}</small>
+              </div>
+              <div className="vendor-logos" aria-label="Detected silicon vendors">
+                {vendorBadges.map((badge) => (
+                  <div key={badge.key} className="vendor-badge">
+                    <img src={vendorLogo(badge.vendor)} alt={`${badge.vendor} logo`} />
+                    <span>{badge.label}: {badge.vendor.toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className="gauge-row">
@@ -135,30 +182,40 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         </Panel>
 
         <MetricCard
+          className="metric-primary metric-cpu"
           icon={Thermometer}
           label="CPU Temperature"
           value={loading ? 'Scanning' : temp(sample?.cpu.temperature ?? null, settings.monitoring.temperatureUnit)}
-          detail={sample ? mhz(sample.cpu.clockMhz) : 'Awaiting scan'}
+          detail={sample
+            ? sample.cpu.temperature == null
+              ? `Provider WMI ACPI · ${mhz(sample.cpu.clockMhz)} · package sensor unavailable`
+              : `Provider WMI ACPI · ${mhz(sample.cpu.clockMhz)}`
+            : 'Awaiting scan'}
           progress={sample?.cpu.temperature ?? 0}
           tone="cyan"
         />
         <MetricCard
+          className="metric-primary metric-gpu"
           icon={MonitorUp}
           label="GPU Temperature"
           value={loading ? 'Scanning' : temp(sample?.gpu.temperature ?? null, settings.monitoring.temperatureUnit)}
-          detail={sample ? `${mhz(sample.gpu.coreClockMhz)} core · ${sample.gpu.powerWatts ? `${sample.gpu.powerWatts.toFixed(0)} W` : 'power pending'}` : 'Awaiting scan'}
+          detail={sample
+            ? `Provider ${gpuProvider} · ${mhz(sample.gpu.coreClockMhz)} core · VRAM ${gb(sample.gpu.vramUsedGb)} / ${gb(sample.gpu.vramTotalGb)}`
+            : 'Awaiting scan'}
           progress={sample?.gpu.temperature ?? 0}
           tone="green"
         />
         <MetricCard
+          className="metric-primary metric-ram"
           icon={MemoryStick}
           label="Memory"
           value={sample ? `${gb(sample.memory.usedGb)} / ${gb(sample.memory.totalGb)}` : 'Scanning'}
-          detail={sample ? pct(sample.memory.usage) : 'Awaiting scan'}
+          detail={sample ? `${pct(sample.memory.usage)} · low-overhead monitor cache` : 'Awaiting scan'}
           progress={sample?.memory.usage ?? 0}
           tone="amber"
         />
         <MetricCard
+          className="metric-secondary metric-network"
           icon={Network}
           label="Network"
           value={sample ? mbps(sample.network.downMbps) : 'Scanning'}
@@ -174,7 +231,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           tone="cyan"
         />
 
-        <Panel className="score-panel">
+        <Panel className="score-panel health-overview">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">OEM readiness</span>
@@ -188,7 +245,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
         </Panel>
 
-        <Panel className="chart-panel wide">
+        <Panel className="chart-panel wide primary-trend">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Live graph</span>
@@ -200,8 +257,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <AreaChart data={history}>
               <defs>
                 <linearGradient id="cpuFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#55d6ff" stopOpacity={0.38} />
-                  <stop offset="95%" stopColor="#55d6ff" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#ff7a00" stopOpacity={0.34} />
+                  <stop offset="95%" stopColor="#ff7a00" stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="gpuFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#84f08c" stopOpacity={0.3} />
@@ -212,14 +269,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
               <Tooltip content={<DashboardTooltip />} />
-              <Area isAnimationActive={animateCharts} type="monotone" dataKey="cpuUsage" stroke="#55d6ff" fill="url(#cpuFill)" strokeWidth={2} dot={false} name="CPU %" />
+              <Area isAnimationActive={animateCharts} type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={2} dot={false} name="CPU %" />
               <Area isAnimationActive={animateCharts} type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={2} dot={false} name="GPU %" />
               <Line isAnimationActive={animateCharts} type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={2} dot={false} name="RAM %" />
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
 
-        <Panel className="chart-panel">
+        <Panel className="chart-panel secondary-trend">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Network</span>
@@ -235,28 +292,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <XAxis dataKey="time" hide />
               <YAxis hide />
               <Tooltip content={<DashboardTooltip />} />
-              <Line isAnimationActive={animateCharts} type="monotone" dataKey="networkDown" stroke="#55d6ff" strokeWidth={2.4} dot={false} name="Download Mbps" />
+              <Line isAnimationActive={animateCharts} type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.4} dot={false} name="Download Mbps" />
             </LineChart>
           </ResponsiveContainer>
         </Panel>
 
-        <Panel className="hardware-list sensor-status-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Sensor sources</span>
-              <h2>Live data availability</h2>
-            </div>
-            <PlugZap size={18} />
-          </div>
-          <div className="sensor-source-grid">
-            <SensorSource label="CPU load / RAM / disks" value="sysinfo" live={!!sample} />
-            <SensorSource label="CPU temperature" value="WMI thermal zone" live={sample?.cpu.temperature != null} />
-            <SensorSource label="GPU sensors" value={systemInfo?.gpuVendor === 'nvidia' ? 'NVML internal' : systemInfo?.gpuVendor === 'amd' ? 'AMD ADL internal' : systemInfo?.gpuVendor === 'intel' ? 'WMI (usage only)' : 'WMI fallback'} live={(sample?.gpu.temperature != null) || (sample?.gpu.usage ?? 0) > 0} hint={systemInfo?.gpuVendor === 'intel' ? 'Intel Arc: usage via WMI only. Temp, fans, and power require IGCL support.' : undefined} />
-            <SensorSource label="GPU power / fans" value="Vendor driver API" live={sample?.gpu.powerWatts != null || sample?.gpu.fanPct != null || sample?.fans.some((fan) => fan.rpm != null) === true} />
-          </div>
-        </Panel>
-
-        <Panel className="hardware-list">
+        <Panel className="hardware-list identity-panel">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Build identity</span>
@@ -288,7 +329,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </dl>
         </Panel>
 
-        <Panel className="hardware-list">
+        <Panel className="hardware-list cooling-panel">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Cooling</span>
@@ -316,17 +357,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   );
 }
 
-function SensorSource({ label, value, live, hint }: { label: string; value: string; live: boolean; hint?: string }) {
-  return (
-    <div className={live ? 'sensor-source live' : 'sensor-source pending'}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{live ? 'Live' : 'Pending'}</small>
-      {hint && <p className="sensor-hint">{hint}</p>}
-    </div>
-  );
-}
-
 function DashboardTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string }) {
   if (!active || !payload || payload.length === 0) {
     return null;
@@ -337,7 +367,7 @@ function DashboardTooltip({ active, payload, label }: { active?: boolean; payloa
       <strong>{label ?? ''}</strong>
       {payload.map((item, index) => (
         <div className="chart-tooltip-row" key={`${item.name ?? 'series'}-${index}`}>
-          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? '#55d6ff' }} />
+          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? '#ff7a00' }} />
           <span>{item.name ?? 'Value'}</span>
           <span>{typeof item.value === 'number' ? item.value.toFixed(1) : item.value ?? '—'}</span>
         </div>

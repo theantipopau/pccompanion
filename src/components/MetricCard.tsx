@@ -10,13 +10,14 @@ type MetricCardProps = {
   icon: LucideIcon;
   tone?: 'cyan' | 'green' | 'amber' | 'red';
   progress?: number;
+  className?: string;
 };
 
-export function MetricCard({ label, value, detail, icon: Icon, tone = 'cyan', progress = 0 }: MetricCardProps) {
+export function MetricCard({ label, value, detail, icon: Icon, tone = 'cyan', progress = 0, className }: MetricCardProps) {
   const animatedProgress = useAnimatedNumber(progress);
 
   return (
-    <Panel className={`metric-card tone-${tone}`}>
+    <Panel className={`metric-card tone-${tone}${className ? ` ${className}` : ''}`}>
       <div className="metric-card-head">
         <span>{label}</span>
         <div className="metric-icon">
