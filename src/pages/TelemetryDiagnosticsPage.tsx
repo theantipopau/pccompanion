@@ -93,7 +93,7 @@ export function TelemetryDiagnosticsPage() {
       <PageHeader
         eyebrow="Diagnostics"
         title="Telemetry Diagnostics"
-        description="Provider provenance, capability intelligence, and support-ready sensor transparency for OEM-grade troubleshooting."
+        description="Provider provenance, capability state, and sensor trust signals for support and troubleshooting."
         action={(
           <div className="diagnostics-header-actions">
             <button className="secondary-button" onClick={() => void refreshDiagnostics()} disabled={busy}>
@@ -113,9 +113,9 @@ export function TelemetryDiagnosticsPage() {
           <div className="diagnostics-hero-top">
             <div>
               <span className="eyebrow">Support readiness</span>
-              <h2>Telemetry orchestration transparency</h2>
+              <h2>Telemetry trust and availability</h2>
               <p>
-                The app now exposes which provider is active, which channels are degraded, and why each sensor is live, staged, or unsupported.
+                Quickly verify active providers, degraded channels, and why each sensor is live, staged, or unavailable.
               </p>
             </div>
             <div className="diagnostics-state-stack">
@@ -126,10 +126,10 @@ export function TelemetryDiagnosticsPage() {
           </div>
 
           <div className="diagnostics-stat-grid">
-            <StatCard label="Providers loaded" value={`${providerCounts.loaded}`} detail={`${providerCounts.staged} staged · ${providerCounts.unavailable} unavailable`} icon={ShieldCheck} />
-            <StatCard label="Sensors live" value={`${sensorCounts.live}`} detail={`${sensorCounts.partial} partial · ${sensorCounts.staged} staged`} icon={Waves} />
+            <StatCard label="Loaded providers" value={`${providerCounts.loaded}`} detail={`${providerCounts.staged} staged · ${providerCounts.unavailable} unavailable`} icon={ShieldCheck} />
+            <StatCard label="Live sensors" value={`${sensorCounts.live}`} detail={`${sensorCounts.partial} partial · ${sensorCounts.staged} staged`} icon={Waves} />
             <StatCard label="Capabilities" value={`${snapshot?.capabilities.length ?? 0}`} detail={`${snapshot?.supportSnapshot.length ?? 0} support notes`} icon={ClipboardList} />
-            <StatCard label="Confidence bands" value={confidenceBandSummary(snapshot)} detail="High / medium / low trust visibility" icon={Sparkles} />
+            <StatCard label="Confidence mix" value={confidenceBandSummary(snapshot)} detail="High / medium / low trust visibility" icon={Sparkles} />
           </div>
         </Panel>
 
@@ -160,6 +160,14 @@ export function TelemetryDiagnosticsPage() {
                   <span>CPU package temp</span>
                   <strong>{snapshot.sensorDiscovery.packageTempAvailable ? 'Available' : 'Unavailable'}</strong>
                 </div>
+                <div>
+                  <span>Issue class</span>
+                  <strong>{snapshot.sensorDiscovery.issueClassification}</strong>
+                </div>
+                <div>
+                  <span>GPU engine counters</span>
+                  <strong>{snapshot.sensorDiscovery.gpuEngineCounterAvailable ? 'Available' : 'Unavailable'}</strong>
+                </div>
               </div>
               {!snapshot.sensorDiscovery.packageTempAvailable && (
                 <div className={snapshot.sensorDiscovery.requiresDriver ? 'validation-card degraded' : 'validation-card partial'}>
@@ -167,19 +175,78 @@ export function TelemetryDiagnosticsPage() {
                   <p>{snapshot.sensorDiscovery.recommendedAction}</p>
                 </div>
               )}
+              <div className="discovery-hints">
+                <span>GPU counter probe state</span>
+                <strong>{snapshot.sensorDiscovery.gpuEngineCounterState}</strong>
+              </div>
               {snapshot.sensorDiscovery.dellClassHints.length > 0 && (
                 <div className="discovery-hints">
                   <span>Dell WMI class hints</span>
                   <strong>{snapshot.sensorDiscovery.dellClassHints.join(' · ')}</strong>
                 </div>
               )}
+
+              <div className="diagnostics-matrix discovery-matrix">
+                <div className="diagnostics-matrix-head">
+                  <span>Namespace</span>
+                  <span>Available</span>
+                  <span>Status</span>
+                  <span>Matching classes</span>
+                  <span></span>
+                  <span></span>
+                </div>
+                {snapshot.sensorDiscovery.namespaceInventory.map((entry) => (
+                  <div key={entry.namespace} className="diagnostics-matrix-row">
+                    <span>{entry.namespace}</span>
+                    <span className={entry.available ? 'state-chip live' : 'state-chip blocked'}>
+                      {entry.available ? 'Yes' : 'No'}
+                    </span>
+                    <span>{entry.status}</span>
+                    <span>{entry.matchingClasses.length > 0 ? entry.matchingClasses.slice(0, 6).join(' · ') : 'None'}</span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="diagnostics-matrix discovery-matrix">
+                <div className="diagnostics-matrix-head">
+                  <span>GPU adapter</span>
+                  <span>Vendor</span>
+                  <span>Type</span>
+                  <span>VRAM</span>
+                  <span></span>
+                  <span></span>
+                </div>
+                {snapshot.sensorDiscovery.gpuAdapters.length === 0 && (
+                  <div className="diagnostics-matrix-row">
+                    <span>None detected</span>
+                    <span>unknown</span>
+                    <span>unknown</span>
+                    <span>N/A</span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                )}
+                {snapshot.sensorDiscovery.gpuAdapters.map((adapter, index) => (
+                  <div key={`${adapter.name}-${index}`} className="diagnostics-matrix-row">
+                    <span>{adapter.name}</span>
+                    <span>{adapter.vendor}</span>
+                    <span>{adapter.integrated ? 'integrated' : 'discrete'}</span>
+                    <span>{adapter.adapterRamGb > 0 ? `${adapter.adapterRamGb.toFixed(1)} GB` : 'Unknown'}</span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                ))}
+              </div>
+
               <div className="diagnostics-matrix discovery-matrix">
                 <div className="diagnostics-matrix-head">
                   <span>Source</span>
                   <span>Label</span>
                   <span>Raw</span>
                   <span>Accepted</span>
-                  <span>Value C</span>
+                  <span>Value</span>
                   <span>Reason</span>
                 </div>
                 {snapshot.sensorDiscovery.attempts.map((attempt, index) => (
@@ -193,7 +260,7 @@ export function TelemetryDiagnosticsPage() {
                     <span>{attempt.source}</span>
                     <span>{attempt.label}</span>
                     <span>{attempt.rawValue}</span>
-                    <span className={attempt.accepted ? 'state-chip live' : 'state-chip blocked'}>{attempt.accepted ? 'yes' : 'no'}</span>
+                    <span className={attempt.accepted ? 'state-chip live' : 'state-chip blocked'}>{attempt.accepted ? 'Yes' : 'No'}</span>
                     <span>{attempt.valueC == null ? 'N/A' : `${attempt.valueC.toFixed(1)} C`}</span>
                     <span>{attempt.reason}</span>
                   </motion.div>
@@ -296,7 +363,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Capability intelligence</span>
-              <h2>Support and safety states</h2>
+              <h2>Capability states by feature</h2>
             </div>
             <ArrowRight size={18} />
           </div>
@@ -322,7 +389,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Support tooling</span>
-              <h2>Support Snapshot and OEM workflow</h2>
+              <h2>Support snapshot workflow</h2>
             </div>
             <CheckCircle2 size={18} />
           </div>
@@ -374,7 +441,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Export bundle</span>
-              <h2>Last report and included sections</h2>
+              <h2>Latest bundle and included sections</h2>
             </div>
             <Download size={18} />
           </div>

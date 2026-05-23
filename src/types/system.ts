@@ -45,6 +45,7 @@ export type HardwareSample = {
     clockMhz: number;
   };
   gpu: {
+    provider: string;
     temperature: number | null;
     usage: number;
     vramUsedGb: number;
@@ -100,13 +101,16 @@ export type CompanionSettings = {
   theme: 'radium-dark' | 'midnight' | 'graphite';
   tray: {
     minimizeToTray: boolean;
+    minimizeOnMinimize: boolean;
     startWithWindows: boolean;
+    startMinimized: boolean;
     silentBackground: boolean;
     showLiveTooltip: boolean;
     liveIconMetric: TrayMetric;
   };
   overlay: {
     enabled: boolean;
+    launchOnStartup: boolean;
     clickThrough: boolean;
     preset: OverlayPreset;
     opacity: number;
@@ -115,6 +119,7 @@ export type CompanionSettings = {
     metrics: Array<'cpuTemp' | 'cpuUsage' | 'gpuTemp' | 'gpuUsage' | 'ramUsage' | 'vramUsage' | 'fps' | 'fans' | 'clocks'>;
   };
   monitoring: {
+    launchOnStartup: boolean;
     refreshMs: number;
     backgroundRefreshMs: number;
     historyLimit: number;
@@ -236,7 +241,22 @@ export type SensorDiscoveryReport = {
   packageTempAvailable: boolean;
   requiresDriver: boolean;
   recommendedAction: string;
+  issueClassification: string;
   dellClassHints: string[];
+  namespaceInventory: Array<{
+    namespace: string;
+    available: boolean;
+    status: string;
+    matchingClasses: string[];
+  }>;
+  gpuAdapters: Array<{
+    name: string;
+    vendor: string;
+    adapterRamGb: number;
+    integrated: boolean;
+  }>;
+  gpuEngineCounterAvailable: boolean;
+  gpuEngineCounterState: string;
   attempts: SensorDiscoveryAttempt[];
 };
 

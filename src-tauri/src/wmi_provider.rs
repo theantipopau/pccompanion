@@ -10,7 +10,9 @@
 use serde::Deserialize;
 use wmi::{COMLibrary, WMIConnection, WMIResult};
 
-use crate::hardware::{bytes_to_gb, vendor_from_str, SystemInfo};
+use crate::hardware::{
+    bytes_to_gb, vendor_from_str, GpuAdapterDiscovery, NamespaceClassInventory, SystemInfo,
+};
 
 // ─── WMI deserialization targets ────────────────────────────────────────────
 
@@ -43,6 +45,19 @@ struct WmiComputerSystem {
 struct WmiClassName {
     #[serde(rename = "__CLASS")]
     class_name: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct DellDcimThermalRow {
+    Name: Option<String>,
+    ElementName: Option<String>,
+    SensorType: Option<String>,
+    CurrentReading: Option<i64>,
+    CurrentTemperature: Option<i64>,
+    CurrentValue: Option<i64>,
+    Reading: Option<i64>,
+    Value: Option<i64>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -97,6 +112,8 @@ pub struct WmiContext {
     pub root_wmi: Option<WMIConnection>,
     /// `ROOT\dcim\sysman` - optional Dell OEM namespace.
     pub root_dcim_sysman: Option<WMIConnection>,
+    /// `ROOT\dcim` - optional Dell OEM namespace root.
+    pub root_dcim: Option<WMIConnection>,
 }
 
 impl WmiContext {
@@ -113,10 +130,15 @@ impl WmiContext {
             let com3 = unsafe { COMLibrary::assume_initialized() };
             WMIConnection::with_namespace_path("ROOT\\dcim\\sysman", com3).ok()
         };
+        let root_dcim = {
+            let com4 = unsafe { COMLibrary::assume_initialized() };
+            WMIConnection::with_namespace_path("ROOT\\dcim", com4).ok()
+        };
         Ok(Self {
             cimv2,
             root_wmi,
             root_dcim_sysman,
+            root_dcim,
         })
     }
 }
@@ -144,6 +166,178 @@ pub struct ThermalProbeRecord {
 pub struct ThermalDiscoveryData {
     pub records: Vec<ThermalProbeRecord>,
     pub dell_class_hints: Vec<String>,
+}
+
+fn normalize_thermal_raw_celsius(raw: u32) -> Option<(f32, &'static str)> {
+    let decikelvin_c = raw as f32 / 10.0 - 273.15;
+    if (0.0..=120.0).contains(&decikelvin_c) {
+        return Some((decikelvin_c, "decikelvin"));
+    }
+
+    let kelvin_c = raw as f32 - 273.15;
+    if (0.0..=120.0).contains(&kelvin_c) {
+        return Some((kelvin_c, "kelvin"));
+    }
+
+    // Some firmware/providers surface direct Celsius values.
+    let celsius = raw as f32;
+    if (0.0..=120.0).contains(&celsius) {
+        return Some((celsius, "celsius"));
+    }
+
+    None
+}
+
+fn normalize_signed_thermal_raw_celsius(raw: i64) -> Option<(f32, &'static str)> {
+    if (0..=u32::MAX as i64).contains(&raw) {
+        if let Some((value, unit)) = normalize_thermal_raw_celsius(raw as u32) {
+            return Some((value, unit));
+        }
+    }
+
+    if (-20..=120).contains(&raw) {
+        return Some((raw as f32, "celsius-signed"));
+    }
+
+    None
+}
+
+fn rejected_thermal_reason(raw: u32) -> String {
+    let dk = raw as f32 / 10.0 - 273.15;
+    let k = raw as f32 - 273.15;
+    let c = raw as f32;
+    format!(
+        "rejected raw thermal value (dk={dk:.1} C, k={k:.1} C, c={c:.1} C)"
+    )
+}
+
+fn extract_hresult_code(message: &str) -> Option<u32> {
+    let lower = message.to_lowercase();
+    let marker = "0x";
+    let idx = lower.find(marker)?;
+    let hex = lower
+        .chars()
+        .skip(idx + marker.len())
+        .take_while(|ch| ch.is_ascii_hexdigit())
+        .collect::<String>();
+    if hex.is_empty() {
+        None
+    } else {
+        u32::from_str_radix(&hex, 16).ok()
+    }
+}
+
+fn classify_wmi_error(message: &str) -> String {
+    match extract_hresult_code(message) {
+        Some(0x80041010) => "invalid class (0x80041010): provider namespace exists but class is not published on this system".to_string(),
+        Some(0x8004100C) => "not supported (0x8004100C): firmware/provider does not expose this telemetry path".to_string(),
+        Some(0x8004100E) => "invalid namespace (0x8004100E): OEM namespace is not installed".to_string(),
+        Some(0x80041003) => "access denied (0x80041003): permissions or policy blocked this query".to_string(),
+        Some(code) => format!("query failed with HRESULT 0x{code:08X}"),
+        None => format!("query failed: {message}"),
+    }
+}
+
+fn collect_namespace_classes(
+    namespace: &str,
+    conn: Option<&WMIConnection>,
+) -> NamespaceClassInventory {
+    let keywords = ["thermal", "temperature", "sensor", "fan", "gpu"];
+    let mut inventory = NamespaceClassInventory {
+        namespace: namespace.to_string(),
+        available: conn.is_some(),
+        status: String::new(),
+        matching_classes: Vec::new(),
+    };
+
+    let Some(connection) = conn else {
+        inventory.status = "namespace connection unavailable".to_string();
+        return inventory;
+    };
+
+    match connection.raw_query::<WmiClassName>("SELECT __CLASS FROM meta_class") {
+        Ok(rows) => {
+            let matches = rows
+                .into_iter()
+                .filter_map(|row| row.class_name)
+                .filter(|name| {
+                    let lower = name.to_lowercase();
+                    keywords.iter().any(|keyword| lower.contains(keyword))
+                })
+                .collect::<Vec<_>>();
+            inventory.status = format!("{} matching class(es)", matches.len());
+            inventory.matching_classes = matches;
+        }
+        Err(err) => {
+            inventory.status = classify_wmi_error(&err.to_string());
+        }
+    }
+
+    inventory
+}
+
+pub fn collect_namespace_inventory(ctx: &WmiContext) -> Vec<NamespaceClassInventory> {
+    vec![
+        collect_namespace_classes("ROOT\\WMI", ctx.root_wmi.as_ref()),
+        collect_namespace_classes("ROOT\\CIMV2", Some(&ctx.cimv2)),
+        collect_namespace_classes("ROOT\\dcim", ctx.root_dcim.as_ref()),
+        collect_namespace_classes("ROOT\\dcim\\sysman", ctx.root_dcim_sysman.as_ref()),
+    ]
+}
+
+pub fn query_gpu_adapters(ctx: &WmiContext) -> Vec<GpuAdapterDiscovery> {
+    let res: Result<Vec<WmiVideoController>, _> = ctx
+        .cimv2
+        .raw_query("SELECT Name, AdapterRAM FROM Win32_VideoController");
+    let Ok(rows) = res else {
+        return Vec::new();
+    };
+
+    rows
+        .into_iter()
+        .filter_map(|row| {
+            let name = row.Name?.trim().to_string();
+            if name.is_empty() {
+                return None;
+            }
+            let vendor = vendor_from_str(&name).to_string();
+            let ram_bytes = row.AdapterRAM.unwrap_or(0);
+            let ram_gb = bytes_to_gb(ram_bytes as u64);
+            let integrated = vendor == "intel" || ram_gb <= 1.5;
+            Some(GpuAdapterDiscovery {
+                name,
+                vendor,
+                adapter_ram_gb: ram_gb,
+                integrated,
+            })
+        })
+        .collect()
+}
+
+pub fn probe_gpu_engine_counter(ctx: &WmiContext) -> (bool, String) {
+    let query =
+        "SELECT Name, UtilizationPercentage FROM Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine";
+    let res: Result<Vec<WmiGpuEngine>, _> = ctx.cimv2.raw_query(query);
+    match res {
+        Ok(rows) if rows.is_empty() => {
+            (false, "GPU engine class available but returned no rows".to_string())
+        }
+        Ok(rows) => {
+            let has_values = rows.iter().any(|row| row.UtilizationPercentage.is_some());
+            if has_values {
+                (true, format!("GPU engine counters live ({} row(s))", rows.len()))
+            } else {
+                (
+                    false,
+                    format!(
+                        "GPU engine class returned {} row(s) without UtilizationPercentage values",
+                        rows.len()
+                    ),
+                )
+            }
+        }
+        Err(err) => (false, classify_wmi_error(&err.to_string())),
+    }
 }
 
 pub fn query_machine_profile(ctx: &WmiContext) -> MachineProfile {
@@ -200,19 +394,20 @@ pub fn collect_thermal_discovery(ctx: &WmiContext, machine: &MachineProfile) -> 
                         .unwrap_or_else(|| "ACPI thermal zone".to_string());
                     match row.CurrentTemperature {
                         Some(raw) => {
-                            let value_c = raw as f32 / 10.0 - 273.15;
-                            let accepted = (0.0..=120.0).contains(&value_c);
+                            let parsed = normalize_thermal_raw_celsius(raw);
+                            let accepted = parsed.is_some();
                             data.records.push(ThermalProbeRecord {
                                 source: "wmi-acpi".to_string(),
                                 query: acpi_query.to_string(),
                                 label,
                                 raw_value: raw.to_string(),
-                                value_c: if accepted { Some(value_c) } else { None },
+                                value_c: parsed.map(|(value, _)| value),
                                 accepted,
                                 reason: if accepted {
-                                    "accepted decikelvin thermal value".to_string()
+                                    let (_, unit) = parsed.unwrap_or_default();
+                                    format!("accepted thermal value via {unit} conversion")
                                 } else {
-                                    format!("rejected out-of-range ACPI value ({value_c:.1} C)")
+                                    rejected_thermal_reason(raw)
                                 },
                             });
                         }
@@ -238,7 +433,7 @@ pub fn collect_thermal_discovery(ctx: &WmiContext, machine: &MachineProfile) -> 
                     raw_value: "query_error".to_string(),
                     value_c: None,
                     accepted: false,
-                    reason: format!("query failed: {err}"),
+                    reason: classify_wmi_error(&err.to_string()),
                 });
             }
         }
@@ -282,19 +477,20 @@ pub fn collect_thermal_discovery(ctx: &WmiContext, machine: &MachineProfile) -> 
                 let label = row.Name.unwrap_or_else(|| "Thermal zone".to_string());
                 match row.Temperature {
                     Some(raw) => {
-                        let value_c = raw as f32 - 273.15;
-                        let accepted = (0.0..=120.0).contains(&value_c);
+                        let parsed = normalize_thermal_raw_celsius(raw);
+                        let accepted = parsed.is_some();
                         data.records.push(ThermalProbeRecord {
                             source: "wmi-perf".to_string(),
                             query: perf_query.to_string(),
                             label,
                             raw_value: raw.to_string(),
-                            value_c: if accepted { Some(value_c) } else { None },
+                            value_c: parsed.map(|(value, _)| value),
                             accepted,
                             reason: if accepted {
-                                "accepted kelvin thermal value".to_string()
+                                let (_, unit) = parsed.unwrap_or_default();
+                                format!("accepted thermal value via {unit} conversion")
                             } else {
-                                format!("rejected out-of-range perf value ({value_c:.1} C)")
+                                rejected_thermal_reason(raw)
                             },
                         });
                     }
@@ -320,7 +516,7 @@ pub fn collect_thermal_discovery(ctx: &WmiContext, machine: &MachineProfile) -> 
                 raw_value: "query_error".to_string(),
                 value_c: None,
                 accepted: false,
-                reason: format!("query failed: {err}"),
+                reason: classify_wmi_error(&err.to_string()),
             });
         }
     }
@@ -330,21 +526,120 @@ pub fn collect_thermal_discovery(ctx: &WmiContext, machine: &MachineProfile) -> 
     } else {
         "unavailable"
     };
-    data.records.push(ThermalProbeRecord {
-        source: "dell-dcim".to_string(),
-        query: "ROOT\\dcim\\sysman".to_string(),
-        label: "Dell namespace probe".to_string(),
-        raw_value: dcim_status.to_string(),
-        value_c: None,
-        accepted: false,
-        reason: if ctx.root_dcim_sysman.is_some() {
-            "Dell DCIM namespace detected; class bindings not yet implemented".to_string()
-        } else if machine.is_dell {
-            "Dell system detected but DCIM namespace not present".to_string()
-        } else {
-            "Not a Dell/Alienware machine profile".to_string()
-        },
-    });
+
+    if let Some(ref dcim) = ctx.root_dcim_sysman {
+        let class_queries = [
+            ("DCIM_TemperatureProbe", "SELECT * FROM DCIM_TemperatureProbe"),
+            ("DCIM_ThermalProbe", "SELECT * FROM DCIM_ThermalProbe"),
+            ("DCIM_ThermalZone", "SELECT * FROM DCIM_ThermalZone"),
+        ];
+
+        let mut had_dcim_rows = false;
+        for (class_name, query) in class_queries {
+            match dcim.raw_query::<DellDcimThermalRow>(query) {
+                Ok(rows) => {
+                    if rows.is_empty() {
+                        data.records.push(ThermalProbeRecord {
+                            source: "dell-dcim".to_string(),
+                            query: query.to_string(),
+                            label: class_name.to_string(),
+                            raw_value: "none".to_string(),
+                            value_c: None,
+                            accepted: false,
+                            reason: format!("{class_name} returned no rows"),
+                        });
+                        continue;
+                    }
+
+                    had_dcim_rows = true;
+                    for row in rows {
+                        let label = row
+                            .ElementName
+                            .or(row.Name)
+                            .or(row.SensorType)
+                            .unwrap_or_else(|| format!("{class_name} sensor"));
+
+                        let raw = row
+                            .CurrentTemperature
+                            .or(row.CurrentReading)
+                            .or(row.CurrentValue)
+                            .or(row.Reading)
+                            .or(row.Value);
+
+                        match raw {
+                            Some(raw_value) => {
+                                let parsed = normalize_signed_thermal_raw_celsius(raw_value);
+                                let accepted = parsed.is_some();
+                                data.records.push(ThermalProbeRecord {
+                                    source: "dell-dcim".to_string(),
+                                    query: query.to_string(),
+                                    label,
+                                    raw_value: raw_value.to_string(),
+                                    value_c: parsed.map(|(v, _)| v),
+                                    accepted,
+                                    reason: if accepted {
+                                        let (_, unit) = parsed.unwrap_or_default();
+                                        format!("accepted Dell DCIM thermal value via {unit} conversion")
+                                    } else {
+                                        format!("{class_name} value not in plausible range")
+                                    },
+                                });
+                            }
+                            None => {
+                                data.records.push(ThermalProbeRecord {
+                                    source: "dell-dcim".to_string(),
+                                    query: query.to_string(),
+                                    label,
+                                    raw_value: "null".to_string(),
+                                    value_c: None,
+                                    accepted: false,
+                                    reason: format!("{class_name} row missing readable temperature fields"),
+                                });
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    data.records.push(ThermalProbeRecord {
+                        source: "dell-dcim".to_string(),
+                        query: query.to_string(),
+                        label: class_name.to_string(),
+                        raw_value: "query_error".to_string(),
+                        value_c: None,
+                        accepted: false,
+                        reason: classify_wmi_error(&err.to_string()),
+                    });
+                }
+            }
+        }
+
+        if !had_dcim_rows {
+            data.records.push(ThermalProbeRecord {
+                source: "dell-dcim".to_string(),
+                query: "ROOT\\dcim\\sysman".to_string(),
+                label: "Dell namespace probe".to_string(),
+                raw_value: dcim_status.to_string(),
+                value_c: None,
+                accepted: false,
+                reason: "Dell DCIM namespace detected but known thermal classes were empty or unavailable"
+                    .to_string(),
+            });
+        }
+    } else {
+        data.records.push(ThermalProbeRecord {
+            source: "dell-dcim".to_string(),
+            query: "ROOT\\dcim\\sysman".to_string(),
+            label: "Dell namespace probe".to_string(),
+            raw_value: dcim_status.to_string(),
+            value_c: None,
+            accepted: false,
+            reason: if machine.is_dell {
+                "Dell system detected but DCIM namespace not present".to_string()
+            } else {
+                "Not a Dell/Alienware machine profile".to_string()
+            },
+        });
+    }
 
     data
 }
@@ -644,11 +939,7 @@ pub fn query_cpu_temp(ctx: &WmiContext) -> Option<f32> {
             let temps: Vec<f32> = zones
                 .into_iter()
                 .filter_map(|z| z.CurrentTemperature)
-                .filter_map(|dk| {
-                    // decikelvin → Celsius
-                    let c = dk as f32 / 10.0 - 273.15;
-                    if (0.0..=120.0).contains(&c) { Some(c) } else { None }
-                })
+                .filter_map(|raw| normalize_thermal_raw_celsius(raw).map(|(c, _)| c))
                 .collect();
             if !temps.is_empty() {
                 return temps.into_iter().reduce(f32::max);
@@ -665,10 +956,7 @@ pub fn query_cpu_temp(ctx: &WmiContext) -> Option<f32> {
     let temps: Vec<f32> = zones
         .into_iter()
         .filter_map(|z| z.Temperature)
-        .filter_map(|k| {
-            let c = k as f32 - 273.15;
-            if (0.0..=120.0).contains(&c) { Some(c) } else { None }
-        })
+        .filter_map(|raw| normalize_thermal_raw_celsius(raw).map(|(c, _)| c))
         .collect();
 
     if temps.is_empty() {

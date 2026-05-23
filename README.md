@@ -22,6 +22,29 @@ Main project marketing image: `images/radiumcompanion-marketing.png`.
 | Dell laptop CPU package temp (user-mode only) | Limited |
 | Optional embedded driver/provider path | Planned (staged) |
 
+## Real Hardware Validation Matrix
+
+Compatibility tracking for this phase lives in:
+- [docs/compatibility-matrix.md](docs/compatibility-matrix.md)
+
+Current validated host in this phase:
+- Dell Latitude 5330 (business laptop):
+  - CPU package temperature: degraded/limited with explicit `missing_or_invalid_wmi_class` classification.
+  - CPU usage, RAM, network, storage: validated live.
+  - GPU fallback diagnostics: validated with explicit engine-counter availability state.
+  - Warning spam hardening: validated (throttled to approximately once per minute when signature is unchanged).
+
+Pending in this phase:
+- Intel + NVIDIA desktop,
+- AMD + NVIDIA desktop,
+- AMD + AMD desktop,
+- Intel + Intel Arc,
+- HP OMEN,
+- HP Victus,
+- hybrid GPU laptops,
+- Intel iGPU-only systems,
+- AMD iGPU systems.
+
 ## Key Features
 
 - Live CPU, GPU, RAM, storage, and network telemetry.
@@ -38,8 +61,14 @@ Some Dell laptops do not expose a reliable CPU package temperature through user-
 
 Current behavior:
 - The app probes ACPI thermal zones, perf thermal classes, sysinfo component labels, and Dell namespace hints.
-- If package temperature is unavailable, the UI now shows an explicit driver-required/degraded state instead of a silent blank/zero interpretation.
+- If package temperature is unavailable, the UI now shows an explicit issue classification plus a driver-required/degraded state instead of a silent blank/zero interpretation.
 - Diagnostics export includes the full sensor discovery report for support analysis.
+
+The diagnostics report now also includes:
+- WMI namespace inventory for `ROOT\\WMI`, `ROOT\\CIMV2`, `ROOT\\dcim`, and `ROOT\\dcim\\sysman`.
+- Matching thermal/sensor/fan/GPU class names discovered in each namespace.
+- HRESULT-aware query failure decoding (for example invalid class vs unsupported provider path).
+- GPU adapter inventory (vendor, integrated/discrete heuristic, VRAM) and GPU engine counter probe state.
 
 What this means:
 - CPU usage and other telemetry can still be live.
@@ -64,9 +93,21 @@ The telemetry diagnostics snapshot now includes:
 - Per-source thermal probe attempts.
 - Raw values, converted values, accepted/rejected status, and rejection reasons.
 - Dell WMI class hints where discoverable.
+- Namespace/class inventory with availability and status per namespace.
+- GPU adapter inventory and GPU engine counter probe state.
+- Issue classification for package-temperature unavailability.
 - Recommended next action when package temperature is unavailable.
 
 Diagnostics export bundles this report under ProgramData diagnostics output.
+
+Runtime warning behavior:
+- CPU temperature-unavailable warnings are now throttled in the monitor loop.
+- The backend logs a concise diagnostic signature at most once per minute unless the failure classification changes.
+
+Known telemetry limitations:
+- Some Dell/enterprise laptop BIOS profiles do not expose package CPU temperature through user-mode WMI.
+- Intel Arc telemetry remains staged in this build and uses explicit fallback messaging.
+- Storage temperature channels may remain unavailable where SMART/driver telemetry is blocked.
 
 ## Tray and Close Behavior
 

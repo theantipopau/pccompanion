@@ -318,7 +318,7 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
 ///
 /// Uses HKCU Run so this does not require elevation and remains visible/reversible
 /// through standard Windows startup tooling.
-pub fn set_companion_startup_enabled(enabled: bool) -> Result<bool, String> {
+pub fn set_companion_startup_enabled(enabled: bool, start_minimized: bool) -> Result<bool, String> {
     #[cfg(windows)]
     {
         use windows::core::PCWSTR;
@@ -333,7 +333,11 @@ pub fn set_companion_startup_enabled(enabled: bool) -> Result<bool, String> {
 
         let exe = std::env::current_exe()
             .map_err(|err| format!("Unable to resolve Companion executable path: {err}"))?;
-        let command = format!("\"{}\" --background", exe.to_string_lossy());
+        let command = if start_minimized {
+            format!("\"{}\" --background", exe.to_string_lossy())
+        } else {
+            format!("\"{}\"", exe.to_string_lossy())
+        };
         let key_wide = wide_null(RUN_KEY);
         let value_wide = wide_null(VALUE_NAME);
 
@@ -381,9 +385,18 @@ pub fn set_companion_startup_enabled(enabled: bool) -> Result<bool, String> {
 
     #[cfg(not(windows))]
     {
-        let _ = enabled;
+        let _ = (enabled, start_minimized);
         Err("Startup registration requires Windows.".to_string())
     }
+}
+
+/// Read whether the packaged Companion startup entry currently exists.
+pub fn is_companion_startup_enabled() -> bool {
+    scan_startup_items().into_iter().any(|item| {
+        item.name.eq_ignore_ascii_case("Radium PCs Companion")
+            && item.enabled
+            && item.location.contains("HKCU\\Run")
+    })
 }
 
 /// Conservative registry cleaner scan. This intentionally focuses on orphaned

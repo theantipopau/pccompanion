@@ -35,6 +35,7 @@ pub struct CpuSample {
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GpuSample {
+    pub provider: String,
     pub temperature: Option<f32>,
     pub usage: f32,
     pub vram_used_gb: f32,
@@ -194,6 +195,24 @@ pub struct SensorDiscoveryAttempt {
 
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct NamespaceClassInventory {
+    pub namespace: String,
+    pub available: bool,
+    pub status: String,
+    pub matching_classes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuAdapterDiscovery {
+    pub name: String,
+    pub vendor: String,
+    pub adapter_ram_gb: f32,
+    pub integrated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SensorDiscoveryReport {
     pub machine_vendor: String,
     pub machine_model: String,
@@ -202,7 +221,12 @@ pub struct SensorDiscoveryReport {
     pub package_temp_available: bool,
     pub requires_driver: bool,
     pub recommended_action: String,
+    pub issue_classification: String,
     pub dell_class_hints: Vec<String>,
+    pub namespace_inventory: Vec<NamespaceClassInventory>,
+    pub gpu_adapters: Vec<GpuAdapterDiscovery>,
+    pub gpu_engine_counter_available: bool,
+    pub gpu_engine_counter_state: String,
     pub attempts: Vec<SensorDiscoveryAttempt>,
 }
 
@@ -441,6 +465,7 @@ impl MonitoringEngine {
                 clock_mhz: c.cpu_clock_mhz,
             },
             gpu: GpuSample {
+                provider: c.gpu_provider.clone(),
                 temperature: c.gpu_temp,
                 usage: c.gpu_usage,
                 vram_used_gb: c.gpu_vram_used_gb,
@@ -476,6 +501,18 @@ impl MonitoringEngine {
             },
             history: c.history.clone(),
         }
+    }
+
+    /// Reset runtime cache surfaces so monitoring can recover quickly after
+    /// a manual restart action from the tray menu.
+    pub fn restart_runtime_state(&self) -> String {
+        let mut c = self.cache.write().expect("hardware cache write lock");
+        c.state = "initializing".to_string();
+        c.timestamp = timestamp_now().0;
+        c.history.clear();
+        c.provider_errors.clear();
+        c.provider_warnings.clear();
+        "Monitoring engine restart scheduled; cache reset for fresh polling cycle.".to_string()
     }
 
     /// Read the cached system info (or a sensible placeholder while it
@@ -981,6 +1018,28 @@ fn build_support_snapshot(
         );
     }
 
+    items.push(format!(
+        "CPU thermal classification: {}",
+        cache.sensor_discovery.issue_classification
+    ));
+    items.push(format!(
+        "GPU engine counters: {}",
+        cache.sensor_discovery.gpu_engine_counter_state
+    ));
+
+    let intel_adapters = cache
+        .sensor_discovery
+        .gpu_adapters
+        .iter()
+        .filter(|adapter| adapter.vendor == "intel")
+        .count();
+    if intel_adapters > 0 {
+        items.push(format!(
+            "Intel adapter(s) detected: {}; IGCL path remains staged and WMI fallback is in use when vendor APIs are unavailable.",
+            intel_adapters
+        ));
+    }
+
     if cache.provider_errors.is_empty() {
         items.push("No provider errors cached.".to_string());
     } else {
@@ -1071,6 +1130,24 @@ pub fn monitor_loop(
     let machine_profile_opt = wmi_opt
         .as_ref()
         .map(crate::wmi_provider::query_machine_profile);
+
+    #[cfg(windows)]
+    let namespace_inventory = wmi_opt
+        .as_ref()
+        .map(crate::wmi_provider::collect_namespace_inventory)
+        .unwrap_or_default();
+
+    #[cfg(windows)]
+    let gpu_adapters = wmi_opt
+        .as_ref()
+        .map(crate::wmi_provider::query_gpu_adapters)
+        .unwrap_or_default();
+
+    #[cfg(windows)]
+    let gpu_engine_probe = wmi_opt
+        .as_ref()
+        .map(crate::wmi_provider::probe_gpu_engine_counter)
+        .unwrap_or_else(|| (false, "WMI unavailable; GPU engine counters not queried".to_string()));
 
     // One-shot vendor GPU provider init (Windows only).
     // Priority: NVML (NVIDIA) → AMD ADL → Intel IGCL groundwork → WMI fallback.
@@ -1205,6 +1282,8 @@ pub fn monitor_loop(
     }
 
     // Main polling loop.
+    let mut last_cpu_warning_signature = String::new();
+    let mut last_cpu_warning_at: Option<Instant> = None;
     loop {
         let tick_start = Instant::now();
 
@@ -1217,7 +1296,13 @@ pub fn monitor_loop(
         // --- CPU temperature: WMI paths first, then sysinfo Components fallback ---
         #[cfg(windows)]
         let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
-            discover_cpu_temperature(wmi_opt.as_ref(), machine_profile_opt.as_ref());
+            discover_cpu_temperature(
+                wmi_opt.as_ref(),
+                machine_profile_opt.as_ref(),
+                &namespace_inventory,
+                &gpu_adapters,
+                &gpu_engine_probe,
+            );
         #[cfg(not(windows))]
         let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
             (None, SensorDiscoveryReport::default());
@@ -1275,6 +1360,38 @@ pub fn monitor_loop(
             .as_ref()
             .map_or(false, |g| g.temperature_c.is_some() || g.usage_pct > 0.0);
         let state = if has_cpu || has_gpu { "valid" } else { "degraded" };
+
+        if cpu_temp.is_none() {
+            let warning_signature = format!(
+                "{}|{}|{}",
+                sensor_discovery.machine_vendor,
+                sensor_discovery.machine_model,
+                sensor_discovery.issue_classification
+            );
+            let should_log = warning_signature != last_cpu_warning_signature
+                || last_cpu_warning_at
+                    .map(|last| last.elapsed() >= Duration::from_secs(60))
+                    .unwrap_or(true);
+
+            if should_log {
+                let probe_summary = sensor_discovery
+                    .attempts
+                    .iter()
+                    .take(8)
+                    .map(|a| format!("{}:{} -> {}", a.source, a.label, a.reason))
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                log::warn!(
+                    "CPU temperature unavailable on {} {} [{}]: {}",
+                    sensor_discovery.machine_vendor,
+                    sensor_discovery.machine_model,
+                    sensor_discovery.issue_classification,
+                    probe_summary
+                );
+                last_cpu_warning_signature = warning_signature;
+                last_cpu_warning_at = Some(Instant::now());
+            }
+        }
 
         // --- Write cache ---
         let (ts, time_str) = timestamp_now();
@@ -1356,6 +1473,9 @@ pub fn monitor_loop(
 fn discover_cpu_temperature(
     wmi_ctx: Option<&crate::wmi_provider::WmiContext>,
     machine_profile: Option<&crate::wmi_provider::MachineProfile>,
+    namespace_inventory: &[NamespaceClassInventory],
+    gpu_adapters: &[GpuAdapterDiscovery],
+    gpu_engine_probe: &(bool, String),
 ) -> (Option<f32>, SensorDiscoveryReport) {
     let mut attempts: Vec<SensorDiscoveryAttempt> = Vec::new();
     let mut wmi_max_temp: Option<f32> = None;
@@ -1477,13 +1597,23 @@ fn discover_cpu_temperature(
         sysinfo_candidate_temp
     };
 
-    if cpu_temp.is_none() {
-        log::warn!(
-            "CPU temperature unavailable: all WMI and sysinfo discovery probes were rejected or empty."
-        );
-    }
-
     let requires_driver = cpu_temp.is_none() && is_dell;
+    let classification = if cpu_temp.is_some() {
+        "available".to_string()
+    } else if attempts.iter().any(|attempt| {
+        attempt.reason.contains("invalid class") || attempt.reason.contains("unsupported class")
+    }) {
+        "missing_or_invalid_wmi_class".to_string()
+    } else if attempts.iter().any(|attempt| attempt.reason.contains("access denied")) {
+        "permissions_or_policy".to_string()
+    } else if is_dell && attempts.iter().any(|attempt| attempt.source == "dell-dcim") {
+        "unsupported_hardware_exposure_or_missing_oem_provider".to_string()
+    } else if requires_driver {
+        "driver_level_telemetry_required".to_string()
+    } else {
+        "user_mode_probe_unavailable".to_string()
+    };
+
     let report = SensorDiscoveryReport {
         machine_vendor,
         machine_model,
@@ -1498,7 +1628,12 @@ fn discover_cpu_temperature(
         } else {
             "No reliable package temperature channel found. Continue with WMI/sysinfo fallback and collect discovery report for model-specific tuning.".to_string()
         },
+        issue_classification: classification,
         dell_class_hints,
+        namespace_inventory: namespace_inventory.to_vec(),
+        gpu_adapters: gpu_adapters.to_vec(),
+        gpu_engine_counter_available: gpu_engine_probe.0,
+        gpu_engine_counter_state: gpu_engine_probe.1.clone(),
         attempts,
     };
 

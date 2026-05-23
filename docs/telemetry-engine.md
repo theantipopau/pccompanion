@@ -63,6 +63,40 @@ The monitoring thread now caches provider orchestration data so the frontend and
 - **Binding state** records whether symbols were resolved and whether the loader is merely staged.
 - **Fallback sequence** is exposed so support can see the exact escalation path.
 
+### Tray Telemetry Trust Surface
+
+The tray tooltip now mirrors diagnostics transparency expectations.
+
+It includes:
+
+- CPU temperature and CPU usage,
+- GPU temperature and GPU usage,
+- RAM usage,
+- active GPU provider label,
+- current telemetry state (`valid`, `degraded`, etc).
+
+This keeps quick tray visibility aligned with full diagnostics provenance instead of opaque summary values.
+
+### Compact Dashboard Trust Surface
+
+The dashboard presentation has been tightened so telemetry provenance remains visible even in dense layouts.
+
+- CPU card now pairs live readings with explicit source context (`WMI ACPI`) and unavailable package-channel messaging.
+- GPU card now surfaces active provider labels directly alongside live metrics.
+- Top-level UI state continues to expose degraded conditions rather than hiding missing channels.
+
+This keeps the UI commercially polished while preserving diagnostic honesty.
+
+### Diagnostics Readability Pass (Commercial Polish)
+
+The diagnostics UI was refined for faster support comprehension without altering backend contracts.
+
+- Matrix headers and rows were visually de-emphasized to reduce noise in dense tables.
+- Stat and provider cards were tightened for quicker scan patterns.
+- Copy was simplified to prioritize operational meaning over marketing phrasing.
+
+No changes were made to telemetry collection, provider cascade, capability-state semantics, or diagnostics payload structure.
+
 ### Telemetry Confidence Model
 
 Confidence is surfaced per sensor so diagnostics can distinguish native telemetry from fallback or inferred data.
@@ -97,9 +131,40 @@ Discovery report includes:
 - perf-counter thermal probe attempts,
 - sysinfo component attempts (label + raw value + accepted/rejected reason),
 - Dell namespace/class hints where visible from user mode,
+- namespace inventory for `ROOT\\WMI`, `ROOT\\CIMV2`, `ROOT\\dcim`, and `ROOT\\dcim\\sysman`,
+- matching class names for thermal/temperature/sensor/fan/GPU keywords,
+- HRESULT-aware query classification in rejection reasons (invalid class, unsupported, invalid namespace, access denied),
+- GPU adapter inventory (name/vendor/VRAM/integrated heuristic),
+- GPU engine performance-counter availability state,
 - recommended action when package channel is unavailable.
 
 If no reliable package sensor is found, capability and provenance state now surface `driver_required` explicitly for CPU package telemetry.
+
+To avoid support-log noise, CPU package temperature warnings are throttled in the monitoring loop: unchanged signatures are emitted at most once per minute, with immediate re-log only when failure classification changes.
+
+### Real Hardware Validation Scope (Current Phase)
+
+Canonical matrix for commercial-readiness validation:
+
+- [docs/compatibility-matrix.md](docs/compatibility-matrix.md)
+
+Validated in this phase so far:
+
+- Dell Latitude 5330 runtime diagnostics path,
+- provider-failure classification behavior,
+- warning-throttle cadence,
+- packaged build + installer generation.
+
+Still pending in this phase:
+
+- Intel+NVIDIA desktop,
+- AMD+NVIDIA desktop,
+- AMD+AMD desktop,
+- Intel Arc target,
+- HP OMEN,
+- HP Victus,
+- hybrid GPU laptop scenarios,
+- Intel/AMD iGPU-only validation rows.
 
 ### LibreHardwareMonitor Research Notes (Why Driver Paths May Be Needed)
 
@@ -128,6 +193,21 @@ Phase C - Signed OEM path (future):
 - ship only signed and model-validated provider components,
 - maintain standalone packaging,
 - default to disabled until compatibility matrix is validated.
+
+---
+
+## Desktop Lifecycle Reliability (Desktop Polish Phase)
+
+The desktop runtime now exposes native lifecycle controls so tray behavior and startup expectations are deterministic.
+
+- Close-to-tray policy is runtime-configurable via native command.
+- Minimize-to-tray-on-minimize policy is runtime-configurable via native command.
+- Startup registration supports optional minimized launch mode.
+- Tray menu includes diagnostics export and monitoring-engine restart actions.
+
+### Monitoring Engine Restart Semantics
+
+`restart_monitoring_engine` resets runtime cache surfaces (state/history/provider warnings/errors) so telemetry polling can recover cleanly after transient provider issues without a full app reinstall cycle.
 
 ---
 

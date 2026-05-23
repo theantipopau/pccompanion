@@ -27,6 +27,7 @@ import type {
   RegistryIssue,
   StartupItem,
   StorageCleanupItem,
+  SensorDiscoveryReport,
   TelemetryDiagnosticsSnapshot,
   SystemInfo,
   TrayStatus,
@@ -65,11 +66,19 @@ export async function setTrayStatus(status: TrayStatus): Promise<void> {
 }
 
 export async function setStartupEnabled(enabled: boolean): Promise<boolean> {
-  return callNative<boolean>('set_startup_enabled', { enabled }, async () => enabled);
+  return callNative<boolean>('set_startup_enabled', { enabled, startMinimized: true }, async () => enabled);
+}
+
+export async function setStartupMode(enabled: boolean, startMinimized: boolean): Promise<boolean> {
+  return callNative<boolean>('set_startup_enabled', { enabled, startMinimized }, async () => enabled);
 }
 
 export async function setCloseToTray(enabled: boolean): Promise<void> {
   return callNative<void>('set_close_to_tray', { enabled }, async () => undefined);
+}
+
+export async function setMinimizeToTrayOnMinimize(enabled: boolean): Promise<void> {
+  return callNative<void>('set_minimize_to_tray_on_minimize', { enabled }, async () => undefined);
 }
 
 export async function showMainWindow(): Promise<void> {
@@ -172,7 +181,26 @@ export async function getTelemetryDiagnostics(): Promise<TelemetryDiagnosticsSna
       packageTempAvailable: false,
       requiresDriver: false,
       recommendedAction: 'Run desktop mode to gather hardware sensor discovery probes.',
+      issueClassification: 'user_mode_probe_unavailable',
       dellClassHints: [],
+      namespaceInventory: [
+        {
+          namespace: 'ROOT\\WMI',
+          available: false,
+          status: 'Browser preview has no WMI access',
+          matchingClasses: [],
+        },
+      ],
+      gpuAdapters: [
+        {
+          name: 'Preview adapter',
+          vendor: 'unknown',
+          adapterRamGb: 0,
+          integrated: true,
+        },
+      ],
+      gpuEngineCounterAvailable: false,
+      gpuEngineCounterState: 'GPU engine counters unavailable in browser preview',
       attempts: [
         {
           source: 'wmi-acpi',
@@ -188,6 +216,13 @@ export async function getTelemetryDiagnostics(): Promise<TelemetryDiagnosticsSna
     hardwareIdentity: mockSystemInfo(),
     sample: mockHardwareSample([]),
   }));
+}
+
+export async function getPlatformTelemetryDiscovery(): Promise<SensorDiscoveryReport> {
+  return callNative<SensorDiscoveryReport>('get_platform_telemetry_discovery', undefined, async () => {
+    const snapshot = await getTelemetryDiagnostics();
+    return snapshot.sensorDiscovery;
+  });
 }
 
 export async function getPerformanceProfiles(): Promise<PerformanceProfile[]> {
@@ -208,6 +243,10 @@ export async function setTrayIconData(rgba: number[], width: number, height: num
 
 export async function listTopProcesses(limit = 30): Promise<ProcessInfo[]> {
   return callNative<ProcessInfo[]>('list_top_processes', { limit }, async () => mockListTopProcesses(limit));
+}
+
+export async function restartMonitoringEngine(): Promise<string> {
+  return callNative<string>('restart_monitoring_engine', undefined, async () => '[browser] monitoring engine restart requested');
 }
 
 export async function getHardwareCapabilities(): Promise<HardwareCapability[]> {

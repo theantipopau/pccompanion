@@ -21,7 +21,10 @@ use tauri::{
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
-use hardware::{HardwareCapability, HardwareSample, MetricPoint, MonitoringEngine, SystemInfo, TelemetryDiagnosticsSnapshot};
+use hardware::{
+    HardwareCapability, HardwareSample, MetricPoint, MonitoringEngine, SensorDiscoveryReport,
+    SystemInfo, TelemetryDiagnosticsSnapshot,
+};
 
 
 
@@ -35,12 +38,14 @@ struct TrayStatus {
 
 struct AppRuntimeState {
     close_to_tray: Mutex<bool>,
+    minimize_to_tray_on_minimize: Mutex<bool>,
 }
 
 impl Default for AppRuntimeState {
     fn default() -> Self {
         Self {
             close_to_tray: Mutex::new(true),
+            minimize_to_tray_on_minimize: Mutex::new(true),
         }
     }
 }
@@ -119,6 +124,13 @@ fn get_telemetry_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> Tele
 }
 
 #[tauri::command]
+fn get_platform_telemetry_discovery(
+    engine: tauri::State<'_, MonitoringEngine>,
+) -> SensorDiscoveryReport {
+    engine.telemetry_diagnostics_snapshot().sensor_discovery
+}
+
+#[tauri::command]
 fn optimize_ram(_mode: Option<String>) -> cleanup::RamCleanupResult {
     cleanup::optimize_ram()
 }
@@ -179,15 +191,54 @@ fn restore_registry_backup(backup_id: String) -> Vec<String> {
 }
 
 #[tauri::command]
-fn export_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> DiagnosticsExport {
+fn export_diagnostics(
+    app: AppHandle,
+    engine: tauri::State<'_, MonitoringEngine>,
+    runtime: tauri::State<'_, AppRuntimeState>,
+) -> DiagnosticsExport {
     let diagnostics = engine.telemetry_diagnostics_snapshot();
     let created_at = diagnostics.created_at.clone();
     let export_dir = diagnostics_dir();
     let _ = std::fs::create_dir_all(&export_dir);
     let path = export_dir.join(format!("diagnostics-{}.json", chrono_like_file_stamp()));
+    let startup_enabled = crate::windows_util::is_companion_startup_enabled();
+    let close_to_tray = runtime
+        .close_to_tray
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(true);
+    let minimize_to_tray_on_minimize = runtime
+        .minimize_to_tray_on_minimize
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(true);
+    let main_window_visible = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false);
+    let osd_window_visible = app
+        .get_webview_window("osd")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false);
+
     let payload = serde_json::json!({
         "createdAt": created_at,
         "format": "radium-diagnostics-v1",
+        "app": {
+            "name": "Radium PCs Companion",
+            "version": env!("CARGO_PKG_VERSION"),
+            "buildProfile": if cfg!(debug_assertions) { "debug" } else { "release" },
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH
+        },
+        "runtimeState": {
+            "startupEnabled": startup_enabled,
+            "closeToTray": close_to_tray,
+            "minimizeToTrayOnMinimize": minimize_to_tray_on_minimize,
+            "mainWindowVisible": main_window_visible,
+            "osdWindowVisible": osd_window_visible,
+            "trayRegistered": app.tray_by_id("main-tray").is_some()
+        },
         "diagnostics": diagnostics,
         "notes": [
             "Generated locally.",
@@ -228,6 +279,24 @@ fn set_close_to_tray(
         .map_err(|_| "Close behavior state lock poisoned".to_string())?;
     *close_to_tray = enabled;
     Ok(())
+}
+
+#[tauri::command]
+fn set_minimize_to_tray_on_minimize(
+    enabled: bool,
+    runtime: tauri::State<'_, AppRuntimeState>,
+) -> Result<(), String> {
+    let mut minimize_to_tray = runtime
+        .minimize_to_tray_on_minimize
+        .lock()
+        .map_err(|_| "Minimize behavior state lock poisoned".to_string())?;
+    *minimize_to_tray = enabled;
+    Ok(())
+}
+
+#[tauri::command]
+fn restart_monitoring_engine(engine: tauri::State<'_, MonitoringEngine>) -> Result<String, String> {
+    Ok(engine.restart_runtime_state())
 }
 
 #[tauri::command]
@@ -410,8 +479,8 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_startup_enabled(enabled: bool) -> Result<bool, String> {
-    windows_util::set_companion_startup_enabled(enabled)
+fn set_startup_enabled(enabled: bool, start_minimized: bool) -> Result<bool, String> {
+    windows_util::set_companion_startup_enabled(enabled, start_minimized)
 }
 
 #[tauri::command]
@@ -484,6 +553,20 @@ pub fn run() {
                         window.app_handle().exit(0);
                     }
                 }
+
+                if matches!(event, WindowEvent::Resized(_)) {
+                    let minimize_to_tray = window
+                        .app_handle()
+                        .state::<AppRuntimeState>()
+                        .minimize_to_tray_on_minimize
+                        .lock()
+                        .map(|flag| *flag)
+                        .unwrap_or(true);
+
+                    if minimize_to_tray && window.is_minimized().ok().unwrap_or(false) {
+                        let _ = window.hide();
+                    }
+                }
             }
         })
         .setup(move |app| {
@@ -504,6 +587,7 @@ pub fn run() {
             get_hardware_sample,
             get_hardware_capabilities,
             get_telemetry_diagnostics,
+            get_platform_telemetry_discovery,
             optimize_ram,
             scan_bloatware,
             remove_bloatware,
@@ -514,6 +598,8 @@ pub fn run() {
             set_startup_enabled,
             set_overlay_window,
             set_close_to_tray,
+            set_minimize_to_tray_on_minimize,
+            restart_monitoring_engine,
             scan_startup_items,
             set_startup_item_enabled,
             scan_storage_cleanup,
@@ -583,17 +669,17 @@ fn chrono_like_file_stamp() -> String {
 }
 
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open-dashboard", "Open Command Center", true, None::<&str>)?;
-    let passport = MenuItem::with_id(app, "open-passport", "Open System Passport", true, None::<&str>)?;
-    let overview = MenuItem::with_id(app, "performance-overview", "Performance Overview", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open-dashboard", "Open Companion", true, None::<&str>)?;
     let toggle_osd = MenuItem::with_id(app, "toggle-osd", "Toggle OSD Overlay", true, None::<&str>)?;
-    let ram_clean = MenuItem::with_id(app, "quick-ram-clean", "Quick Memory Optimization", true, None::<&str>)?;
-    let performance = MenuItem::with_id(app, "performance-mode", "Set Performance Mode", true, None::<&str>)?;
-    let quiet = MenuItem::with_id(app, "quiet-mode", "Set Quiet Mode", true, None::<&str>)?;
+    let ram_clean = MenuItem::with_id(app, "quick-ram-clean", "Quick RAM Clean", true, None::<&str>)?;
+    let performance = MenuItem::with_id(app, "performance-mode", "Performance Mode", true, None::<&str>)?;
+    let quiet = MenuItem::with_id(app, "quiet-mode", "Quiet Mode", true, None::<&str>)?;
+    let export_diagnostics = MenuItem::with_id(app, "export-diagnostics", "Diagnostics Export", true, None::<&str>)?;
+    let restart_monitoring = MenuItem::with_id(app, "restart-monitoring", "Restart Monitoring Engine", true, None::<&str>)?;
     let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&open, &passport, &overview, &toggle_osd, &ram_clean, &performance, &quiet, &exit],
+        &[&open, &toggle_osd, &ram_clean, &performance, &quiet, &export_diagnostics, &restart_monitoring, &exit],
     )?;
 
     let icon = app.default_window_icon().cloned();
@@ -601,11 +687,8 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .menu(&menu)
         .tooltip("Radium PCs Companion")
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "open-dashboard" | "performance-overview" => {
+            "open-dashboard" => {
                 let _ = app.emit("tray://open-dashboard", ());
-            }
-            "open-passport" => {
-                let _ = app.emit("tray://open-passport", ());
             }
             "toggle-osd" => {
                 let _ = app.emit("tray://toggle-osd", ());
@@ -618,6 +701,12 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
             }
             "quiet-mode" => {
                 let _ = app.emit("tray://quiet-mode", ());
+            }
+            "export-diagnostics" => {
+                let _ = app.emit("tray://export-diagnostics", ());
+            }
+            "restart-monitoring" => {
+                let _ = app.emit("tray://restart-monitoring", ());
             }
             "exit" => {
                 app.exit(0);

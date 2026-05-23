@@ -43,9 +43,91 @@
 | Build validation | 🟨 `npm.cmd run build` + `cargo check` + `cargo test -q` passed; `cargo test` binary run still needs elevation |
 | Runtime validation | ✅ Packaged release EXE launched from `src-tauri/target/release/radium_pcs_companion.exe`; ProgramData logs show tray registration and background startup |
 | Dell thermal discovery report | ✅ Added per-source thermal probe attempts with accepted/rejected values, labels, and Dell namespace hints |
+| Dell namespace inventory diagnostics | ✅ Added namespace/class inventory for ROOT\WMI, ROOT\CIMV2, ROOT\dcim, ROOT\dcim\sysman |
+| HRESULT error classification | ✅ Discovery reasons now classify invalid-class/not-supported/invalid-namespace/access-denied HRESULTs |
+| GPU fallback clarity (Intel/Dell) | ✅ Discovery report includes GPU adapters + GPU engine counter availability state |
 | CPU temp limitation surfacing | ✅ CPU package telemetry now marks `driver_required` when user-mode channels are unavailable |
+| CPU temp warning spam control | ✅ Monitor loop warning is throttled (signature-based; re-log at most once/minute unless classification changes) |
 | Close behavior control | ✅ Native close-to-tray behavior now follows Settings toggle via runtime command |
 | Sidebar compact grouping | ✅ Sidebar now supports grouped nav sections and compact-shell mode tied to settings |
+| Minimise lifecycle control | ✅ Separate native policy added for minimise-to-tray on minimise |
+| Tray menu production actions | ✅ Added diagnostics export + monitoring restart tray actions |
+| Startup mode registration | ✅ Startup registration now respects start-minimised mode |
+| NSIS install mode | ✅ Configured for `both` (per-user and per-machine) |
+| Compatibility matrix tracking | ✅ `docs/compatibility-matrix.md` added for real-hardware validation phase |
+| Diagnostics export runtime metadata | ✅ Export now includes app version/build + startup/tray/window lifecycle state |
+
+---
+
+### Phase: Final Reliability + Hardware-Telemetry Audit Pass (2026-05-23)
+
+### Phase: Real Hardware Validation & Commercial Readiness (2026-05-23)
+
+#### Scope guardrails applied
+- No architecture redesign.
+- No major new subsystem introduced.
+- Hardening focused on diagnostics clarity, lifecycle visibility, and validation traceability.
+
+#### Compatibility and validation tracking
+- Added canonical matrix: `docs/compatibility-matrix.md`.
+- Matrix now tracks desktop and laptop target configurations with per-channel status (`validated`, `partial`, `pending`, `blocked`).
+- Current real host evidence captured for Dell Latitude 5330.
+
+#### Diagnostics export hardening
+- `export_diagnostics` payload now includes:
+  - app metadata (`name`, `version`, `buildProfile`, `os`, `arch`),
+  - runtime lifecycle state (`startupEnabled`, `closeToTray`, `minimizeToTrayOnMinimize`, `mainWindowVisible`, `osdWindowVisible`, `trayRegistered`).
+- Added backend helper to infer current Companion startup registration state from startup scan results.
+
+#### Validation evidence captured in this phase
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed (includes `npm run build` pre-step and NSIS packaging).
+- Runtime logs confirm Dell classification + warning-throttle behavior at roughly one-minute cadence:
+  - `missing_or_invalid_wmi_class` classification in warning signature,
+  - HRESULT interpretation visible (`0x8004100C` unsupported path, `0x80041010` invalid class).
+
+#### Pending manual hardware coverage
+- Intel+NVIDIA desktop,
+- AMD+NVIDIA desktop,
+- AMD+AMD desktop,
+- Intel Arc target,
+- HP OMEN,
+- HP Victus,
+- hybrid/iGPU-only laptop scenarios,
+- full uninstall manual verification,
+- overhead benchmark capture (idle CPU/RAM, tray/OSD polling impact).
+
+---
+
+#### Dell telemetry root-cause clarity
+- Added discovery `issueClassification` output for CPU package-temperature unavailability.
+- Added namespace-level inventory and matching class listing for:
+  - `ROOT\\WMI`
+  - `ROOT\\CIMV2`
+  - `ROOT\\dcim`
+  - `ROOT\\dcim\\sysman`
+- Added HRESULT-aware interpretation in query rejection reasons:
+  - `0x80041010` invalid class,
+  - `0x8004100C` not supported,
+  - `0x8004100E` invalid namespace,
+  - `0x80041003` access denied.
+
+#### GPU Intel fallback diagnostics
+- Added GPU adapter inventory (name/vendor/VRAM/integrated heuristic) to sensor discovery payload.
+- Added GPU engine counter probe status to distinguish unavailable counters from vendor-API staging.
+- Support snapshot now explicitly explains Intel adapter detection and staged IGCL fallback context.
+
+#### Log reliability hardening
+- CPU temperature unavailable warning moved to monitor-loop throttled emission.
+- Repeated identical signatures no longer log every poll tick.
+
+#### Validation in this pass
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0_x64-setup.exe`
+- Runtime log spot-check command tasks remain quoting-sensitive in this workspace; launch logs confirmed packaged EXE startup.
 
 ---
 
@@ -82,6 +164,104 @@
 - Remaining manual verification to run on an interactive desktop session:
   - tray menu `Exit` end-to-end confirmation (full process teardown after user click),
   - diagnostics export spot-check from the running desktop app to confirm discovery-attempt payload content on target hardware.
+
+### Phase: Desktop Polish, Reliability & Installer Readiness (2026-05-23)
+
+#### Desktop lifecycle and startup settings
+- Added new user-facing settings and runtime wiring:
+  - start with Windows,
+  - start minimised,
+  - minimise to tray on close,
+  - minimise to tray on minimise,
+  - launch overlay on startup,
+  - launch monitoring on startup.
+- Native runtime state now tracks minimise-to-tray-on-minimise independently from close behavior.
+
+#### Tray reliability and support actions
+- Tray menu streamlined to production actions:
+  - Open Companion,
+  - Toggle OSD,
+  - Quick RAM Clean,
+  - Performance Mode,
+  - Quiet Mode,
+  - Diagnostics Export,
+  - Restart Monitoring Engine,
+  - Exit.
+- Added `restart_monitoring_engine` native command that resets runtime telemetry cache surfaces for recovery workflows.
+
+#### Telemetry trust visibility in tray
+- Tray tooltip now includes active GPU provider and telemetry state in addition to CPU/GPU/RAM metrics.
+
+#### Installer readiness and packaging config
+- Updated NSIS install mode from per-machine-only to `both` to support per-user and per-machine installation paths.
+
+#### Validation status for this phase
+- `npm.cmd run build` completed successfully (`BUILD_OK` captured).
+- `cargo check --manifest-path Cargo.toml` from `src-tauri` completed successfully (`CARGO_OK` captured).
+- Automated viewport matrix passed with no horizontal overflow at:
+  - 980x680,
+  - 1920x1080,
+  - 2560x1440,
+  - 3440x1440.
+- `npm.cmd run build:exe` completed successfully with NSIS bundling:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0_x64-setup.exe`
+- Still pending manual desktop interaction checks:
+  - installer flow and uninstall flow,
+  - startup flow (silent/minimised),
+  - tray restore and tray exit full process teardown,
+  - diagnostics export payload spot-check on target Dell hardware.
+
+#### Desktop OEM visual-density pass (same phase continuation)
+- Refined shell and dashboard presentation toward a compact desktop utility profile:
+  - reduced topbar/page/card spacing,
+  - tighter sidebar/nav ergonomics,
+  - stronger telemetry-at-a-glance hierarchy,
+  - reduced marketing-heavy hero surface in favour of live telemetry context.
+- Updated colour direction to Radium black/orange styling with restrained glow and clearer active states.
+- Dashboard now emphasises provider-aware telemetry details directly in CPU/GPU cards (including unavailable/degraded channel messaging).
+- Topbar tray preview now includes telemetry state + active provider summary.
+
+#### Additional validation for OEM visual-density pass
+- `npm.cmd run build` completed successfully (`BUILD_OK`).
+- `cargo check --manifest-path Cargo.toml` from `src-tauri` completed successfully (`CARGO_OK`).
+- Automated overflow checks passed at:
+  - 1366x768,
+  - 1600x900,
+  - 1920x1080,
+  - 2560x1440,
+  - 3440x1440.
+- No horizontal clipping detected in shell/sidebar/topbar/dashboard grid containers.
+
+### Phase Continuation: Commercial UX Refinement & Interaction Polish (2026-05-23)
+
+#### Scope guardrails respected
+- No telemetry architecture replacement.
+- No major new systems.
+- No desktop lifecycle behavior regressions introduced.
+
+#### Implemented polish updates
+- Shell/topbar refinement:
+  - reduced action clutter (removed non-functional notifications action),
+  - softened support/tray pill prominence,
+  - tightened icon/button sizing and spacing.
+- Dashboard refinement:
+  - reduced panel glow and hover intensity,
+  - tightened card typography and chart-adjacent density,
+  - improved telemetry-first hierarchy while preserving existing content model.
+- Diagnostics refinement:
+  - tightened diagnostics hero/stat/provider card spacing,
+  - reduced matrix row/head visual weight,
+  - clearer support-facing labels/copy for faster interpretation.
+
+#### Validation for this continuation
+- `npm.cmd run build:exe` completed successfully (includes frontend build + Rust compile + NSIS bundling).
+- Viewport overflow sweep on live dev server passed with no horizontal or vertical overflow at:
+  - 1366x768,
+  - 1600x900,
+  - 1920x1080,
+  - 2560x1440,
+  - 3440x1440.
 
 ## Completed Work
 
