@@ -163,6 +163,29 @@
   - `src-tauri/target/release/radium_pcs_companion.exe`
   - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
 
+---
+
+### Phase: Compact System Identity Header Composition Refinement (2026-05-23)
+
+#### Scope guardrails applied
+- Dashboard top identity section only.
+- No telemetry provider/backend redesign.
+- No diagnostics/runtime lifecycle architecture changes.
+
+#### UI composition outcomes
+- Replaced oversized dual-logo hero strip with a compact left-aligned identity block.
+- New left block now presents single-brand identity, device name, telemetry state headline, and concise provider-backed status copy.
+- Replaced decorative right-side visual rail with compact hardware/status pills (CPU, GPU, OS, provider, telemetry lanes, support readiness).
+- Preserved existing live bindings for system identity and telemetry/provider data; no fake channels added.
+- Reduced dead decorative space and improved hierarchy so the section reads as dashboard-integrated identity telemetry, not concept artwork.
+
+#### Validation evidence captured in this phase
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+
 
 ---
 

@@ -11,9 +11,8 @@ import { StatePill } from '../components/StatePill';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
-import { assets, vendorLogo } from '../lib/assets';
+import { assets } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
-import type { Vendor } from '../types/system';
 
 type DashboardPageProps = {
   onNavigate?: (view: string) => void;
@@ -34,30 +33,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const hardwareTheme = (systemInfo?.gpuVendor && systemInfo.gpuVendor !== 'unknown')
     ? systemInfo.gpuVendor
     : (systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : 'unknown');
-  const systemIdentity = [
-    { label: 'Platform', value: systemInfo?.windows ?? 'Detecting OS' },
-    { label: 'Mainboard', value: systemInfo?.motherboard ?? 'Detecting board' },
-    { label: 'GPU', value: systemInfo?.gpu ?? 'Detecting graphics' },
-    { label: 'CPU', value: systemInfo?.cpu ?? 'Detecting processor' },
+  const deviceName = systemInfo?.motherboard || systemInfo?.windows || 'Device identity pending';
+  const telemetryHeadline = loading
+    ? 'Telemetry calibrating'
+    : nominal
+      ? 'Telemetry stable'
+      : 'Telemetry partially degraded';
+  const telemetrySubline = sample
+    ? `Provider-backed hardware monitoring · ${sampleAgeLabel}`
+    : 'Provider-backed hardware monitoring';
+  const compactIdentityPills = [
+    { key: 'cpu', label: systemInfo?.cpu ?? 'CPU detecting' },
+    { key: 'gpu', label: systemInfo?.gpu ?? 'GPU detecting' },
+    { key: 'os', label: systemInfo?.windows ?? 'OS detecting' },
+    { key: 'provider', label: `${gpuProvider} Provider` },
+    { key: 'lanes', label: `Telemetry ${activeChannels}/4` },
+    { key: 'support', label: `Support ${nominal ? 'Ready' : 'Degraded'} · ${performanceScore.grade}` },
   ];
-  const vendorBadges = (() => {
-    if (!systemInfo) return [] as Array<{ key: string; label: string; vendor: Vendor }>;
-    const cpuVendor = systemInfo.cpuVendor;
-    const gpuVendor = systemInfo.gpuVendor;
-
-    if (cpuVendor !== 'unknown' && cpuVendor === gpuVendor) {
-      return [{ key: `shared-${cpuVendor}`, label: 'CPU/GPU', vendor: cpuVendor }];
-    }
-
-    const badges: Array<{ key: string; label: string; vendor: Vendor }> = [];
-    if (cpuVendor !== 'unknown') {
-      badges.push({ key: `cpu-${cpuVendor}`, label: 'CPU', vendor: cpuVendor });
-    }
-    if (gpuVendor !== 'unknown') {
-      badges.push({ key: `gpu-${gpuVendor}`, label: 'GPU', vendor: gpuVendor });
-    }
-    return badges;
-  })();
   const heroSignals = [
     { id: 'cpu', label: 'CPU', value: sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.cpu.usage) : 'Pending' },
     { id: 'gpu', label: 'GPU', value: sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.gpu.usage) : 'Pending' },
@@ -98,28 +90,21 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         <Panel className="hero-monitor">
           <div className="hero-ambient" aria-hidden="true" />
           <div className="hero-monitor-top">
-            <div>
-              <div className="dashboard-brandmark" aria-label="Radium branding">
+            <div className="hero-identity-main">
+              <div className="hero-identity-brand" aria-label="Radium PCs Companion identity">
                 <img className="dashboard-brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
-                <img src={assets.radiumHeader} alt="Radium PCs Companion" />
+                <div className="hero-brand-copy">
+                  <strong>Radium PCs Companion</strong>
+                  <span>Companion</span>
+                </div>
               </div>
-              <span className="eyebrow">System identity and telemetry overview</span>
-              <h2>{loading ? 'Scanning hardware' : nominal ? 'Hardware runtime calibrated' : 'Telemetry channels partially degraded'}</h2>
-              <p>
-                Live provider-backed data with explicit channel confidence. Missing sensors stay visible as degraded states.
-              </p>
-              <div className="hero-identity-grid">
-                {systemIdentity.map((identity) => (
-                  <div key={identity.label} className="hero-identity-chip">
-                    <span>{identity.label}</span>
-                    <strong>{identity.value}</strong>
-                  </div>
-                ))}
-              </div>
+              <h2>{deviceName}</h2>
+              <p className="hero-status-line">{telemetryHeadline}</p>
+              <p>{telemetrySubline}</p>
               <div className="hero-runtime-meta">
                 <span><ShieldCheck size={13} /> State: {(sample?.state ?? 'inactive').toUpperCase()}</span>
                 <span><MonitorUp size={13} /> Provider: {gpuProvider}</span>
-                <span><Gauge size={13} /> Telemetry lanes: {activeChannels}/4</span>
+                <span><Gauge size={13} /> Lanes: {activeChannels}/4</span>
               </div>
               <div className="hero-links">
                 <a href={companyWebsite} target="_blank" rel="noreferrer noopener">Radium PCs</a>
@@ -149,27 +134,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
 
             <div className="hero-side-rail">
-              <div className="hero-visual-card" aria-hidden="true">
-                <div className="hero-visual-mesh" />
-                <div className="hero-visual-core" />
-                <div className="hero-silhouette" />
-              </div>
-              <div className="hero-grade-tile">
-                <span>System health</span>
-                <strong>{nominal ? 'Nominal' : 'Degraded'}</strong>
-                <small>{sampleAgeLabel}</small>
-              </div>
-              <div className="hero-grade-tile hero-grade-tile-score">
-                <span>Support readiness</span>
-                <strong>{performanceScore.grade}</strong>
-                <small>{nominal ? 'Live telemetry stable' : 'Degraded channels surfaced'}</small>
-              </div>
-              <div className="vendor-logos" aria-label="Detected silicon vendors">
-                {vendorBadges.map((badge) => (
-                  <div key={badge.key} className="vendor-badge">
-                    <img src={vendorLogo(badge.vendor)} alt={`${badge.vendor} logo`} />
-                    <span>{badge.label}: {badge.vendor.toUpperCase()}</span>
-                  </div>
+              <div className="hero-status-pills" aria-label="Detected identity and telemetry status">
+                {compactIdentityPills.map((pill) => (
+                  <span key={pill.key} className="hero-status-pill" title={pill.label}>{pill.label}</span>
                 ))}
               </div>
             </div>
