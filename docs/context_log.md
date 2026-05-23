@@ -16,7 +16,7 @@
 | WMI telemetry — GPU usage | ✅ Implemented via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine` |
 | NVML telemetry (NVIDIA GPU full) | ✅ Implemented (dynamic `nvml.dll` loading) |
 | ADL2 telemetry (AMD GPU full) | ✅ Implemented (dynamic `atiadlxx.dll` loading) |
-| Intel Arc telemetry | ✅ WMI usage% only — IGCL deferred; UI shows notice |
+| Intel Arc telemetry | 🟨 IGCL loader groundwork active + WMI fallback usage; full Arc sensor bindings staged |
 | Network adapter detection | ✅ Most-active adapter name + type (wifi/ethernet/unknown) |
 | Storage drive type detection | ✅ NVMe/SSD/HDD via sysinfo DiskKind + name heuristic |
 | WMI disk model names | ✅ `Win32_DiskDrive` query → "Model (N GB)" labels |
@@ -26,7 +26,7 @@
 | Bloatware scanner (real AppX queries) | ✅ Implemented (10 known packages via PowerShell) |
 | Registry cleaner | ✅ Implemented (scan + backup to Documents + dry-run/live clean) |
 | Performance profiles page | ✅ UI + service contracts done; backend applies Companion state only (no firmware writes yet) |
-| Diagnostics export | ✅ Exports JSON bundle to `%ProgramData%\Radium PCs Companion\diagnostics\` |
+| Diagnostics export | 🟨 Exports expanded provider/capability/provenance JSON bundle to `%ProgramData%\Radium PCs Companion\diagnostics\` |
 | **callNative browser/native split** | ✅ `isNative()` detection — browser uses mock, Tauri mode propagates real errors |
 | **All mutating ops execute for real** | ✅ `dryRun: false` for startup, bloatware, storage, registry operations |
 | **MonitorContext `native` flag** | ✅ `native: boolean` exposed in context; DashboardPage shows browser-preview banner |
@@ -35,16 +35,210 @@
 | **Standalone EXE / NSIS installer** | ✅ `tauri.conf.json` NSIS configured; `npm run build:exe` produces installer |
 | **Run scripts** | ✅ `npm run desktop`, `build:exe`, `package:windows`, `package:portable`, `check:desktop` |
 | **Minimize to tray** | ✅ Close button hides to tray; `--background`/`--silent` start hidden; double-click restores |
-| **Live tray icon (metric)** | ❌ Not yet — planned next (canvas-rendered 32×32 icon with gauge arc) |
+| **Live tray icon (metric)** | ✅ Multi-metric tray icon renderer live (CPU/GPU temp, CPU/GPU/RAM usage) |
 | UI density rework | ✅ CSS scaled down across all components |
 | UI polish — panels, nav, scrollbar | ✅ Panel glow hover, nav left-accent active, status-dot pulse, thin cyan scrollbar |
 | Desktop run scripts | ✅ `desktop`, `dev:desktop`, `build:exe`, `package:windows`, `check:desktop` scripts added |
 | EXE packaging config | ✅ Tauri NSIS bundle metadata configured |
-| Build validation | ❌ **Pending** — cargo not available in current terminal env; developer must validate |
+| Build validation | 🟨 `npm.cmd run build` + `cargo check` + `cargo test -q` passed; `cargo test` binary run still needs elevation |
+| Runtime validation | ✅ Packaged release EXE launched from `src-tauri/target/release/radium_pcs_companion.exe`; ProgramData logs show tray registration and background startup |
 
 ---
 
 ## Completed Work
+
+### Phase: Telemetry Diagnostics + Sensor Provenance + OEM Capability Intelligence (2026-05-23)
+
+#### Frontend diagnostics surface
+- Added `src/pages/TelemetryDiagnosticsPage.tsx` with a premium OEM diagnostics layout.
+- The page renders:
+  - provider orchestration cards,
+  - a full sensor provenance matrix,
+  - capability intelligence states,
+  - support tooling actions,
+  - export bundle coverage and validation feedback.
+- Wired dashboard quick access and shell search access to `Telemetry Diagnostics`.
+
+#### Backend diagnostics orchestration
+- Added `get_telemetry_diagnostics` command and expanded `export_diagnostics` output.
+- Introduced backend diagnostics snapshot types:
+  - `TelemetryDiagnosticsSnapshot`
+  - `ProviderDiagnostics`
+  - `SensorProvenance`
+- Hardware cache now tracks provider load order, provider warnings, and provider errors for support visibility.
+
+#### Capability intelligence
+- Formalised capability states across the stack:
+  - live, partial, degraded, staged, unsupported, blocked, elevated_required, driver_required, unknown.
+- Sensor confidence is now surfaced as:
+  - high, medium, low, unknown.
+
+#### Intel Arc continuation
+- IGCL loader scaffold remains staged and visible in diagnostics.
+- Intel Arc telemetry is now represented as a support-visible staged provider rather than a hidden fallback.
+
+#### Validation
+- `npm.cmd run build` passed.
+- `cargo check` passed.
+- `cargo test -q` passed for the library test suite; the binary test target requires elevation in this environment.
+
+### Phase: Premium OEM Identity + Embedded Telemetry Expansion (2026-05-23)
+
+#### Frontend evolution
+- `src/pages/SystemPassportPage.tsx` now consumes live backend capability registry via `getHardwareCapabilities()` and renders dynamic capability rows instead of static placeholders.
+- Added first-launch premium onboarding sequence (`src/components/OnboardingFlow.tsx`) and integrated it in `src/App.tsx` with persisted completion state (`radium-onboarding-complete-v1`).
+- Updated global visual language in `src/styles.css`:
+  - premium font stack update,
+  - layered panel treatment with sheen overlay,
+  - dashboard hero telemetry ribbon/chips,
+  - tabular numeric typography reinforcement,
+  - onboarding modal and new matrix unsupported state styles.
+
+#### Backend telemetry groundwork
+- Added Intel Arc provider groundwork module: `src-tauri/src/igcl_provider.rs`.
+  - runtime dynamic loading (`igcl64.dll` / `ControlLib.dll` candidates),
+  - symbol discovery scaffolding (`ctlInit`, `ctlEnumerateDevices`),
+  - safe no-op query path for staged sensor binding rollout.
+- Integrated provider into backend startup and polling flow:
+  - `src-tauri/src/lib.rs`: registered `igcl_provider` module.
+  - `src-tauri/src/hardware.rs`: provider cascade now `NVML -> ADL2 -> IGCL -> WMI`.
+  - Added cache fields for `gpu_provider` and `intel_igcl_loaded`.
+  - `capability_snapshot()` now reports provider-aware GPU capability detail and Intel groundwork state.
+
+#### Commercial UX continuity
+- Tray/workbench alignment remains under OEM identity with metric-mode expansion and richer tooltip language from prior pass.
+- Capability matrix now reflects read-only vs write-safe semantics directly from backend command output.
+
+#### Validation
+- Build/test re-validation after this wave: pending.
+
+### Phase: OEM Foundation Slice — Passport + Score + LHM Analysis (2026-05-23)
+
+#### Product-facing implementation
+- Added a dedicated `System Passport` experience (`src/pages/SystemPassportPage.tsx`) with:
+  - hardware identity surface,
+  - OEM attestation placeholders (passport ID/serial/build batch/QC seal/image revision/support tier),
+  - telemetry access matrix to distinguish live vs partial data channels,
+  - integrated Radium score badge.
+- Added global navigation route and shell quick-action coverage:
+  - `src/App.tsx` now includes `passport` nav item and route.
+  - `src/components/Shell.tsx` search quick actions now include `Open System Passport`.
+
+#### Performance model groundwork
+- Added `src/lib/performanceScore.ts`:
+  - weighted score model with five pillars:
+    1) thermal envelope,
+    2) CPU headroom,
+    3) memory headroom,
+    4) storage health,
+    5) telemetry confidence.
+  - grade mapping (`S/A/B/C/D`) and qualitative summary text.
+  - safe fallback score behavior while awaiting first live sample.
+- Integrated score snapshot into Dashboard (`src/pages/DashboardPage.tsx`) as an OEM readiness panel.
+
+#### Design system extensions
+- Extended `src/styles.css` with dedicated score and passport styling blocks:
+  - score panel visuals,
+  - passport hero, pillar cards, metadata fields, matrix states,
+  - responsive layout behavior for passport grid and sections.
+
+#### Architecture documentation
+- Added `docs/lhm_oem_analysis.md` with adaptation findings and next-step slices:
+  - Super I/O + EC model-specific gating rationale,
+  - IGCL-based Intel Arc strategy,
+  - storage confidence strategy,
+  - staged OEM safety envelope recommendations.
+
+#### Validation target
+- Frontend build validation passed (`npm run build`).
+- Full desktop executable build passed (`npm.cmd run build:exe` via VS Code task `build-exe-fresh`) with NSIS bundle output:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0_x64-setup.exe`
+
+### Phase: Search Activation + UX Polish (2026-05-23)
+
+#### Search activation
+- `src/components/Shell.tsx`:
+  - Topbar search upgraded to command-palette behavior:
+    - keyboard navigation with Up/Down + Enter
+    - quick actions (open website, email support, go to settings)
+    - active result highlighting and focus-aware results popup
+
+#### Visual polish
+- `src/styles.css`:
+  - panel hover now includes subtle elevation (`box-shadow` + `translateY`) for stronger depth feedback.
+  - search results include active/highlight state for keyboard selection.
+- `src/pages/DashboardPage.tsx`:
+  - replaced inline tooltip styles with a reusable custom tooltip component for charts.
+
+#### Validation
+- Frontend build passed (`npm.cmd run build`).
+
+### Phase: Restore Paths + Safety Tests (2026-05-23)
+
+#### Restore command surface
+- `src-tauri/src/windows_util.rs`:
+  - Registry backups now store a foldered manifest + per-issue `.reg` exports.
+  - Added `restore_registry_backup(backup_id)` to import exported `.reg` files.
+  - Added `restore_bloatware(ids, dry_run)` with action-aware restore handling:
+    - AppX: best-effort re-register from WindowsApps manifest
+    - Policy: consumer-experience value restoration
+    - Scheduled task: re-enable mapped task
+- `src-tauri/src/lib.rs`:
+  - Exposed new Tauri commands: `restore_registry_backup`, `restore_bloatware`.
+- `src/services/systemService.ts`:
+  - Added `restoreRegistryBackup()` and `restoreBloatware()` native/browser adapters.
+- UI wiring:
+  - `src/pages/RegistryCleanerPage.tsx`: added Restore Backup action button.
+  - `src/pages/BloatwarePage.tsx`: added Restore Selected action button.
+
+#### Backend tests
+- `src-tauri/src/cleanup.rs`: added unit tests for byte conversion, directory cleanup helpers, and unknown-id cleanup guard.
+- `src-tauri/src/windows_util.rs`: added unit tests for id sanitization and backup-required registry safety gates.
+
+#### Validation
+- `cargo check` passed.
+- `npm.cmd run build` passed.
+
+### Phase: Functional Roadmap Pass — Power Modes + Cleaner Hardening (2026-05-23)
+
+#### Performance profiles / power modes
+- `src-tauri/src/lib.rs`: `apply_performance_profile` now applies three stages in live mode:
+  1) Windows plan selection, 2) processor power tuning, 3) timer resolution.
+- `src-tauri/src/windows_util.rs`: added `apply_power_mode_tweaks(profile_id)` using supported `powercfg` processor subgroup controls:
+  - `PROCTHROTTLEMIN`
+  - `PROCTHROTTLEMAX`
+  - `PERFBOOSTMODE`
+  Applied on both AC/DC, then `SCHEME_CURRENT` re-activated.
+
+#### Registry cleaner
+- `src-tauri/src/windows_util.rs`:
+  - `clean_registry_issues` now validates backup presence before live deletion.
+  - Added safe live deletion path for scanned issues:
+    - startup orphan values: value delete
+    - uninstall/app-path leftovers: key-tree delete
+  - Added Win32 helpers `delete_registry_value` and `delete_registry_tree`.
+- `src/pages/RegistryCleanerPage.tsx`: now re-scans findings after clean run and uses successful `[ok]` log detection for clean-step completion.
+
+#### Bloatware remover
+- `src-tauri/src/windows_util.rs`:
+  - switched APPX removal to spec-driven match pattern (`remove_appx_package_for_id`) instead of display-name matching.
+  - implemented live `consumer-experience` policy write (ContentDeliveryManager recommendation value).
+  - added scheduled-task disable path mapping (initial hook for Xbox game-save task).
+- `src/pages/BloatwarePage.tsx`: refactored into refresh-based scan flow and post-removal rescan; action button wording now reflects live removal intent.
+
+#### System cleaner
+- `src-tauri/src/cleanup.rs`:
+  - added `User Downloads (review)` target (non-safe, default unselected).
+  - added `Recycle Bin` target with size estimate and live clear action.
+  - run path now handles recycle-bin cleanup as a special action.
+- `src/pages/StorageCleanerPage.tsx`:
+  - added safety gate so one-click cleanup runs only on `safe` targets.
+  - selected non-safe targets are explicitly blocked with review log output.
+
+#### Validation
+- Frontend: `npm.cmd run build` passed.
+- Backend: `cargo check` passed.
 
 ### Phase: AAA Premium UX Visual Identity (2026-05-23)
 

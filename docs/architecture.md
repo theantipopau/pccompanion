@@ -12,6 +12,33 @@ Radium PCs Companion is a native Windows desktop application providing real-time
 
 ---
 
+## Layered Platform Model
+
+Radium PCs Companion is now treated as a layered OEM platform rather than a single monitoring utility.
+
+1. **UI Layer**
+- React/Tauri frontend, page composition, motion, and visual systems.
+
+2. **Telemetry Layer**
+- Provider orchestration, polling cadence, cache publication, and vendor/native sensor adapters.
+
+3. **Capability Layer**
+- Capability registry, support states, confidence scoring, and degraded-state explanation.
+
+4. **OEM Layer**
+- System Passport, performance score, branding, onboarding, and certification-facing identity.
+
+5. **Diagnostics Layer**
+- Sensor provenance, support bundles, export formats, issue triage, and OEM reports.
+
+6. **Safety Layer**
+- Read-only defaults, EC/write gating, driver-required blocks, and unsafe-operation suppression.
+
+7. **Branding Layer**
+- Splash/onboarding surfaces, tray identity, product visual language, and first-launch experience.
+
+---
+
 ## Process Architecture
 
 ```
@@ -56,6 +83,7 @@ src-tauri/src/
 ├── lib.rs               — Command handlers, tray, OSD, pub fn run()
 ├── hardware.rs          — HAL: types, MonitoringEngine, monitor_loop
 ├── wmi_provider.rs      — WMI queries (Windows-only module)
+├── igcl_provider.rs     — Intel Arc / IGCL staging loader
 ├── cleanup.rs           — RAM cleaner + storage scanner
 └── windows_util.rs      — Startup manager + bloatware scanner
 ```
@@ -69,6 +97,7 @@ src-tauri/src/
 - `SysinfoState` + `SysinfoState::tick()` — sysinfo polling abstraction
 - `monitor_loop()` — background thread function; all real sensor I/O happens here
 - Helper: `bytes_to_gb()`, `vendor_from_str()`, `timestamp_now()`
+- Diagnostics helpers: provider orchestration snapshots, sensor provenance, capability intelligence, OEM support export seeds
 
 #### `wmi_provider.rs` (Windows only)
 - `WmiContext` — holds a live `WMIConnection` to `ROOT\CIMV2`; initialised once on the monitoring thread
@@ -141,6 +170,8 @@ All Tauri commands are synchronous Rust functions registered in `tauri::generate
 |---|---|---|---|
 | `get_system_info` | — | `SystemInfo` | `hardware` |
 | `get_hardware_sample` | `history?: MetricPoint[]` | `HardwareSample` | `hardware` |
+| `get_hardware_capabilities` | — | `HardwareCapability[]` | `hardware` |
+| `get_telemetry_diagnostics` | — | `TelemetryDiagnosticsSnapshot` | `hardware` |
 | `optimize_ram` | `mode?: string` | `RamCleanupResult` | `cleanup` |
 | `scan_bloatware` | — | `BloatwareItem[]` | `windows_util` |
 | `remove_bloatware` | `ids: string[], dry_run: bool` | `string[]` | `windows_util` |
@@ -152,6 +183,7 @@ All Tauri commands are synchronous Rust functions registered in `tauri::generate
 | `show_main_window` | — | `Result<(), string>` | `lib` |
 | `set_startup_enabled` | `enabled: bool` | `Result<bool, string>` | `lib` |
 | `set_overlay_window` | `enabled: bool, click_through: bool` | `Result<(), string>` | `lib` |
+| `export_diagnostics` | — | `DiagnosticsExport` | `lib` |
 
 ---
 

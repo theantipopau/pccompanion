@@ -14,6 +14,7 @@ import {
 } from './mockData';
 import type {
   BloatwareItem,
+  HardwareCapability,
   DiagnosticsExport,
   HardwareSample,
   MetricPoint,
@@ -26,6 +27,7 @@ import type {
   RegistryIssue,
   StartupItem,
   StorageCleanupItem,
+  TelemetryDiagnosticsSnapshot,
   SystemInfo,
   TrayStatus,
 } from '../types/system';
@@ -49,6 +51,12 @@ export async function scanBloatware(): Promise<BloatwareItem[]> {
 export async function removeBloatware(items: BloatwareItem[]): Promise<string[]> {
   return callNative<string[]>('remove_bloatware', { ids: items.map((item) => item.id), dryRun: false }, async () =>
     items.map((item) => `[browser] ${item.name}: queued ${item.action} cleanup with restore logging.`),
+  );
+}
+
+export async function restoreBloatware(items: BloatwareItem[]): Promise<string[]> {
+  return callNative<string[]>('restore_bloatware', { ids: items.map((item) => item.id), dryRun: false }, async () =>
+    items.map((item) => `[browser] ${item.name}: restore action queued.`),
   );
 }
 
@@ -102,11 +110,57 @@ export async function cleanRegistryIssues(items: RegistryIssue[], backupId: stri
   );
 }
 
+export async function restoreRegistryBackup(backupId: string): Promise<string[]> {
+  return callNative<string[]>('restore_registry_backup', { backupId }, async () => [
+    `[browser] restore requested for backup ${backupId}.`,
+  ]);
+}
+
 export async function exportDiagnostics(): Promise<DiagnosticsExport> {
   return callNative<DiagnosticsExport>('export_diagnostics', undefined, async () => ({
     path: 'Browser preview only',
     createdAt: new Date().toLocaleString(),
     message: 'Native diagnostics export is available in the Tauri desktop app.',
+    sections: ['System identity', 'Telemetry sample', 'Capability registry', 'Provider orchestration'],
+    providerCount: 3,
+    capabilityCount: 3,
+    sensorCount: 4,
+  }));
+}
+
+export async function getTelemetryDiagnostics(): Promise<TelemetryDiagnosticsSnapshot> {
+  return callNative<TelemetryDiagnosticsSnapshot>('get_telemetry_diagnostics', undefined, async () => ({
+    createdAt: new Date().toLocaleString(),
+    overallState: 'Browser preview',
+    activeProvider: 'mock',
+    fallbackSequence: ['browser-preview', 'mock-data'],
+    providerLoadOrder: ['wmi', 'nvml', 'adl2', 'igcl'],
+    providers: [
+      {
+        id: 'wmi', label: 'WMI', vendor: 'windows', loadOrder: 1, state: 'loaded', active: true, dll: 'COM / ROOT\\CIMV2', dllAvailable: true, symbolsResolved: true, symbols: ['Win32_Processor', 'Win32_VideoController', 'MSAcpi_ThermalZoneTemperature'], notes: 'Core identity and fallback telemetry', warnings: [], errors: [],
+      },
+      {
+        id: 'nvml', label: 'NVML', vendor: 'nvidia', loadOrder: 2, state: 'unavailable', active: false, dll: 'nvml.dll', dllAvailable: false, symbolsResolved: false, symbols: ['nvmlInit_v2', 'nvmlDeviceGetUtilizationRates'], notes: 'NVIDIA driver API unavailable in browser preview', warnings: [], errors: [],
+      },
+      {
+        id: 'igcl', label: 'IGCL', vendor: 'intel', loadOrder: 4, state: 'staged', active: false, dll: 'igcl64.dll / ControlLib.dll', dllAvailable: false, symbolsResolved: false, symbols: ['ctlInit', 'ctlEnumerateDevices'], notes: 'Intel Arc loader scaffold is staged for native hardware', warnings: ['Sensor bindings pending'], errors: [],
+      },
+    ],
+    capabilities: [
+      { id: 'cpu-temp', label: 'CPU package telemetry', state: 'partial', detail: 'Browser preview mode', writeSafe: false },
+      { id: 'gpu-intel-arc', label: 'Intel Arc telemetry', state: 'staged', detail: 'IGCL loader scaffold active', writeSafe: false },
+      { id: 'superio-ec', label: 'SuperIO / EC access', state: 'driver_required', detail: 'Capability registry pending', writeSafe: false },
+    ],
+    sensors: [
+      { id: 'cpu-temp', sensor: 'CPU Temp', provider: 'WMI ACPI', providerState: 'loaded', state: 'partial', confidence: 'medium', telemetryQuality: 'Fallback thermal read', fallbackStatus: 'sysinfo CPU usage still available', notes: 'Package-only thermal channel in browser preview', oemSupportStatus: 'Supported with fallback', icon: 'thermometer' },
+      { id: 'gpu-temp', sensor: 'GPU Temp', provider: 'Mock GPU', providerState: 'unavailable', state: 'staged', confidence: 'low', telemetryQuality: 'Preview-only', fallbackStatus: 'WMI usage placeholder', notes: 'Native vendor provider required for trustworthy data', oemSupportStatus: 'Staged', icon: 'gpu' },
+      { id: 'storage-smart', sensor: 'NVMe Temp', provider: 'SMART', providerState: 'unavailable', state: 'driver_required', confidence: 'low', telemetryQuality: 'Pending DeviceIoControl', fallbackStatus: 'No safe fallback', notes: 'SMART sensor path is not yet bound', oemSupportStatus: 'Planned', icon: 'hard-drive' },
+      { id: 'network', sensor: 'Network throughput', provider: 'sysinfo', providerState: 'loaded', state: 'live', confidence: 'medium', telemetryQuality: 'Cached throughput delta', fallbackStatus: 'None', notes: 'Live in preview and native modes', oemSupportStatus: 'Supported', icon: 'network' },
+    ],
+    supportSnapshot: ['Local export only', 'No automatic upload', 'Owner consent required for sharing'],
+    supportActions: ['Support Snapshot', 'Generate OEM Report', 'Validate System Health'],
+    hardwareIdentity: mockSystemInfo(),
+    sample: mockHardwareSample([]),
   }));
 }
 
@@ -128,4 +182,12 @@ export async function setTrayIconData(rgba: number[], width: number, height: num
 
 export async function listTopProcesses(limit = 30): Promise<ProcessInfo[]> {
   return callNative<ProcessInfo[]>('list_top_processes', { limit }, async () => mockListTopProcesses(limit));
+}
+
+export async function getHardwareCapabilities(): Promise<HardwareCapability[]> {
+  return callNative<HardwareCapability[]>('get_hardware_capabilities', undefined, async () => [
+    { id: 'cpu-temp', label: 'CPU package telemetry', state: 'partial', detail: 'Browser preview mode', writeSafe: false },
+    { id: 'gpu-intel-arc', label: 'Intel Arc telemetry', state: 'partial', detail: 'WMI fallback only', writeSafe: false },
+    { id: 'superio-ec', label: 'SuperIO / EC access', state: 'unknown', detail: 'Capability registry pending', writeSafe: false },
+  ]);
 }

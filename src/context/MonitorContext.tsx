@@ -55,8 +55,21 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
           setError(null);
           consecutiveErrorsRef.current = 0;
           if (settings.tray.showLiveTooltip) {
+            const trayMetric = settings.tray.liveIconMetric;
+            const trayLabel = trayMetric === 'disabled'
+              ? 'Static'
+              : trayMetric === 'cpuTemp'
+              ? `CPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)}`
+              : trayMetric === 'gpuTemp'
+              ? `GPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)}`
+              : trayMetric === 'cpuUsage'
+              ? `CPU ${pct(next.cpu.usage)}`
+              : trayMetric === 'gpuUsage'
+              ? `GPU ${pct(next.gpu.usage)}`
+              : `RAM ${pct(next.memory.usage)}`;
+
             void setTrayStatus({
-              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} / ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} / ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)}`,
+              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} · NET ${next.network.downMbps.toFixed(0)} Mbps\nTray ${trayLabel}\nDouble-click: Open · Menu: OSD, RAM clean, modes`,
               mode: settings.experience.performanceMode,
               overlayEnabled: settings.overlay.enabled,
             });

@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { backupRegistryIssues, cleanRegistryIssues, scanRegistryIssues } from '../services/systemService';
+import { backupRegistryIssues, cleanRegistryIssues, restoreRegistryBackup, scanRegistryIssues } from '../services/systemService';
 import type { RegistryBackup, RegistryIssue } from '../types/system';
 export function RegistryCleanerPage() {
   const [issues, setIssues] = useState<RegistryIssue[]>([]);
@@ -16,8 +16,14 @@ export function RegistryCleanerPage() {
   const categories = useMemo(() => ['All', ...Array.from(new Set(issues.map((issue) => issue.category)))], [issues]);
   const visibleIssues = activeCategory === 'All' ? issues : issues.filter((issue) => issue.category === activeCategory);
 
+  async function refreshIssues() {
+    const result = await scanRegistryIssues();
+    setIssues(result);
+    return result;
+  }
+
   useEffect(() => {
-    scanRegistryIssues().then((result) => {
+    refreshIssues().then((result) => {
       setIssues(result);
       setBusy(false);
       setLog([`Found ${result.length} registry issues. No changes will be applied without a backup.`]);
@@ -46,6 +52,21 @@ export function RegistryCleanerPage() {
       setBackup(freshBackup);
       const cleanLog = await cleanRegistryIssues(safeSelected, freshBackup.id);
       setLog([`Backup created: ${freshBackup.path}`, ...cleanLog]);
+      await refreshIssues();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreBackup() {
+    if (!backup) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const restoreLog = await restoreRegistryBackup(backup.id);
+      setLog(restoreLog);
+      await refreshIssues();
     } finally {
       setBusy(false);
     }
@@ -59,6 +80,10 @@ export function RegistryCleanerPage() {
         description="Scans for orphaned startup entries, dead uninstall references, broken file associations, and stale application paths. Every clean is preceded by an automatic backup."
         action={
           <div className="button-row">
+            <button className="secondary-button" onClick={restoreBackup} disabled={busy || !backup}>
+              <ShieldCheck size={17} />
+              <span>Restore backup</span>
+            </button>
             <button className="secondary-button" onClick={createBackup} disabled={busy || selected.length === 0}>
               <Archive size={17} />
               <span>Backup selected</span>
@@ -76,7 +101,7 @@ export function RegistryCleanerPage() {
         <Step num={1} label="Scan" detail="Issues are loaded automatically on page open." done={issues.length > 0} />
         <Step num={2} label="Review" detail="Select items you want cleaned. Uncheck anything uncertain." done={selected.length > 0} />
         <Step num={3} label="Backup" detail="A .reg export is written to Documents before any change." done={backup !== null} />
-        <Step num={4} label="Clean" detail="Only items marked safe are removed. Unsafe items need manual review." done={log.some((l) => l.includes('backup'))} />
+        <Step num={4} label="Clean" detail="Only items marked safe are removed. Unsafe items need manual review." done={log.some((l) => l.startsWith('[ok]'))} />
       </div>
 
       <div className="cleaner-shell">

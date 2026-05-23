@@ -1,4 +1,5 @@
-import { Cpu, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, PlugZap, Thermometer, Zap } from 'lucide-react';
+import { Cpu, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, PlugZap, ShieldCheck, Thermometer, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge as RadialGauge } from '../components/Gauge';
 import { CpuIcon, GpuIcon, NvmeIcon, RamIcon, HddIcon, VramIcon, NetworkIcon, EthernetIcon, WifiIcon } from '../components/HardwareIcon';
@@ -11,12 +12,32 @@ import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
 import { assets, vendorLogo } from '../lib/assets';
+import { computePerformanceScore } from '../lib/performanceScore';
 
-export function DashboardPage() {
+type DashboardPageProps = {
+  onNavigate?: (view: string) => void;
+};
+
+export function DashboardPage({ onNavigate }: DashboardPageProps) {
+  const companyWebsite = 'https://radiumpcs.com.au';
+  const phone = '1300 935 884';
+  const salesEmail = 'sales@radiumpcs.com.au';
+  const supportEmail = 'support@radiumpcs.com.au';
+  const operationsEmail = 'operations@radiumpcs.com.au';
+  const businessHours = 'Mon-Fri, 9:30am-5:30pm';
+  const storeAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
+  const abn = '55 644 890 013';
   const { systemInfo, sample, loading, error, native } = useMonitor();
   const { settings } = useSettings();
   const history = sample?.history ?? [];
   const animateCharts = settings.experience.animations;
+  const performanceScore = computePerformanceScore(sample);
+  const heroSignals = [
+    { id: 'cpu', label: 'CPU', value: sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.cpu.usage) : 'Pending' },
+    { id: 'gpu', label: 'GPU', value: sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.gpu.usage) : 'Pending' },
+    { id: 'ram', label: 'RAM', value: sample ? pct(sample.memory.usage) : 'Scan', detail: sample ? `${gb(sample.memory.usedGb)} used` : 'Pending' },
+    { id: 'net', label: 'NET', value: sample ? mbps(sample.network.downMbps) : 'Scan', detail: sample ? `${mbps(sample.network.upMbps)} up` : 'Pending' },
+  ];
 
   return (
     <div className="page">
@@ -24,7 +45,21 @@ export function DashboardPage() {
         eyebrow="Radium PCs Companion"
         title="Command Center"
         description="Live system telemetry, build identity, and practical tuning tools in one local-first control surface."
-        action={<StatePill state={sample?.state ?? (loading ? 'inactive' : 'unavailable')} />}
+        action={(
+          <div className="dashboard-header-actions">
+            <StatePill state={sample?.state ?? (loading ? 'inactive' : 'unavailable')} />
+            <button className="secondary-button" onClick={() => onNavigate?.('diagnostics')}>
+              <ShieldCheck size={16} />
+              <span>Telemetry Diagnostics</span>
+            </button>
+            <a className="primary-button" href={companyWebsite} target="_blank" rel="noreferrer noopener">
+              Book a Build Consultation
+            </a>
+            <a className="secondary-button" href={`mailto:${supportEmail}`}>
+              Contact Support
+            </a>
+          </div>
+        )}
       />
 
       {!native && (
@@ -42,12 +77,50 @@ export function DashboardPage() {
         <Panel className="hero-monitor">
           <div className="hero-monitor-top">
             <div>
-              <div className="dashboard-brandmark">
+              <div className="dashboard-brandmark" aria-label="Radium branding">
+                <img className="dashboard-brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
                 <img src={assets.radiumHeader} alt="Radium PCs Companion" />
               </div>
               <span className="eyebrow">System health</span>
               <h2>{loading ? 'Scanning hardware' : 'Performance steady'}</h2>
               <p>Polling is throttled for low overhead and chart updates are sampled for smooth rendering.</p>
+              <div className="hero-links">
+                <a href={companyWebsite} target="_blank" rel="noreferrer noopener">Visit radiumpcs.com.au</a>
+                <a href={`tel:${phone.replace(/\s+/g, '')}`}>Call {phone}</a>
+                <a href={`mailto:${salesEmail}`}>Sales</a>
+                <a href={`mailto:${supportEmail}`}>Support</a>
+                <a href={`mailto:${operationsEmail}`}>Operations</a>
+              </div>
+              <div className="hero-business-meta">
+                <span>{storeAddress}</span>
+                <span>{businessHours}</span>
+                <span>ABN {abn}</span>
+              </div>
+              <div className="hero-why-strip" aria-label="Why choose Radium PCs">
+                <span>Australian custom PC specialists</span>
+                <span>Performance-first builds and tuning</span>
+                <span>Local post-sale support and upgrades</span>
+              </div>
+              <motion.div
+                className="hero-telemetry-ribbon"
+                initial={animateCharts ? { opacity: 0, y: 10 } : false}
+                animate={animateCharts ? { opacity: 1, y: 0 } : false}
+                transition={{ type: 'spring', stiffness: 220, damping: 26, mass: 0.64, delay: 0.08 }}
+              >
+                {heroSignals.map((signal, index) => (
+                  <motion.div
+                    key={signal.id}
+                    className="hero-telemetry-chip"
+                    initial={animateCharts ? { opacity: 0, y: 8 } : false}
+                    animate={animateCharts ? { opacity: 1, y: 0 } : false}
+                    transition={{ type: 'spring', stiffness: 230, damping: 26, mass: 0.62, delay: 0.1 + index * 0.04 }}
+                  >
+                    <span>{signal.label}</span>
+                    <strong>{signal.value}</strong>
+                    <small>{signal.detail}</small>
+                  </motion.div>
+                ))}
+              </motion.div>
             </div>
             <div className="vendor-logos">
               {systemInfo && <img src={vendorLogo(systemInfo.cpuVendor)} alt={systemInfo.cpuVendor} />}
@@ -101,6 +174,20 @@ export function DashboardPage() {
           tone="cyan"
         />
 
+        <Panel className="score-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">OEM readiness</span>
+              <h2>Radium Performance Score</h2>
+            </div>
+            <div className="score-pill">{performanceScore.grade}</div>
+          </div>
+          <div className="score-panel-body">
+            <strong>{performanceScore.value}</strong>
+            <p>{performanceScore.summary}</p>
+          </div>
+        </Panel>
+
         <Panel className="chart-panel wide">
           <div className="panel-heading">
             <div>
@@ -124,7 +211,7 @@ export function DashboardPage() {
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
-              <Tooltip contentStyle={{ background: 'rgba(9,13,21,0.97)', border: '1px solid rgba(85,214,255,0.18)', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.45)', fontSize: 12 }} labelStyle={{ color: '#8a9db5', fontWeight: 700 }} itemStyle={{ color: '#e2ecf4' }} />
+              <Tooltip content={<DashboardTooltip />} />
               <Area isAnimationActive={animateCharts} type="monotone" dataKey="cpuUsage" stroke="#55d6ff" fill="url(#cpuFill)" strokeWidth={2} dot={false} name="CPU %" />
               <Area isAnimationActive={animateCharts} type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={2} dot={false} name="GPU %" />
               <Line isAnimationActive={animateCharts} type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={2} dot={false} name="RAM %" />
@@ -147,7 +234,7 @@ export function DashboardPage() {
               <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="time" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'rgba(9,13,21,0.97)', border: '1px solid rgba(85,214,255,0.18)', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.45)', fontSize: 12 }} labelStyle={{ color: '#8a9db5', fontWeight: 700 }} itemStyle={{ color: '#e2ecf4' }} />
+              <Tooltip content={<DashboardTooltip />} />
               <Line isAnimationActive={animateCharts} type="monotone" dataKey="networkDown" stroke="#55d6ff" strokeWidth={2.4} dot={false} name="Download Mbps" />
             </LineChart>
           </ResponsiveContainer>
@@ -236,6 +323,25 @@ function SensorSource({ label, value, live, hint }: { label: string; value: stri
       <strong>{value}</strong>
       <small>{live ? 'Live' : 'Pending'}</small>
       {hint && <p className="sensor-hint">{hint}</p>}
+    </div>
+  );
+}
+
+function DashboardTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string }) {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="chart-tooltip">
+      <strong>{label ?? ''}</strong>
+      {payload.map((item, index) => (
+        <div className="chart-tooltip-row" key={`${item.name ?? 'series'}-${index}`}>
+          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? '#55d6ff' }} />
+          <span>{item.name ?? 'Value'}</span>
+          <span>{typeof item.value === 'number' ? item.value.toFixed(1) : item.value ?? '—'}</span>
+        </div>
+      ))}
     </div>
   );
 }

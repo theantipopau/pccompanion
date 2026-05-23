@@ -11,6 +11,7 @@ export function StorageCleanerPage() {
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(true);
   const selected = useMemo(() => items.filter((item) => item.selected), [items]);
+  const reviewSelected = useMemo(() => selected.filter((item) => !item.safe), [selected]);
   const reclaimable = selected.reduce((sum, item) => sum + item.sizeGb, 0);
 
   useEffect(() => {
@@ -25,6 +26,14 @@ export function StorageCleanerPage() {
   }
 
   async function runCleanup() {
+    if (reviewSelected.length > 0) {
+      setLog([
+        '[blocked] One-click cleanup only runs on safe targets.',
+        ...reviewSelected.map((item) => `[review] ${item.name}: requires manual review before deletion.`),
+      ]);
+      return;
+    }
+
     setBusy(true);
     try {
       setLog(await runStorageCleanup(selected));
@@ -102,6 +111,7 @@ export function StorageCleanerPage() {
             <li><CheckCircle2 size={16} /> Personal downloads require explicit review</li>
             <li><CheckCircle2 size={16} /> Shader caches are marked rebuildable</li>
             <li><CheckCircle2 size={16} /> Native cleanup will log every deleted path</li>
+            <li><CheckCircle2 size={16} /> One-click cleanup is limited to targets marked safe</li>
           </ul>
         </Panel>
       </div>

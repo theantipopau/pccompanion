@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, FileText, PackageMinus, ShieldCheck } from
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
-import { removeBloatware, scanBloatware } from '../services/systemService';
+import { removeBloatware, restoreBloatware, scanBloatware } from '../services/systemService';
 import type { BloatwareItem } from '../types/system';
 
 export function BloatwarePage() {
@@ -10,11 +10,13 @@ export function BloatwarePage() {
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(true);
 
+  async function refreshScan() {
+    const result = await scanBloatware();
+    setItems(result);
+  }
+
   useEffect(() => {
-    scanBloatware().then((result) => {
-      setItems(result);
-      setBusy(false);
-    });
+    refreshScan().finally(() => setBusy(false));
   }, []);
 
   const selected = useMemo(() => items.filter((item) => item.selected && item.detected), [items]);
@@ -26,7 +28,20 @@ export function BloatwarePage() {
   async function runRemoval() {
     setBusy(true);
     try {
-      setLog(await removeBloatware(selected));
+      const actionLog = await removeBloatware(selected);
+      setLog(actionLog);
+      await refreshScan();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runRestore() {
+    setBusy(true);
+    try {
+      const actionLog = await restoreBloatware(selected);
+      setLog(actionLog);
+      await refreshScan();
     } finally {
       setBusy(false);
     }
@@ -39,10 +54,16 @@ export function BloatwarePage() {
         title="Bloatware Remover"
         description="A modular, review-first cleanup surface with native desktop execution, restore groundwork, and clear risk categories."
         action={
-          <button className="primary-button" onClick={runRemoval} disabled={busy || selected.length === 0}>
-            <PackageMinus size={17} />
-            <span>{busy ? 'Scanning' : `Review ${selected.length} actions`}</span>
-          </button>
+          <div className="button-row">
+            <button className="secondary-button" onClick={runRestore} disabled={busy || selected.length === 0}>
+              <ShieldCheck size={17} />
+              <span>{busy ? 'Working' : `Restore ${selected.length} selected`}</span>
+            </button>
+            <button className="primary-button" onClick={runRemoval} disabled={busy || selected.length === 0}>
+              <PackageMinus size={17} />
+              <span>{busy ? 'Working' : `Remove ${selected.length} selected`}</span>
+            </button>
+          </div>
         }
       />
 

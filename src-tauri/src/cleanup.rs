@@ -294,6 +294,39 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
         });
     }
 
+    // ----- Downloads folder (review-only) -----
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        let downloads = std::path::Path::new(&profile).join("Downloads");
+        if downloads.exists() {
+            let size = dir_size(&downloads);
+            items.push(StorageCleanupItem {
+                id: "user-downloads".to_string(),
+                name: "User Downloads (review)".to_string(),
+                location: downloads.to_string_lossy().to_string(),
+                size_gb: bytes_to_gb_u64(size),
+                category: "Downloads".to_string(),
+                selected: false,
+                safe: false,
+                description: "Personal download folder. Review manually before deletion to avoid losing installers/documents.".to_string(),
+            });
+        }
+    }
+
+    // ----- Recycle Bin -----
+    let recycle_estimate = estimate_recycle_bin_bytes();
+    if recycle_estimate > 0 {
+        items.push(StorageCleanupItem {
+            id: "recycle-bin".to_string(),
+            name: "Recycle Bin".to_string(),
+            location: "Shell:RecycleBinFolder".to_string(),
+            size_gb: bytes_to_gb_u64(recycle_estimate),
+            category: "Recycle Bin".to_string(),
+            selected: true,
+            safe: true,
+            description: "Files already marked for deletion. Safe to empty when you no longer need to restore them.".to_string(),
+        });
+    }
+
     items
 }
 
@@ -316,6 +349,10 @@ pub fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Vec<String> {
                             item.name, item.size_gb, item.location
                         )
                     } else {
+                        if item.id == "recycle-bin" {
+                            return clear_recycle_bin();
+                        }
+
                         match delete_dir_contents(std::path::Path::new(&item.location)) {
                             Ok(freed) => format!(
                                 "[ok] {}: reclaimed {:.2} GB",
@@ -379,4 +416,103 @@ fn delete_dir_contents(path: &std::path::Path) -> std::io::Result<u64> {
 
 fn bytes_to_gb_u64(bytes: u64) -> f32 {
     bytes as f32 / 1_073_741_824.0
+}
+
+fn estimate_recycle_bin_bytes() -> u64 {
+    #[cfg(windows)]
+    {
+        // Each volume has a hidden $Recycle.Bin root.
+        let mut total = 0u64;
+        for drive in b'A'..=b'Z' {
+            let root = format!("{}:\\$Recycle.Bin", drive as char);
+            let p = std::path::Path::new(&root);
+            if p.exists() {
+                total += dir_size(p);
+            }
+        }
+        total
+    }
+
+    #[cfg(not(windows))]
+    {
+        0
+    }
+}
+
+fn clear_recycle_bin() -> String {
+    #[cfg(windows)]
+    {
+        let result = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                "Clear-RecycleBin -Force -ErrorAction Stop",
+            ])
+            .output();
+
+        return match result {
+            Ok(out) if out.status.success() => "[ok] Recycle Bin: emptied".to_string(),
+            Ok(out) => format!(
+                "[error] Recycle Bin: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            Err(e) => format!("[error] Recycle Bin: PowerShell unavailable — {e}"),
+        };
+    }
+
+    #[cfg(not(windows))]
+    {
+        "[unavailable] Recycle Bin cleanup requires Windows".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bytes_to_gb_u64, delete_dir_contents, dir_size, run_storage_cleanup};
+
+    fn temp_test_dir(name: &str) -> std::path::PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("radium-cleanup-test-{name}-{stamp}"))
+    }
+
+    #[test]
+    fn bytes_to_gb_conversion_is_reasonable() {
+        let one_gib = 1_073_741_824u64;
+        let gb = bytes_to_gb_u64(one_gib);
+        assert!((gb - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn dir_size_and_delete_dir_contents_work() {
+        let root = temp_test_dir("delete");
+        let nested = root.join("nested");
+        std::fs::create_dir_all(&nested).expect("create nested test dir");
+
+        let a = root.join("a.bin");
+        let b = nested.join("b.bin");
+        std::fs::write(&a, vec![0u8; 1024]).expect("write a.bin");
+        std::fs::write(&b, vec![0u8; 2048]).expect("write b.bin");
+
+        let before = dir_size(&root);
+        assert!(before >= 3072);
+
+        let freed = delete_dir_contents(&root).expect("delete contents");
+        assert!(freed >= 3072);
+        assert_eq!(dir_size(&root), 0);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn storage_cleanup_reports_unknown_id() {
+        let log = run_storage_cleanup(vec!["no-such-id".to_string()], true);
+        assert_eq!(log.len(), 1);
+        assert!(log[0].starts_with("[error] no-such-id: item not found in scan results"));
+    }
 }

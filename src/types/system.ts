@@ -78,7 +78,7 @@ export type RamCleanupResult = {
   message: string;
 };
 
-export type BloatwareCategory = 'Safe' | 'Advanced' | 'Gaming focused' | 'OEM cleanup';
+export type BloatwareCategory = 'Safe' | 'Advanced' | 'Gaming focused' | 'OEM cleanup' | 'Third-party';
 
 export type BloatwareItem = {
   id: string;
@@ -174,10 +174,73 @@ export type RegistryBackup = {
   issueCount: number;
 };
 
+export type TelemetryConfidence = 'high' | 'medium' | 'low' | 'unknown';
+
+export type CapabilityState = 'live' | 'partial' | 'degraded' | 'staged' | 'unsupported' | 'blocked' | 'elevated_required' | 'driver_required' | 'unknown';
+
+export type HardwareCapability = {
+  id: string;
+  label: string;
+  state: CapabilityState;
+  detail: string;
+  writeSafe: boolean;
+};
+
+export type ProviderState = 'loaded' | 'staged' | 'degraded' | 'unavailable';
+
+export type ProviderDiagnostics = {
+  id: string;
+  label: string;
+  vendor: string;
+  loadOrder: number;
+  state: ProviderState;
+  active: boolean;
+  dll: string;
+  dllAvailable: boolean;
+  symbolsResolved: boolean;
+  symbols: string[];
+  notes: string;
+  warnings: string[];
+  errors: string[];
+};
+
+export type SensorProvenance = {
+  id: string;
+  sensor: string;
+  provider: string;
+  providerState: ProviderState | CapabilityState;
+  state: CapabilityState;
+  confidence: TelemetryConfidence;
+  telemetryQuality: string;
+  fallbackStatus: string;
+  notes: string;
+  oemSupportStatus: string;
+  icon: string;
+};
+
+export type TelemetryDiagnosticsSnapshot = {
+  createdAt: string;
+  overallState: string;
+  activeProvider: string;
+  fallbackSequence: string[];
+  providerLoadOrder: string[];
+  providers: ProviderDiagnostics[];
+  capabilities: HardwareCapability[];
+  sensors: SensorProvenance[];
+  supportSnapshot: string[];
+  supportActions: string[];
+  hardwareIdentity: SystemInfo;
+  sample: HardwareSample;
+};
+
 export type DiagnosticsExport = {
   path: string;
   createdAt: string;
   message: string;
+  sections: string[];
+  providerCount: number;
+  capabilityCount: number;
+  sensorCount: number;
 };
 
 export type PerformanceProfileId = 'quiet' | 'balanced' | 'gaming' | 'creator';
@@ -200,3 +263,4 @@ export type PerformanceProfileResult = {
   message: string;
   actions: string[];
 };
+

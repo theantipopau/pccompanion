@@ -67,6 +67,7 @@ An amber banner is shown in the Dashboard when running in browser mode.
 ## Scripts
 
 | Script | What it does |
+| Responsive sidebar and topbar shell layout | ✅ Live |
 |---|---|
 | `npm run dev` | Vite browser preview (mock data, no Rust needed) |
 | `npm run desktop` / `npm run dev:desktop` | Tauri dev mode — real hardware, live data |
@@ -78,13 +79,12 @@ An amber banner is shown in the Dashboard when running in browser mode.
 `npm run desktop` and `npm run build:exe` require the Rust toolchain and Tauri prerequisites on PATH.
 
 ---
-
 ## Output paths
 
 | Artifact | Path |
 |---|---|
 | Development binary | `src-tauri/target/debug/` |
-| Release binary | `src-tauri/target/release/` |
+| CPU temperature | ROOT\\WMI ACPI thermal zones (primary) · sysinfo components with ACPI / thermal / package fallbacks |
 | NSIS installer | `src-tauri/target/release/bundle/nsis/` |
 | Portable ZIP | `dist-portable/` (after `package:portable`) |
 
@@ -92,7 +92,6 @@ The packaged app is fully standalone — no npm, Vite, or browser window require
 
 ---
 
-## Project structure
 
 ```
 src/

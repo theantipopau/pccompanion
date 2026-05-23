@@ -44,6 +44,23 @@ pub struct RegistryBackup {
     pub issue_count: usize,
 }
 
+#[derive(Debug, Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RegistryBackupManifest {
+    id: String,
+    created_at: String,
+    issue_count: usize,
+    entries: Vec<RegistryBackupEntry>,
+}
+
+#[derive(Debug, Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RegistryBackupEntry {
+    issue_id: String,
+    reg_file: Option<String>,
+    note: String,
+}
+
 /// Scan the four standard Run registry keys and return real startup entries.
 pub fn scan_startup_items() -> Vec<StartupItem> {
     let mut items = Vec::new();
@@ -419,20 +436,45 @@ pub fn scan_registry_issues() -> Vec<RegistryIssue> {
 
 pub fn backup_registry_issues(ids: Vec<String>) -> RegistryBackup {
     let stamp = registry_stamp();
-    let backup_dir = registry_backup_dir();
-    let _ = std::fs::create_dir_all(&backup_dir);
-    let path_buf = backup_dir.join(format!("{stamp}.json"));
+    let backup_root = registry_backup_dir().join(&stamp);
+    let _ = std::fs::create_dir_all(&backup_root);
+    let path_buf = backup_root.join("manifest.json");
     let issues: Vec<RegistryIssue> = scan_registry_issues()
         .into_iter()
         .filter(|issue| ids.iter().any(|id| id == &issue.id))
         .collect();
-    let snapshot = serde_json::json!({
-        "id": stamp,
-        "createdAt": stamp,
-        "format": "radium-registry-backup-v1",
-        "issues": issues,
-        "note": "Internal JSON snapshot. Live registry deletion remains blocked until restore is validated."
-    });
+
+    let mut entries = Vec::new();
+    for (index, issue) in issues.iter().enumerate() {
+        let full_key = format!("{}\\{}", issue.hive, issue.key_path);
+        let file_name = format!("{:03}-{}.reg", index + 1, sanitize_id(&issue.id));
+        let reg_path = backup_root.join(file_name);
+
+        #[cfg(windows)]
+        let export_result = export_registry_key(&full_key, &reg_path);
+        #[cfg(not(windows))]
+        let export_result: Result<(), String> = Err("Registry export requires Windows".to_string());
+
+        match export_result {
+            Ok(_) => entries.push(RegistryBackupEntry {
+                issue_id: issue.id.clone(),
+                reg_file: Some(reg_path.to_string_lossy().to_string()),
+                note: format!("Exported key {}", full_key),
+            }),
+            Err(err) => entries.push(RegistryBackupEntry {
+                issue_id: issue.id.clone(),
+                reg_file: None,
+                note: format!("Failed to export {}: {}", full_key, err),
+            }),
+        }
+    }
+
+    let snapshot = RegistryBackupManifest {
+        id: stamp.clone(),
+        created_at: stamp.clone(),
+        issue_count: issues.len(),
+        entries,
+    };
     let _ = std::fs::write(
         &path_buf,
         serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| "{}".to_string()),
@@ -442,20 +484,143 @@ pub fn backup_registry_issues(ids: Vec<String>) -> RegistryBackup {
         id: stamp.clone(),
         created_at: stamp,
         path,
-        issue_count: ids.len(),
+        issue_count: issues.len(),
     }
 }
 
+pub fn restore_registry_backup(backup_id: String) -> Vec<String> {
+    let Some(manifest_path) = resolve_backup_manifest_path(&backup_id) else {
+        return vec![format!("[error] backup '{backup_id}' not found")];
+    };
+
+    let text = match std::fs::read_to_string(&manifest_path) {
+        Ok(t) => t,
+        Err(err) => return vec![format!("[error] cannot read backup manifest: {err}")],
+    };
+
+    let manifest: RegistryBackupManifest = match serde_json::from_str(&text) {
+        Ok(m) => m,
+        Err(err) => {
+            if manifest_path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .map(|n| n.eq_ignore_ascii_case("manifest.json"))
+                .unwrap_or(false)
+            {
+                return vec![format!("[error] invalid backup manifest: {err}")];
+            }
+            return vec![
+                "[error] this backup was created by an older build and does not include .reg exports.".to_string(),
+                "[info] create a new backup in the current version before running clean, then use restore.".to_string(),
+            ];
+        }
+    };
+
+    let mut log = vec![format!(
+        "[info] restoring backup {} ({})",
+        manifest.id, manifest.created_at
+    )];
+
+    for entry in manifest.entries {
+        let Some(file) = entry.reg_file else {
+            log.push(format!("[skip] {}: no export file ({})", entry.issue_id, entry.note));
+            continue;
+        };
+
+        #[cfg(windows)]
+        {
+            match import_registry_file(std::path::Path::new(&file)) {
+                Ok(_) => log.push(format!("[ok] {} restored from {}", entry.issue_id, file)),
+                Err(err) => log.push(format!("[error] {}: {}", entry.issue_id, err)),
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            log.push(format!("[unavailable] {}: restore requires Windows", entry.issue_id));
+        }
+    }
+
+    log
+}
+
 pub fn clean_registry_issues(ids: Vec<String>, backup_id: String, dry_run: bool) -> Vec<String> {
+    if resolve_backup_manifest_path(&backup_id).is_none() {
+        return vec![format!(
+            "[error] backup '{backup_id}' not found. Create a backup before cleaning."
+        )];
+    }
+
+    let issues = scan_registry_issues();
+    let issue_map: std::collections::HashMap<_, _> =
+        issues.iter().map(|issue| (issue.id.as_str(), issue)).collect();
+
     ids.into_iter()
-        .map(|id| {
-            if dry_run {
-                format!("[dry-run] {id}: would remove after verifying backup {backup_id}")
-            } else {
-                format!("[blocked] {id}: live registry cleaning requires signed backup/export implementation")
+        .map(|id| match issue_map.get(id.as_str()) {
+            None => format!("[skip] {id}: issue no longer present in latest scan"),
+            Some(issue) => {
+                if dry_run {
+                    return format!(
+                        "[dry-run] {}\\{}{}: would remove after verifying backup {backup_id}",
+                        issue.hive,
+                        issue.key_path,
+                        if issue.value_name.is_empty() {
+                            String::new()
+                        } else {
+                            format!("\\{}", issue.value_name)
+                        }
+                    );
+                }
+
+                if !issue.safe {
+                    return format!(
+                        "[blocked] {}: marked review-only and not safe for automatic cleanup",
+                        issue.id
+                    );
+                }
+
+                remove_registry_issue(issue)
             }
         })
         .collect()
+}
+
+fn remove_registry_issue(issue: &RegistryIssue) -> String {
+    #[cfg(windows)]
+    {
+        let hive = match issue.hive.as_str() {
+            "HKCU" => windows::Win32::System::Registry::HKEY_CURRENT_USER,
+            "HKLM" => windows::Win32::System::Registry::HKEY_LOCAL_MACHINE,
+            _ => {
+                return format!(
+                    "[blocked] {}: unsupported hive '{}' for automatic cleanup",
+                    issue.id, issue.hive
+                )
+            }
+        };
+
+        // Startup issue: remove specific Run value.
+        if issue.category == "Invalid startup reference" {
+            if issue.value_name.is_empty() {
+                return format!("[skip] {}: missing value name", issue.id);
+            }
+            return match delete_registry_value(hive, &issue.key_path, &issue.value_name) {
+                Ok(_) => format!("[ok] {}: removed startup value '{}'.", issue.id, issue.value_name),
+                Err(err) => format!("[error] {}: {}", issue.id, err),
+            };
+        }
+
+        // Uninstall leftovers and app paths are represented as subkeys and can be removed.
+        match delete_registry_tree(hive, &issue.key_path) {
+            Ok(_) => format!("[ok] {}: removed stale registry key.", issue.id),
+            Err(err) => format!("[error] {}: {}", issue.id, err),
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        format!("[unavailable] {}: registry cleanup requires Windows", issue.id)
+    }
 }
 
 // ─── Bloatware Scanner ───────────────────────────────────────────────────────
@@ -521,7 +686,7 @@ pub fn remove_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
                         );
                     }
                     match item.action.as_str() {
-                        "appx" => remove_appx_package(&item.name),
+                        "appx" => remove_appx_package_for_id(&item.id),
                         "policy" => apply_policy_tweak(&item.id),
                         "scheduled-task" => disable_scheduled_task(&item.id),
                         _ => format!(
@@ -533,6 +698,37 @@ pub fn remove_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
             }
         })
         .collect()
+}
+
+pub fn restore_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
+    ids.into_iter()
+        .map(|id| {
+            let Some(spec) = find_bloatware_spec(&id) else {
+                return format!("[error] {id}: item not found in known specs");
+            };
+
+            if dry_run {
+                return format!(
+                    "[dry-run] {}: would restore {} action",
+                    spec.name, spec.action
+                );
+            }
+
+            match spec.action {
+                "appx" => restore_appx_package_for_id(&id),
+                "policy" => restore_policy_tweak(&id),
+                "scheduled-task" => enable_scheduled_task(&id),
+                _ => format!(
+                    "[blocked] {}: restore path not implemented for action '{}'",
+                    spec.name, spec.action
+                ),
+            }
+        })
+        .collect()
+}
+
+fn find_bloatware_spec(id: &str) -> Option<&'static BloatwareSpec> {
+    BLOATWARE_SPECS.iter().find(|spec| spec.id == id)
 }
 
 // ─── Registry helpers ────────────────────────────────────────────────────────
@@ -871,6 +1067,64 @@ fn read_string_value(
     }
 }
 
+#[cfg(windows)]
+fn delete_registry_value(
+    hive: windows::Win32::System::Registry::HKEY,
+    subkey: &str,
+    value_name: &str,
+) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, KEY_SET_VALUE, KEY_WOW64_64KEY,
+    };
+
+    let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
+    let value_wide: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+    unsafe {
+        let mut hkey = windows::Win32::System::Registry::HKEY::default();
+        let open = RegOpenKeyExW(
+            hive,
+            PCWSTR(subkey_wide.as_ptr()),
+            0,
+            KEY_SET_VALUE | KEY_WOW64_64KEY,
+            &mut hkey,
+        );
+        if open != ERROR_SUCCESS {
+            return Err("cannot open target key (admin may be required)".to_string());
+        }
+
+        let del = RegDeleteValueW(hkey, PCWSTR(value_wide.as_ptr()));
+        let _ = RegCloseKey(hkey);
+        if del == ERROR_SUCCESS {
+            Ok(())
+        } else {
+            Err(format!("registry delete failed with Win32 code {}", del.0))
+        }
+    }
+}
+
+#[cfg(windows)]
+fn delete_registry_tree(
+    hive: windows::Win32::System::Registry::HKEY,
+    subkey: &str,
+) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::RegDeleteTreeW;
+
+    let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let res = RegDeleteTreeW(hive, PCWSTR(subkey_wide.as_ptr()));
+        if res == ERROR_SUCCESS {
+            Ok(())
+        } else {
+            Err(format!("registry key delete failed with Win32 code {}", res.0))
+        }
+    }
+}
+
 // ─── AppX / PowerShell helpers ───────────────────────────────────────────────
 
 /// Query installed AppX package names via PowerShell.
@@ -907,32 +1161,222 @@ fn query_appx_packages() -> Vec<String> {
     }
 }
 
-fn remove_appx_package(name: &str) -> String {
+fn remove_appx_package_for_id(id: &str) -> String {
+    let Some(spec) = find_bloatware_spec(id) else {
+        return format!("[error] {id}: unknown bloatware spec");
+    };
+
+    let pattern = spec.match_pattern;
     let cmd = format!(
-        "Get-AppxPackage -Name '*{}*' | Remove-AppxPackage",
-        name.replace('\'', "")
+        "Get-AppxPackage | Where-Object {{ $_.Name -like '*{}*' }} | Remove-AppxPackage",
+        pattern.replace('\'', "")
     );
     let result = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &cmd])
         .output();
 
     match result {
-        Ok(out) if out.status.success() => format!("[ok] {name}: package removed"),
+        Ok(out) if out.status.success() => format!("[ok] {}: package removed", spec.name),
         Ok(out) => format!(
-            "[error] {name}: {}",
+            "[error] {}: {}",
+            spec.name,
             String::from_utf8_lossy(&out.stderr).trim()
         ),
-        Err(e) => format!("[error] {name}: PowerShell unavailable — {e}"),
+        Err(e) => format!("[error] {}: PowerShell unavailable — {e}", spec.name),
     }
 }
 
 fn apply_policy_tweak(id: &str) -> String {
-    // Conservative: report as dry-run until a full restore-point flow exists.
-    format!("[blocked] {id}: policy tweaks require restore-point creation (not yet wired)")
+    #[cfg(windows)]
+    {
+        use windows::core::PCWSTR;
+        use windows::Win32::Foundation::ERROR_SUCCESS;
+        use windows::Win32::System::Registry::{
+            RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
+            REG_DWORD, REG_OPTION_NON_VOLATILE,
+        };
+
+        if id == "consumer-experience" {
+            let key = wide_null(r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
+            let value = wide_null("SubscribedContent-338388Enabled");
+            let data: u32 = 0;
+            let bytes = data.to_le_bytes();
+            unsafe {
+                let mut hkey = windows::Win32::System::Registry::HKEY::default();
+                let res = RegCreateKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(key.as_ptr()),
+                    0,
+                    None,
+                    REG_OPTION_NON_VOLATILE,
+                    KEY_SET_VALUE,
+                    None,
+                    &mut hkey,
+                    None,
+                );
+                if res != ERROR_SUCCESS {
+                    return "[error] consumer-experience: unable to open policy key".to_string();
+                }
+
+                let set_res = RegSetValueExW(
+                    hkey,
+                    PCWSTR(value.as_ptr()),
+                    0,
+                    REG_DWORD,
+                    Some(&bytes),
+                );
+                let _ = RegCloseKey(hkey);
+                if set_res == ERROR_SUCCESS {
+                    return "[ok] consumer-experience: disabled recommendation content policy".to_string();
+                }
+                return "[error] consumer-experience: failed to write policy value".to_string();
+            }
+        }
+    }
+
+    format!("[blocked] {id}: no live policy implementation for this id")
 }
 
 fn disable_scheduled_task(id: &str) -> String {
-    format!("[blocked] {id}: scheduled task management requires elevated restore-point flow")
+    let task_name = match id {
+        "xbox-game-bar-extras" => Some(r"\Microsoft\XblGameSave\XblGameSaveTask"),
+        _ => None,
+    };
+
+    let Some(task_name) = task_name else {
+        return format!("[blocked] {id}: no mapped scheduled task");
+    };
+
+    let result = std::process::Command::new("schtasks")
+        .args(["/Change", "/TN", task_name, "/Disable"])
+        .output();
+
+    match result {
+        Ok(out) if out.status.success() => format!("[ok] {id}: scheduled task disabled"),
+        Ok(out) => format!(
+            "[error] {id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => format!("[error] {id}: failed to run schtasks — {e}"),
+    }
+}
+
+fn restore_policy_tweak(id: &str) -> String {
+    #[cfg(windows)]
+    {
+        use windows::core::PCWSTR;
+        use windows::Win32::Foundation::ERROR_SUCCESS;
+        use windows::Win32::System::Registry::{
+            RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
+            REG_DWORD, REG_OPTION_NON_VOLATILE,
+        };
+
+        if id == "consumer-experience" {
+            let key = wide_null(r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
+            let value = wide_null("SubscribedContent-338388Enabled");
+            let data: u32 = 1;
+            let bytes = data.to_le_bytes();
+            unsafe {
+                let mut hkey = windows::Win32::System::Registry::HKEY::default();
+                let res = RegCreateKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(key.as_ptr()),
+                    0,
+                    None,
+                    REG_OPTION_NON_VOLATILE,
+                    KEY_SET_VALUE,
+                    None,
+                    &mut hkey,
+                    None,
+                );
+                if res != ERROR_SUCCESS {
+                    return "[error] consumer-experience: unable to open policy key".to_string();
+                }
+
+                let set_res = RegSetValueExW(
+                    hkey,
+                    PCWSTR(value.as_ptr()),
+                    0,
+                    REG_DWORD,
+                    Some(&bytes),
+                );
+                let _ = RegCloseKey(hkey);
+                if set_res == ERROR_SUCCESS {
+                    return "[ok] consumer-experience: recommendation content policy restored".to_string();
+                }
+                return "[error] consumer-experience: failed to write policy value".to_string();
+            }
+        }
+    }
+
+    format!("[blocked] {id}: no policy restore implementation for this id")
+}
+
+fn enable_scheduled_task(id: &str) -> String {
+    let task_name = match id {
+        "xbox-game-bar-extras" => Some(r"\Microsoft\XblGameSave\XblGameSaveTask"),
+        _ => None,
+    };
+
+    let Some(task_name) = task_name else {
+        return format!("[blocked] {id}: no mapped scheduled task restore path");
+    };
+
+    let result = std::process::Command::new("schtasks")
+        .args(["/Change", "/TN", task_name, "/Enable"])
+        .output();
+
+    match result {
+        Ok(out) if out.status.success() => format!("[ok] {id}: scheduled task enabled"),
+        Ok(out) => format!(
+            "[error] {id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => format!("[error] {id}: failed to run schtasks — {e}"),
+    }
+}
+
+fn restore_appx_package_for_id(id: &str) -> String {
+    let Some(spec) = find_bloatware_spec(id) else {
+        return format!("[error] {id}: unknown bloatware spec");
+    };
+
+    // Best-effort restore: re-register matching package manifests from WindowsApps.
+    let script = format!(
+        r#"$paths = Get-ChildItem 'C:\Program Files\WindowsApps' -Directory -ErrorAction SilentlyContinue | Where-Object {{ $_.Name -like '*{pattern}*' }};
+if (-not $paths) {{ throw 'No matching WindowsApps package manifests found'; }}
+$ok = 0;
+foreach ($p in $paths) {{
+  $m = Join-Path $p.FullName 'AppxManifest.xml';
+  if (Test-Path $m) {{
+    try {{ Add-AppxPackage -Register $m -DisableDevelopmentMode -ErrorAction Stop; $ok++ }} catch {{ }}
+  }}
+}}
+if ($ok -eq 0) {{ throw 'Package manifests found but registration failed' }}
+"#,
+        pattern = spec.match_pattern.replace('"', "")
+    );
+
+    let result = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &script,
+        ])
+        .output();
+
+    match result {
+        Ok(out) if out.status.success() => format!("[ok] {}: restore attempt completed", spec.name),
+        Ok(out) => format!(
+            "[error] {}: {}",
+            spec.name,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => format!("[error] {}: PowerShell unavailable — {e}", spec.name),
+    }
 }
 
 // ─── Classification helpers ──────────────────────────────────────────────────
@@ -1036,6 +1480,59 @@ fn registry_backup_dir() -> std::path::PathBuf {
         .join("Documents")
         .join("Radium PCs Companion")
         .join("registry-backups")
+}
+
+fn resolve_backup_manifest_path(backup_id: &str) -> Option<std::path::PathBuf> {
+    let base = registry_backup_dir();
+    let new_manifest = base.join(backup_id).join("manifest.json");
+    if new_manifest.exists() {
+        return Some(new_manifest);
+    }
+
+    // Legacy fallback from older JSON-only backups.
+    let legacy = base.join(format!("{backup_id}.json"));
+    if legacy.exists() {
+        return Some(legacy);
+    }
+
+    None
+}
+
+#[cfg(windows)]
+fn export_registry_key(full_key: &str, output_path: &std::path::Path) -> Result<(), String> {
+    let out = std::process::Command::new("reg")
+        .args([
+            "export",
+            full_key,
+            &output_path.to_string_lossy(),
+            "/y",
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+#[cfg(windows)]
+fn import_registry_file(path: &std::path::Path) -> Result<(), String> {
+    if !path.exists() {
+        return Err(format!("backup file missing: {}", path.to_string_lossy()));
+    }
+
+    let out = std::process::Command::new("reg")
+        .args(["import", &path.to_string_lossy()])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
 }
 
 fn sanitize_id(name: &str) -> String {
@@ -1406,5 +1903,119 @@ pub fn set_timer_resolution(profile_id: &str) -> String {
     {
         let _ = profile_id;
         "Timer resolution: no-op on non-Windows".to_string()
+    }
+}
+
+/// Apply additional power-mode tuning on top of plan selection.
+///
+/// Uses supported `powercfg` processor subgroup settings so this remains
+/// reversible and firmware-safe.
+pub fn apply_power_mode_tweaks(profile_id: &str) -> String {
+    #[cfg(windows)]
+    {
+        // powercfg aliases
+        const SUB_PROCESSOR: &str = "SUB_PROCESSOR";
+        const PROC_MIN: &str = "PROCTHROTTLEMIN";
+        const PROC_MAX: &str = "PROCTHROTTLEMAX";
+        const BOOST_MODE: &str = "PERFBOOSTMODE";
+
+        let (min_pct, max_pct, boost): (&str, &str, &str) = match profile_id {
+            "gaming" => ("100", "100", "2"),  // aggressive boost
+            "creator" => ("10", "100", "1"),  // enabled boost, less idle burn
+            "balanced" => ("5", "100", "1"),
+            "quiet" => ("5", "70", "0"),      // disable boost
+            _ => ("5", "100", "1"),
+        };
+
+        let mut failures = Vec::new();
+        let cmds = [
+            ["/setacvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MIN, min_pct],
+            ["/setacvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MAX, max_pct],
+            ["/setacvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, BOOST_MODE, boost],
+            ["/setdcvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MIN, min_pct],
+            ["/setdcvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MAX, max_pct],
+            ["/setdcvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, BOOST_MODE, boost],
+        ];
+
+        for args in cmds {
+            if let Err(err) = run_powercfg_cmd(&args) {
+                failures.push(err);
+            }
+        }
+
+        if let Err(err) = run_powercfg_cmd(&["/setactive", "SCHEME_CURRENT"]) {
+            failures.push(err);
+        }
+
+        if failures.is_empty() {
+            return format!(
+                "Power tuning → min {min_pct}%, max {max_pct}%, boost mode {boost} (AC/DC)"
+            );
+        }
+
+        return format!(
+            "Power tuning partially applied ({} warnings): {}",
+            failures.len(),
+            failures.join(" | ")
+        );
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = profile_id;
+        "Power tuning: no-op on non-Windows".to_string()
+    }
+}
+
+#[cfg(windows)]
+fn run_powercfg_cmd(args: &[&str]) -> Result<(), String> {
+    let mut cmd = std::process::Command::new("powercfg");
+    cmd.args(args);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err("powercfg returned non-zero status".to_string())
+        } else {
+            Err(stderr)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clean_registry_issues, restore_registry_backup, sanitize_id};
+
+    #[test]
+    fn sanitize_id_normalizes_text() {
+        assert_eq!(sanitize_id("Hello World.exe"), "hello_world_exe");
+        assert_eq!(sanitize_id("GPU-Boost#1"), "gpu-boost_1");
+    }
+
+    #[test]
+    fn clean_registry_requires_backup() {
+        let log = clean_registry_issues(
+            vec!["startup-missing-helper".to_string()],
+            "definitely-missing-backup".to_string(),
+            false,
+        );
+        assert_eq!(log.len(), 1);
+        assert!(log[0].contains("backup 'definitely-missing-backup' not found"));
+    }
+
+    #[test]
+    fn restore_registry_missing_backup_is_error() {
+        let log = restore_registry_backup("missing-backup-id".to_string());
+        assert_eq!(log.len(), 1);
+        assert!(log[0].contains("backup 'missing-backup-id' not found"));
     }
 }

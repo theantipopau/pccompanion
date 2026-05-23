@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Cpu, Gauge, Layers, MemoryStick, Minimize2, MonitorUp, Search, Settings, Thermometer } from 'lucide-react';
+import { Bell, Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
 import { pct, temp } from '../lib/format';
+import { extractTrayValue } from '../lib/trayIcon';
 import type { NavItem } from '../types/navigation';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
@@ -18,15 +19,93 @@ type ShellProps = {
 };
 
 export function Shell({ navItems, activeView, onNavigate, children }: ShellProps) {
+  const companyWebsite = 'https://radiumpcs.com.au';
+  const phone = '1300 935 884';
+  const salesEmail = 'sales@radiumpcs.com.au';
+  const supportEmail = 'support@radiumpcs.com.au';
+  const operationsEmail = 'operations@radiumpcs.com.au';
+  const businessHours = 'Mon-Fri, 9:30am-5:30pm';
+  const storeAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
+  const abn = '55 644 890 013';
+  const supportSubject = 'Radium PCs Companion Support';
   const { sample, native } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dashboardActive = activeView === 'dashboard';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
-  const searchResults = searchQuery.trim()
-    ? navItems.filter(item => item.label.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
+  const quickActions = [
+    {
+      id: 'action-open-system-passport',
+      label: 'Open System Passport',
+      icon: Gauge,
+      keywords: 'passport serial build oem identity score',
+      run: () => onNavigate('passport'),
+    },
+    {
+      id: 'action-open-telemetry-diagnostics',
+      label: 'Open Telemetry Diagnostics',
+      icon: ShieldCheck,
+      keywords: 'diagnostics provenance provider confidence support bundle',
+      run: () => onNavigate('diagnostics'),
+    },
+    {
+      id: 'action-open-radium-site',
+      label: 'Open Radium PCs website',
+      icon: Globe2,
+      keywords: 'website sales build consultation',
+      run: () => window.open(companyWebsite, '_blank', 'noopener,noreferrer'),
+    },
+    {
+      id: 'action-email-support',
+      label: 'Email support',
+      icon: Mail,
+      keywords: 'support help issue',
+      run: () => window.open(`mailto:${supportEmail}`, '_self'),
+    },
+    {
+      id: 'action-open-settings',
+      label: 'Go to settings',
+      icon: Settings,
+      keywords: 'settings preferences',
+      run: () => onNavigate('settings'),
+    },
+  ];
+
+  const query = searchQuery.trim().toLowerCase();
+  const pageResults = navItems
+    .filter(item =>
+      query
+        ? item.label.toLowerCase().includes(query)
+        : true,
+    )
+    .map(item => ({
+      id: `page-${item.id}`,
+      label: item.label,
+      icon: item.icon,
+      run: () => onNavigate(item.id),
+    }));
+
+  const actionResults = quickActions
+    .filter(action =>
+      query
+        ? `${action.label} ${action.keywords}`.toLowerCase().includes(query)
+        : true,
+    )
+    .map(action => ({
+      id: action.id,
+      label: action.label,
+      icon: action.icon,
+      run: action.run,
+    }));
+
+  const searchResults = [...pageResults, ...actionResults].slice(0, 9);
+
+  useEffect(() => {
+    setActiveSearchIndex(0);
+  }, [searchQuery]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -40,9 +119,25 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   }, []);
 
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Escape') { setSearchQuery(''); e.currentTarget.blur(); }
+    if (e.key === 'Escape') {
+      setSearchQuery('');
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key === 'ArrowDown' && searchResults.length > 0) {
+      e.preventDefault();
+      setActiveSearchIndex((current) => (current + 1) % searchResults.length);
+      return;
+    }
+    if (e.key === 'ArrowUp' && searchResults.length > 0) {
+      e.preventDefault();
+      setActiveSearchIndex((current) => (current - 1 + searchResults.length) % searchResults.length);
+      return;
+    }
     if (e.key === 'Enter' && searchResults.length > 0) {
-      onNavigate(searchResults[0].id);
+      e.preventDefault();
+      const selected = searchResults[Math.min(activeSearchIndex, searchResults.length - 1)];
+      selected.run();
       setSearchQuery('');
       e.currentTarget.blur();
     }
@@ -51,14 +146,12 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const trayPreview = (() => {
     const metric = settings.tray.liveIconMetric;
     if (!sample || metric === 'disabled') return { Icon: Gauge, label: 'Tray off' };
-    switch (metric) {
-      case 'cpuTemp':  return { Icon: Thermometer, label: temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) + ' CPU' };
-      case 'gpuTemp':  return { Icon: Thermometer, label: temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) + ' GPU' };
-      case 'cpuUsage': return { Icon: Cpu,         label: pct(sample.cpu.usage) + ' CPU' };
-      case 'gpuUsage': return { Icon: MonitorUp,   label: pct(sample.gpu.usage) + ' GPU' };
-      case 'ramUsage': return { Icon: MemoryStick, label: pct(sample.memory.usage) + ' RAM' };
-      default:         return { Icon: Cpu,         label: 'Scanning' };
+    const { value, isTemp } = extractTrayValue(sample, metric);
+    if (isTemp) {
+      const source = metric === 'gpuTemp' ? 'GPU' : 'CPU';
+      return { Icon: Thermometer, label: `${temp(value, settings.monitoring.temperatureUnit)} ${source}` };
     }
+    return { Icon: Cpu, label: `${pct(value ?? 0)} ${metric.replace('Usage', '').toUpperCase()}` };
   })();
 
   async function handleMinimize() {
@@ -79,6 +172,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
       <aside className="sidebar" aria-label="Primary">
         <div className="brand-lockup">
           <img className="brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
+          <img className="brand-wordmark" src={assets.radiumHeader} alt="Radium PCs Companion" />
         </div>
         <nav className="nav-list">
           {navItems.map((item) => {
@@ -155,6 +249,42 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             <span>{native ? 'Live hardware data' : 'Run: npm run desktop'}</span>
           </div>
         </div>
+
+        <div className="sidebar-contact">
+          <span className="sidebar-metrics-label">Radium PCs Contact</span>
+          <a className="sidebar-contact-link" href={companyWebsite} target="_blank" rel="noreferrer noopener">
+            <Globe2 size={14} />
+            <span>radiumpcs.com.au</span>
+            <ExternalLink size={12} />
+          </a>
+          <a className="sidebar-contact-link" href={`tel:${phone.replace(/\s+/g, '')}`}>
+            <PhoneCall size={14} />
+            <span>{phone}</span>
+          </a>
+          <a className="sidebar-contact-link" href={`mailto:${salesEmail}`}>
+            <Mail size={14} />
+            <span>{salesEmail}</span>
+          </a>
+          <a className="sidebar-contact-link" href={`mailto:${supportEmail}`}>
+            <Mail size={14} />
+            <span>{supportEmail}</span>
+          </a>
+          <a className="sidebar-contact-link" href={`mailto:${operationsEmail}`}>
+            <Mail size={14} />
+            <span>{operationsEmail}</span>
+          </a>
+          <div className="sidebar-contact-static">
+            <div className="sidebar-contact-line">
+              <Clock3 size={13} />
+              <span>{businessHours}</span>
+            </div>
+            <div className="sidebar-contact-line">
+              <Building2 size={13} />
+              <span>{storeAddress}</span>
+            </div>
+            <div className="sidebar-contact-meta">ABN {abn}</div>
+          </div>
+        </div>
       </aside>
       <section className="workspace">
         <header className={dashboardActive ? 'topbar dashboard-topbar' : 'topbar'} data-tauri-drag-region>
@@ -174,6 +304,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
                 placeholder="Search… ⌃K"
                 aria-label="Search modules"
               />
@@ -186,17 +318,20 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                 >×</button>
               )}
             </div>
-            {searchResults.length > 0 && (
+            {searchFocused && searchResults.length > 0 && (
               <div className="search-results" role="listbox">
-                {searchResults.map(item => {
+                {searchResults.map((item, index) => {
                   const Icon = item.icon;
+                  const activeResult = index === activeSearchIndex;
                   return (
                     <button
                       key={item.id}
-                      className="search-result-item"
+                      className={activeResult ? 'search-result-item active' : 'search-result-item'}
                       role="option"
+                      aria-selected={activeResult}
+                      onMouseEnter={() => setActiveSearchIndex(index)}
                       onMouseDown={e => e.preventDefault()}
-                      onClick={() => { onNavigate(item.id); setSearchQuery(''); }}
+                      onClick={() => { item.run(); setSearchQuery(''); }}
                     >
                       <Icon size={15} />
                       <span>{item.label}</span>
@@ -207,6 +342,14 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             )}
           </div>
           <div className="window-actions">
+            <a
+              className="topbar-support-link"
+              href={`mailto:${supportEmail}?subject=${encodeURIComponent(supportSubject)}`}
+              title="Contact support"
+            >
+              <Mail size={14} />
+              <span>Get Support</span>
+            </a>
             <div className="tray-preview" title="Live tray icon preview">
               <trayPreview.Icon size={15} />
               <span>{trayPreview.label}</span>

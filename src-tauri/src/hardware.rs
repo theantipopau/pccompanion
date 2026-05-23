@@ -135,6 +135,68 @@ pub struct SystemInfo {
     pub bios: String,
 }
 
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HardwareCapability {
+    pub id: String,
+    pub label: String,
+    /// "live" | "partial" | "unsupported" | "unknown"
+    pub state: String,
+    pub detail: String,
+    pub write_safe: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderDiagnostics {
+    pub id: String,
+    pub label: String,
+    pub vendor: String,
+    pub load_order: u32,
+    pub state: String,
+    pub active: bool,
+    pub dll: String,
+    pub dll_available: bool,
+    pub symbols_resolved: bool,
+    pub symbols: Vec<String>,
+    pub notes: String,
+    pub warnings: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SensorProvenance {
+    pub id: String,
+    pub sensor: String,
+    pub provider: String,
+    pub provider_state: String,
+    pub state: String,
+    pub confidence: String,
+    pub telemetry_quality: String,
+    pub fallback_status: String,
+    pub notes: String,
+    pub oem_support_status: String,
+    pub icon: String,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TelemetryDiagnosticsSnapshot {
+    pub created_at: String,
+    pub overall_state: String,
+    pub active_provider: String,
+    pub fallback_sequence: Vec<String>,
+    pub provider_load_order: Vec<String>,
+    pub providers: Vec<ProviderDiagnostics>,
+    pub capabilities: Vec<HardwareCapability>,
+    pub sensors: Vec<SensorProvenance>,
+    pub support_snapshot: Vec<String>,
+    pub support_actions: Vec<String>,
+    pub hardware_identity: SystemInfo,
+    pub sample: HardwareSample,
+}
+
 // ─── Internal shared cache ──────────────────────────────────────────────────
 
 /// Cached readings written by the monitoring thread, read by Tauri commands.
@@ -148,6 +210,12 @@ pub struct HardwareCache {
     pub cpu_clock_mhz: u64,
     pub gpu_name: String,
     pub gpu_vendor: String,
+    pub gpu_provider: String,
+    pub intel_igcl_loaded: bool,
+    pub provider_load_order: Vec<String>,
+    pub provider_diagnostics: Vec<ProviderDiagnostics>,
+    pub provider_warnings: Vec<String>,
+    pub provider_errors: Vec<String>,
     pub gpu_temp: Option<f32>,
     pub gpu_usage: f32,
     pub gpu_vram_used_gb: f32,
@@ -392,6 +460,457 @@ impl MonitoringEngine {
         // Fast sysinfo fallback while WMI is still initialising.
         build_sysinfo_fallback(sys, &c)
     }
+
+    /// Return a registry-style summary of available telemetry capabilities.
+    pub fn capability_snapshot(&self) -> Vec<HardwareCapability> {
+        let c = self.cache.read().expect("hardware cache read lock");
+        let gpu_vendor = c.gpu_vendor.to_lowercase();
+        let gpu_provider = c.gpu_provider.to_lowercase();
+
+        let mut caps = Vec::new();
+        caps.push(HardwareCapability {
+            id: "cpu-package".to_string(),
+            label: "CPU package telemetry".to_string(),
+            state: if c.cpu_temp.is_some() { "live" } else { "partial" }.to_string(),
+            detail: if c.cpu_temp.is_some() {
+                "WMI ACPI thermal + sysinfo load active".to_string()
+            } else {
+                "Load active; temperature channel unavailable".to_string()
+            },
+            write_safe: false,
+        });
+
+        let gpu_state = if c.gpu_usage > 0.0 || c.gpu_temp.is_some() {
+            "live"
+        } else if gpu_vendor == "intel" && c.intel_igcl_loaded {
+            "staged"
+        } else if gpu_provider == "wmi" || gpu_provider.is_empty() {
+            "partial"
+        } else {
+            "degraded"
+        };
+        let gpu_detail = match gpu_provider.as_str() {
+            "nvml" => "NVML provider".to_string(),
+            "adl2" => "ADL2 provider".to_string(),
+            "igcl" => "Intel Arc IGCL groundwork active; enhanced sensor bindings staged".to_string(),
+            "wmi" => "WMI fallback".to_string(),
+            _ => {
+                if gpu_vendor == "intel" && c.intel_igcl_loaded {
+                    "Intel Arc IGCL loader active with WMI fallback".to_string()
+                } else {
+                    "Provider not yet resolved".to_string()
+                }
+            }
+        };
+        caps.push(HardwareCapability {
+            id: "gpu-core".to_string(),
+            label: "Discrete GPU telemetry".to_string(),
+            state: gpu_state.to_string(),
+            detail: gpu_detail,
+            write_safe: false,
+        });
+
+        caps.push(HardwareCapability {
+            id: "network-throughput".to_string(),
+            label: "Network throughput telemetry".to_string(),
+            state: if c.net_down_mbps >= 0.0 { "live" } else { "partial" }.to_string(),
+            detail: "sysinfo network delta cache".to_string(),
+            write_safe: true,
+        });
+
+        let storage_has_temp = c.storage.iter().any(|drive| drive.temperature.is_some());
+        caps.push(HardwareCapability {
+            id: "storage-smart".to_string(),
+            label: "Storage SMART depth".to_string(),
+            state: if storage_has_temp { "live" } else { "driver_required" }.to_string(),
+            detail: if storage_has_temp {
+                "Temperature channels active".to_string()
+            } else {
+                "Usage/space active; SMART wear and TBW expansion pending".to_string()
+            },
+            write_safe: false,
+        });
+
+        let fan_available = c.gpu_fan_pct.is_some() || c.gpu_fan_rpm.is_some();
+        caps.push(HardwareCapability {
+            id: "cooling-control".to_string(),
+            label: "Fan telemetry and control safety".to_string(),
+            state: if fan_available { "partial" } else { "blocked" }.to_string(),
+            detail: if fan_available {
+                "Read channels detected; write controls remain safety-locked".to_string()
+            } else {
+                "SuperIO/EC capability registry required before enablement".to_string()
+            },
+            write_safe: false,
+        });
+
+        caps.push(HardwareCapability {
+            id: "system-identity".to_string(),
+            label: "System identity confidence".to_string(),
+            state: if c.system_info.is_some() { "live" } else { "partial" }.to_string(),
+            detail: "WMI and sysinfo identity fusion".to_string(),
+            write_safe: true,
+        });
+
+        caps
+    }
+
+    pub fn telemetry_diagnostics_snapshot(&self) -> TelemetryDiagnosticsSnapshot {
+        let sample = self.snapshot();
+        let system_info = {
+            let sys_guard = self.sysinfo.lock().expect("sysinfo lock");
+            self.system_info_snapshot(&sys_guard.sys)
+        };
+        let cache = self.cache.read().expect("hardware cache read lock");
+        let providers = build_provider_diagnostics(&cache);
+        let capabilities = self.capability_snapshot();
+        let sensors = build_sensor_provenance(&cache, &sample, &capabilities);
+        let support_snapshot = build_support_snapshot(&cache, &sample, &capabilities);
+
+        TelemetryDiagnosticsSnapshot {
+            created_at: timestamp_now().1,
+            overall_state: cache.state.clone(),
+            active_provider: active_provider_label(&cache),
+            fallback_sequence: cache.provider_load_order.clone(),
+            provider_load_order: cache.provider_load_order.clone(),
+            providers,
+            capabilities,
+            sensors,
+            support_snapshot,
+            support_actions: vec![
+                "Support Snapshot".to_string(),
+                "Generate OEM Report".to_string(),
+                "Validate System Health".to_string(),
+            ],
+            hardware_identity: system_info,
+            sample,
+        }
+    }
+}
+
+fn active_provider_label(cache: &HardwareCache) -> String {
+    match cache.gpu_provider.as_str() {
+        "nvml" => "NVML".to_string(),
+        "adl2" => "ADL2".to_string(),
+        "igcl" => "Intel IGCL".to_string(),
+        "wmi" => "WMI fallback".to_string(),
+        "none" | "" => "Unavailable".to_string(),
+        other => other.to_uppercase(),
+    }
+}
+
+fn provider_state_from_enabled(enabled: bool, staged: bool) -> String {
+    if enabled {
+        "loaded".to_string()
+    } else if staged {
+        "staged".to_string()
+    } else {
+        "unavailable".to_string()
+    }
+}
+
+fn build_provider_diagnostics(cache: &HardwareCache) -> Vec<ProviderDiagnostics> {
+    let active = cache.gpu_provider.as_str();
+    let mut providers = vec![
+        ProviderDiagnostics {
+            id: "wmi".to_string(),
+            label: "WMI / sysinfo".to_string(),
+            vendor: "windows".to_string(),
+            load_order: 1,
+            state: provider_state_from_enabled(true, false),
+            active: active == "wmi" || active == "none" || active.is_empty(),
+            dll: "ROOT\\CIMV2 + ROOT\\WMI".to_string(),
+            dll_available: true,
+            symbols_resolved: true,
+            symbols: vec![
+                "Win32_Processor".to_string(),
+                "Win32_VideoController".to_string(),
+                "MSAcpi_ThermalZoneTemperature".to_string(),
+            ],
+            notes: "Primary identity and fallback telemetry source".to_string(),
+            warnings: if cache.state == "degraded" {
+                vec!["Thermal and vendor GPU data may be reduced".to_string()]
+            } else {
+                Vec::new()
+            },
+            errors: Vec::new(),
+        },
+        ProviderDiagnostics {
+            id: "nvml".to_string(),
+            label: "NVIDIA NVML".to_string(),
+            vendor: "nvidia".to_string(),
+            load_order: 2,
+            state: provider_state_from_enabled(cache.gpu_vendor == "nvidia" || active == "nvml", false),
+            active: active == "nvml",
+            dll: "nvml.dll".to_string(),
+            dll_available: cache.gpu_vendor == "nvidia" || active == "nvml",
+            symbols_resolved: cache.gpu_vendor == "nvidia" || active == "nvml",
+            symbols: vec![
+                "nvmlInit_v2".to_string(),
+                "nvmlDeviceGetTemperature".to_string(),
+                "nvmlDeviceGetUtilizationRates".to_string(),
+                "nvmlDeviceGetPowerUsage".to_string(),
+            ],
+            notes: if active == "nvml" {
+                "Native NVIDIA telemetry loaded and active".to_string()
+            } else {
+                "Available only on NVIDIA systems".to_string()
+            },
+            warnings: if cache.gpu_vendor != "nvidia" {
+                vec!["No NVIDIA hardware detected".to_string()]
+            } else {
+                Vec::new()
+            },
+            errors: Vec::new(),
+        },
+        ProviderDiagnostics {
+            id: "adl2".to_string(),
+            label: "AMD ADL2".to_string(),
+            vendor: "amd".to_string(),
+            load_order: 3,
+            state: provider_state_from_enabled(cache.gpu_vendor == "amd" || active == "adl2", false),
+            active: active == "adl2",
+            dll: "atiadlxx.dll".to_string(),
+            dll_available: cache.gpu_vendor == "amd" || active == "adl2",
+            symbols_resolved: cache.gpu_vendor == "amd" || active == "adl2",
+            symbols: vec![
+                "ADL2_Main_Control_Create".to_string(),
+                "ADL2_Overdrive5_Temperature_Get".to_string(),
+                "ADL2_Overdrive5_CurrentActivity_Get".to_string(),
+            ],
+            notes: if active == "adl2" {
+                "Native AMD telemetry loaded and active".to_string()
+            } else {
+                "Available only on AMD systems".to_string()
+            },
+            warnings: if cache.gpu_vendor != "amd" {
+                vec!["No AMD hardware detected".to_string()]
+            } else {
+                Vec::new()
+            },
+            errors: Vec::new(),
+        },
+        ProviderDiagnostics {
+            id: "igcl".to_string(),
+            label: "Intel IGCL".to_string(),
+            vendor: "intel".to_string(),
+            load_order: 4,
+            state: if cache.intel_igcl_loaded {
+                "staged".to_string()
+            } else {
+                "unavailable".to_string()
+            },
+            active: active == "igcl",
+            dll: "igcl64.dll / ControlLib.dll".to_string(),
+            dll_available: cache.intel_igcl_loaded,
+            symbols_resolved: cache.intel_igcl_loaded,
+            symbols: vec![
+                "ctlInit".to_string(),
+                "ctlEnumerateDevices".to_string(),
+            ],
+            notes: if cache.intel_igcl_loaded {
+                "Loader scaffold active; sensor bindings staged".to_string()
+            } else {
+                "Intel Arc loader scaffold not initialised".to_string()
+            },
+            warnings: if cache.intel_igcl_loaded {
+                vec!["Sensor calls remain staged until validation completes".to_string()]
+            } else {
+                vec!["Intel Arc telemetry remains on fallback paths".to_string()]
+            },
+            errors: Vec::new(),
+        },
+    ];
+
+    if let Some(provider) = providers.iter_mut().find(|provider| provider.active) {
+        provider.notes = format!("{} Active provider for current GPU path.", provider.notes);
+    }
+
+    providers
+}
+
+fn confidence_from_state(state: &str, provider: &str, fallback: bool) -> String {
+    if state == "live" {
+        if fallback {
+            return "medium".to_string();
+        }
+        if provider == "NVML" || provider == "ADL2" {
+            return "high".to_string();
+        }
+        return "medium".to_string();
+    }
+
+    match state {
+        "partial" | "staged" => "medium".to_string(),
+        "blocked" | "driver_required" => "low".to_string(),
+        "degraded" | "unsupported" => "low".to_string(),
+        "elevated_required" => "low".to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+fn build_sensor_provenance(
+    cache: &HardwareCache,
+    sample: &HardwareSample,
+    capabilities: &[HardwareCapability],
+) -> Vec<SensorProvenance> {
+    let gpu_provider = active_provider_label(cache);
+    let gpu_native = gpu_provider == "NVML" || gpu_provider == "ADL2";
+    let gpu_fallback = gpu_provider == "WMI fallback";
+    let intel_staged = cache.intel_igcl_loaded && cache.gpu_vendor.to_lowercase() == "intel";
+
+    let mut sensors = vec![
+        SensorProvenance {
+            id: "cpu-temp".to_string(),
+            sensor: "CPU Temp".to_string(),
+            provider: "WMI ACPI".to_string(),
+            provider_state: if cache.cpu_temp.is_some() { "loaded".to_string() } else { "degraded".to_string() },
+            state: if cache.cpu_temp.is_some() { "live".to_string() } else { "partial".to_string() },
+            confidence: confidence_from_state(if cache.cpu_temp.is_some() { "live" } else { "partial" }, "WMI", true),
+            telemetry_quality: if cache.cpu_temp.is_some() { "Package thermal channel".to_string() } else { "Fallback thermal channel only".to_string() },
+            fallback_status: if cache.cpu_temp.is_some() { "No fallback needed".to_string() } else { "Sysinfo CPU usage still live".to_string() },
+            notes: "Thermal zone temperature is filtered to avoid false positives.".to_string(),
+            oem_support_status: "Supported with fallback".to_string(),
+            icon: "thermometer".to_string(),
+        },
+        SensorProvenance {
+            id: "cpu-usage".to_string(),
+            sensor: "CPU Usage".to_string(),
+            provider: "sysinfo".to_string(),
+            provider_state: "loaded".to_string(),
+            state: "live".to_string(),
+            confidence: "high".to_string(),
+            telemetry_quality: "Scheduled polling cache".to_string(),
+            fallback_status: "None".to_string(),
+            notes: "Derived from refresh tick across logical cores.".to_string(),
+            oem_support_status: "Supported".to_string(),
+            icon: "cpu".to_string(),
+        },
+        SensorProvenance {
+            id: "memory-usage".to_string(),
+            sensor: "RAM Usage".to_string(),
+            provider: "sysinfo".to_string(),
+            provider_state: "loaded".to_string(),
+            state: "live".to_string(),
+            confidence: "high".to_string(),
+            telemetry_quality: "Physical memory snapshot".to_string(),
+            fallback_status: "None".to_string(),
+            notes: "Monitored from a cached memory refresh.".to_string(),
+            oem_support_status: "Supported".to_string(),
+            icon: "memory-stick".to_string(),
+        },
+        SensorProvenance {
+            id: "gpu-core".to_string(),
+            sensor: "GPU Core Telemetry".to_string(),
+            provider: gpu_provider.clone(),
+            provider_state: if gpu_native { "loaded".to_string() } else if intel_staged { "staged".to_string() } else { "degraded".to_string() },
+            state: if sample.gpu.temperature.is_some() || sample.gpu.usage > 0.0 { "live".to_string() } else if intel_staged { "staged".to_string() } else if gpu_fallback { "partial".to_string() } else { "degraded".to_string() },
+            confidence: confidence_from_state(if sample.gpu.temperature.is_some() || sample.gpu.usage > 0.0 { "live" } else if intel_staged { "staged" } else if gpu_fallback { "partial" } else { "degraded" }, &gpu_provider, gpu_fallback),
+            telemetry_quality: if gpu_native { "Native vendor telemetry".to_string() } else if intel_staged { "IGCL loader scaffold only".to_string() } else { "WMI usage fallback".to_string() },
+            fallback_status: if gpu_native { "None".to_string() } else if intel_staged { "Fallback sensor binding pending".to_string() } else { "Usage via WMI only".to_string() },
+            notes: if gpu_native { "High-trust vendor telemetry path.".to_string() } else if intel_staged { "Intel Arc provider scaffold staged for bindings.".to_string() } else { "GPU data sourced from fallback counters.".to_string() },
+            oem_support_status: if gpu_native { "Supported".to_string() } else if intel_staged { "Staged".to_string() } else { "Fallback only".to_string() },
+            icon: "gpu".to_string(),
+        },
+        SensorProvenance {
+            id: "gpu-fan".to_string(),
+            sensor: "GPU Fan".to_string(),
+            provider: gpu_provider.clone(),
+            provider_state: if gpu_native { "loaded".to_string() } else if intel_staged { "staged".to_string() } else { "blocked".to_string() },
+            state: if sample.gpu.fan_pct.is_some() || sample.fans.iter().any(|fan| fan.rpm.is_some()) { "live".to_string() } else if intel_staged { "staged".to_string() } else { "unsupported".to_string() },
+            confidence: confidence_from_state(if sample.gpu.fan_pct.is_some() || sample.fans.iter().any(|fan| fan.rpm.is_some()) { "live" } else if intel_staged { "staged" } else { "unsupported" }, &gpu_provider, gpu_fallback),
+            telemetry_quality: if sample.gpu.fan_pct.is_some() || sample.fans.iter().any(|fan| fan.rpm.is_some()) { "Vendor fan telemetry".to_string() } else { "Not exposed by current path".to_string() },
+            fallback_status: if sample.gpu.fan_pct.is_some() || sample.fans.iter().any(|fan| fan.rpm.is_some()) { "No fallback needed".to_string() } else { "Requires vendor API or EC support".to_string() },
+            notes: "Write controls stay safety-gated regardless of read access.".to_string(),
+            oem_support_status: if sample.gpu.fan_pct.is_some() || sample.fans.iter().any(|fan| fan.rpm.is_some()) { "Supported read-only".to_string() } else { "Staged".to_string() },
+            icon: "fan".to_string(),
+        },
+        SensorProvenance {
+            id: "gpu-power".to_string(),
+            sensor: "GPU Power".to_string(),
+            provider: gpu_provider.clone(),
+            provider_state: if sample.gpu.power_watts.is_some() { "loaded".to_string() } else if intel_staged { "staged".to_string() } else { "unsupported".to_string() },
+            state: if sample.gpu.power_watts.is_some() { "live".to_string() } else if intel_staged { "staged".to_string() } else { "unsupported".to_string() },
+            confidence: confidence_from_state(if sample.gpu.power_watts.is_some() { "live" } else if intel_staged { "staged" } else { "unsupported" }, &gpu_provider, gpu_fallback),
+            telemetry_quality: if sample.gpu.power_watts.is_some() { "Native vendor wattage".to_string() } else { "Power telemetry unavailable".to_string() },
+            fallback_status: if sample.gpu.power_watts.is_some() { "No fallback needed".to_string() } else { "Waiting on vendor API binding".to_string() },
+            notes: "Power telemetry is vendor-sensitive and is never inferred silently.".to_string(),
+            oem_support_status: if sample.gpu.power_watts.is_some() { "Supported read-only".to_string() } else { "Planned".to_string() },
+            icon: "zap".to_string(),
+        },
+        SensorProvenance {
+            id: "storage-smart".to_string(),
+            sensor: "NVMe Temp / SMART".to_string(),
+            provider: "SMART / DeviceIoControl".to_string(),
+            provider_state: "staged".to_string(),
+            state: if sample.storage.iter().any(|drive| drive.temperature.is_some()) { "live".to_string() } else { "driver_required".to_string() },
+            confidence: if sample.storage.iter().any(|drive| drive.temperature.is_some()) { "medium".to_string() } else { "low".to_string() },
+            telemetry_quality: if sample.storage.iter().any(|drive| drive.temperature.is_some()) { "Drive temperature channel present".to_string() } else { "SMART and lifetime channels pending".to_string() },
+            fallback_status: "No safe fallback yet".to_string(),
+            notes: "SMART expansion will require per-device DeviceIoControl work.".to_string(),
+            oem_support_status: "Driver required".to_string(),
+            icon: "hard-drive".to_string(),
+        },
+        SensorProvenance {
+            id: "network-throughput".to_string(),
+            sensor: "Network Throughput".to_string(),
+            provider: "sysinfo".to_string(),
+            provider_state: "loaded".to_string(),
+            state: "live".to_string(),
+            confidence: "high".to_string(),
+            telemetry_quality: "Cached throughput delta".to_string(),
+            fallback_status: "None".to_string(),
+            notes: "Non-loopback adapters only; low-overhead polling.".to_string(),
+            oem_support_status: "Supported".to_string(),
+            icon: "network".to_string(),
+        },
+    ];
+
+    if let Some(capability) = capabilities.iter().find(|capability| capability.id == "cooling-control") {
+        sensors.push(SensorProvenance {
+            id: "cooling-safety".to_string(),
+            sensor: "Cooling Control Safety".to_string(),
+            provider: "Capability registry".to_string(),
+            provider_state: capability.state.clone(),
+            state: capability.state.clone(),
+            confidence: if capability.state == "live" { "medium".to_string() } else { "low".to_string() },
+            telemetry_quality: capability.detail.clone(),
+            fallback_status: "Safety lock engaged by default".to_string(),
+            notes: "Write-paths stay disabled until model-safe EC profiles exist.".to_string(),
+            oem_support_status: "Blocked until validated".to_string(),
+            icon: "shield".to_string(),
+        });
+    }
+
+    sensors
+}
+
+fn build_support_snapshot(
+    cache: &HardwareCache,
+    sample: &HardwareSample,
+    capabilities: &[HardwareCapability],
+) -> Vec<String> {
+    let mut items = vec![
+        format!("Active provider: {}", active_provider_label(cache)),
+        format!("Provider sequence: {}", cache.provider_load_order.join(" → ")),
+        format!("Telemetry state: {}", cache.state),
+        format!("Capability coverage: {} entries", capabilities.len()),
+        format!("Support confidence: {}", if sample.cpu.temperature.is_some() && sample.gpu.temperature.is_some() { "high" } else { "medium" }),
+    ];
+
+    if cache.provider_errors.is_empty() {
+        items.push("No provider errors cached.".to_string());
+    } else {
+        items.push(format!("Provider errors cached: {}", cache.provider_errors.len()));
+    }
+
+    if cache.provider_warnings.is_empty() {
+        items.push("No provider warnings cached.".to_string());
+    } else {
+        items.push(format!("Provider warnings cached: {}", cache.provider_warnings.len()));
+    }
+
+    items
 }
 
 fn build_sysinfo_fallback(sys: &System, cache: &HardwareCache) -> SystemInfo {
@@ -466,7 +985,7 @@ pub fn monitor_loop(
     };
 
     // One-shot vendor GPU provider init (Windows only).
-    // Priority: NVML (NVIDIA) → AMD ADL → WMI fallback.
+    // Priority: NVML (NVIDIA) → AMD ADL → Intel IGCL groundwork → WMI fallback.
     #[cfg(windows)]
     let nvml_opt: Option<crate::nvml_provider::NvmlContext> =
         crate::nvml_provider::NvmlContext::init();
@@ -477,6 +996,22 @@ pub fn monitor_loop(
     } else {
         None
     };
+
+    #[cfg(windows)]
+    let igcl_opt: Option<crate::igcl_provider::IntelIgclContext> =
+        if nvml_opt.is_none() && amd_opt.is_none() {
+            crate::igcl_provider::IntelIgclContext::init()
+        } else {
+            None
+        };
+
+    #[cfg(windows)]
+    {
+        if igcl_opt.is_some() {
+            let mut c = cache.write().expect("cache write");
+            c.intel_igcl_loaded = true;
+        }
+    }
 
     // Query static identifiers once (GPU name, MB, BIOS, RAM speed).
     #[cfg(windows)]
@@ -493,6 +1028,92 @@ pub fn monitor_loop(
             // Persist full system info snapshot.
             c.system_info = Some(static_info.system_info);
         }
+    }
+
+    #[cfg(windows)]
+    {
+        let provider_load_order = vec![
+            "WMI / sysinfo".to_string(),
+            "NVIDIA NVML".to_string(),
+            "AMD ADL2".to_string(),
+            "Intel IGCL".to_string(),
+        ];
+
+        let provider_diagnostics = vec![
+            ProviderDiagnostics {
+                id: "wmi".to_string(),
+                label: "WMI / sysinfo".to_string(),
+                vendor: "windows".to_string(),
+                load_order: 1,
+                state: if wmi_opt.is_some() { "loaded".to_string() } else { "unavailable".to_string() },
+                active: false,
+                dll: "ROOT\\CIMV2 + ROOT\\WMI".to_string(),
+                dll_available: true,
+                symbols_resolved: wmi_opt.is_some(),
+                symbols: vec![
+                    "Win32_Processor".to_string(),
+                    "Win32_VideoController".to_string(),
+                    "MSAcpi_ThermalZoneTemperature".to_string(),
+                ],
+                notes: "Primary identity and fallback telemetry source".to_string(),
+                warnings: if wmi_opt.is_some() { Vec::new() } else { vec!["WMI telemetry unavailable; fallback channels will degrade".to_string()] },
+                errors: if wmi_opt.is_some() { Vec::new() } else { vec!["WMI context failed to initialise".to_string()] },
+            },
+            ProviderDiagnostics {
+                id: "nvml".to_string(),
+                label: "NVIDIA NVML".to_string(),
+                vendor: "nvidia".to_string(),
+                load_order: 2,
+                state: if nvml_opt.is_some() { "loaded".to_string() } else { "unavailable".to_string() },
+                active: false,
+                dll: "nvml.dll".to_string(),
+                dll_available: nvml_opt.is_some(),
+                symbols_resolved: nvml_opt.is_some(),
+                symbols: vec!["nvmlInit_v2".to_string(), "nvmlDeviceGetTemperature".to_string(), "nvmlDeviceGetUtilizationRates".to_string(), "nvmlDeviceGetPowerUsage".to_string()],
+                notes: if nvml_opt.is_some() { "Native NVIDIA telemetry loaded".to_string() } else { "Available only on NVIDIA systems".to_string() },
+                warnings: if nvml_opt.is_some() { Vec::new() } else { vec!["No NVIDIA driver API available".to_string()] },
+                errors: if nvml_opt.is_some() { Vec::new() } else { vec!["NVML not initialised".to_string()] },
+            },
+            ProviderDiagnostics {
+                id: "adl2".to_string(),
+                label: "AMD ADL2".to_string(),
+                vendor: "amd".to_string(),
+                load_order: 3,
+                state: if amd_opt.is_some() { "loaded".to_string() } else { "unavailable".to_string() },
+                active: false,
+                dll: "atiadlxx.dll".to_string(),
+                dll_available: amd_opt.is_some(),
+                symbols_resolved: amd_opt.is_some(),
+                symbols: vec!["ADL2_Main_Control_Create".to_string(), "ADL2_Overdrive5_Temperature_Get".to_string(), "ADL2_Overdrive5_CurrentActivity_Get".to_string()],
+                notes: if amd_opt.is_some() { "Native AMD telemetry loaded".to_string() } else { "Available only on AMD systems".to_string() },
+                warnings: if amd_opt.is_some() { Vec::new() } else { vec!["No AMD driver API available".to_string()] },
+                errors: if amd_opt.is_some() { Vec::new() } else { vec!["ADL2 not initialised".to_string()] },
+            },
+            ProviderDiagnostics {
+                id: "igcl".to_string(),
+                label: "Intel IGCL".to_string(),
+                vendor: "intel".to_string(),
+                load_order: 4,
+                state: if igcl_opt.is_some() { "staged".to_string() } else { "unavailable".to_string() },
+                active: false,
+                dll: "igcl64.dll / ControlLib.dll".to_string(),
+                dll_available: igcl_opt.is_some(),
+                symbols_resolved: igcl_opt.is_some(),
+                symbols: vec!["ctlInit".to_string(), "ctlEnumerateDevices".to_string()],
+                notes: if igcl_opt.is_some() { "Loader scaffold active; sensor bindings staged".to_string() } else { "Intel Arc loader scaffold not initialised".to_string() },
+                warnings: if igcl_opt.is_some() { vec!["Sensor calls remain staged until validation completes".to_string()] } else { vec!["Intel Arc telemetry remains on fallback paths".to_string()] },
+                errors: if igcl_opt.is_some() { Vec::new() } else { vec!["IGCL not initialised".to_string()] },
+            },
+        ];
+
+        let provider_warnings = provider_diagnostics.iter().flat_map(|provider| provider.warnings.clone()).collect();
+        let provider_errors = provider_diagnostics.iter().flat_map(|provider| provider.errors.clone()).collect();
+
+        let mut c = cache.write().expect("cache write");
+        c.provider_load_order = provider_load_order;
+        c.provider_diagnostics = provider_diagnostics;
+        c.provider_warnings = provider_warnings;
+        c.provider_errors = provider_errors;
     }
 
     // Main polling loop.
@@ -517,18 +1138,46 @@ pub fn monitor_loop(
                 // Fallback: sysinfo Components (works on some Intel systems
                 // where WMI thermal zones are empty but PDH counters are live).
                 let components = Components::new_with_refreshed_list();
-                let sysinfo_temp = components
-                    .iter()
-                    .filter(|c| {
-                        let l = c.label().to_lowercase();
+                let sysinfo_temp = {
+                    let prefer_cpu_labels = |label: &str| {
+                        let l = label.to_lowercase();
                         l.contains("cpu")
                             || l.contains("core")
                             || l.contains("package")
                             || l.contains("tdie")
                             || l.contains("tctl")
-                    })
-                    .filter_map(|c| c.temperature())
-                    .reduce(f32::max);
+                            || l.contains("acpi")
+                            || l.contains("thermal")
+                            || l.contains("zone")
+                            || l.contains("platform")
+                            || l.contains("pch")
+                    };
+                    let is_plausible_temp = |value: f32| (0.0..=120.0).contains(&value);
+
+                    let preferred = components
+                        .iter()
+                        .filter(|c| prefer_cpu_labels(c.label()))
+                        .filter_map(|c| c.temperature())
+                        .filter(|temp| is_plausible_temp(*temp))
+                        .reduce(f32::max);
+
+                    if preferred.is_some() {
+                        preferred
+                    } else {
+                        components
+                            .iter()
+                            .filter(|c| {
+                                let l = c.label().to_lowercase();
+                                !l.contains("battery")
+                                    && !l.contains("charger")
+                                    && !l.contains("adapter")
+                                    && !l.contains("unknown")
+                            })
+                            .filter_map(|c| c.temperature())
+                            .filter(|temp| is_plausible_temp(*temp))
+                            .reduce(f32::max)
+                    }
+                };
                 if sysinfo_temp.is_none() {
                     log::warn!(
                         "CPU temperature unavailable: WMI thermal zones and sysinfo components \
@@ -544,31 +1193,52 @@ pub fn monitor_loop(
         #[cfg(not(windows))]
         let cpu_temp: Option<f32> = None;
 
-        // --- GPU reading: NVML > AMD ADL > WMI fallback (Windows only) ---
+        // --- GPU reading: NVML > AMD ADL > IGCL > WMI fallback (Windows only) ---
         #[cfg(windows)]
-        let gpu_reading: Option<GpuReading> = {
+        let (gpu_reading, gpu_provider): (Option<GpuReading>, &'static str) = {
             if let Some(ref nvml) = nvml_opt {
-                nvml.query_primary_gpu()
+                (nvml.query_primary_gpu(), "nvml")
             } else if let Some(ref amd) = amd_opt {
                 let mut r = amd.query_primary_gpu();
                 // AMD ADL reports RPM via a separate call; wire it into fan_rpm.
                 if let Some(ref mut reading) = r {
                     reading.fan_rpm = amd.query_fan_rpm();
                 }
-                r
+                (r, "adl2")
+            } else if let Some(ref igcl) = igcl_opt {
+                match igcl.query_primary_gpu() {
+                    Some(reading) => (Some(reading), "igcl"),
+                    None => {
+                        if let Some(ctx) = &wmi_opt {
+                            let wmi_usage = crate::wmi_provider::query_gpu_usage(ctx);
+                            (
+                                Some(GpuReading {
+                                    usage_pct: wmi_usage,
+                                    ..Default::default()
+                                }),
+                                "wmi",
+                            )
+                        } else {
+                            (None, "igcl")
+                        }
+                    }
+                }
             } else if let Some(ctx) = &wmi_opt {
                 // WMI provides GPU usage % only — no temp, fans, or clocks.
                 let wmi_usage = crate::wmi_provider::query_gpu_usage(ctx);
-                Some(GpuReading {
-                    usage_pct: wmi_usage,
-                    ..Default::default()
-                })
+                (
+                    Some(GpuReading {
+                        usage_pct: wmi_usage,
+                        ..Default::default()
+                    }),
+                    "wmi",
+                )
             } else {
-                None
+                (None, "none")
             }
         };
         #[cfg(not(windows))]
-        let gpu_reading: Option<GpuReading> = None;
+        let (gpu_reading, gpu_provider): (Option<GpuReading>, &'static str) = (None, "none");
 
         // --- Derive state label ---
         let has_cpu = cpu_temp.is_some();
@@ -617,6 +1287,7 @@ pub fn monitor_loop(
                 c.gpu_fan_rpm = gpu.fan_rpm;
                 c.gpu_power_watts = gpu.power_watts;
             }
+            c.gpu_provider = gpu_provider.to_string();
 
             // Rolling history (60 points ≈ 1 minute).
             let gpu_temp_hist = gpu_reading

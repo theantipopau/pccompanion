@@ -46,11 +46,45 @@ The telemetry engine provides real-time hardware sensor data to the frontend. It
 |----------|--------|-----|--------|---------|
 | 1 | `nvml_provider` | `nvml.dll` | NVIDIA | Temp, usage, VRAM used/total, core/mem clocks, fan %, power W |
 | 2 | `amd_provider` | `atiadlxx.dll` | AMD | Temp, usage, VRAM used, core/mem clocks, fan RPM |
-| 3 | `wmi_provider` | — | Any | GPU 3D engine load % only |
+| 3 | `igcl_provider` | `igcl64.dll` / `ControlLib.dll` | Intel | Staged loader, device enumeration scaffold, sensor bindings pending |
+| 4 | `wmi_provider` | — | Any | GPU 3D engine load % only |
 
 - **DLL loading**: `LoadLibraryW` at runtime via `windows::Win32::System::LibraryLoader`. If the DLL is absent, `None` is returned and the next tier is tried.
 - **No redistribution**: vendor DLLs ship with the respective GPU driver — Radium PCs Companion never bundles them.
 - **Thread affinity**: all provider objects (`NvmlContext`, `AmdAdlContext`) are created and used exclusively within the `radium-monitor` thread.
+
+### Provider Diagnostics & Provenance
+
+The monitoring thread now caches provider orchestration data so the frontend and support bundle can explain where telemetry came from and why a channel is unavailable.
+
+- **Provider load order** is explicitly tracked in cache and exposed to the frontend.
+- **Active provider** is derived from the current GPU vendor path rather than inferred client-side.
+- **Initialization state** is surfaced as `loaded`, `staged`, `degraded`, or `unavailable`.
+- **Binding state** records whether symbols were resolved and whether the loader is merely staged.
+- **Fallback sequence** is exposed so support can see the exact escalation path.
+
+### Telemetry Confidence Model
+
+Confidence is surfaced per sensor so diagnostics can distinguish native telemetry from fallback or inferred data.
+
+- **High**: native vendor telemetry with direct bindings and stable readings.
+- **Medium**: WMI-backed or partially inferred values that remain useful but less authoritative.
+- **Low**: staged, inferred, or driver-dependent values that are not yet native.
+- **Unknown**: no validated reading source yet.
+
+### Sensor Provenance Matrix
+
+The frontend diagnostics page renders a matrix with:
+
+- sensor name,
+- provider source,
+- capability state,
+- confidence band,
+- telemetry quality,
+- fallback status,
+- OEM support status.
+
+This matrix is built from the backend snapshot returned by `get_telemetry_diagnostics` and exported via `export_diagnostics`.
 
 ---
 
@@ -154,6 +188,10 @@ pub struct HardwareCache {
     pub ram_usage: f32,
     pub net_down_mbps: f32,
     pub net_up_mbps: f32,
+    pub provider_load_order: Vec<String>,
+    pub provider_diagnostics: Vec<ProviderDiagnostics>,
+    pub provider_warnings: Vec<String>,
+    pub provider_errors: Vec<String>,
     pub storage: Vec<StorageSample>,
     pub history: Vec<MetricPoint>,   // rolling 60 points
     pub system_info: Option<SystemInfo>,
@@ -176,6 +214,66 @@ pub struct MetricPoint {
     pub ram_usage: f32,
     pub network_down: f32,   // Mbps
 }
+
+### `TelemetryDiagnosticsSnapshot`
+Support-ready, cached snapshot exposed to the frontend and diagnostics export.
+
+```rust
+pub struct TelemetryDiagnosticsSnapshot {
+  pub created_at: String,
+  pub overall_state: String,
+  pub active_provider: String,
+  pub fallback_sequence: Vec<String>,
+  pub provider_load_order: Vec<String>,
+  pub providers: Vec<ProviderDiagnostics>,
+  pub capabilities: Vec<HardwareCapability>,
+  pub sensors: Vec<SensorProvenance>,
+  pub support_snapshot: Vec<String>,
+  pub support_actions: Vec<String>,
+  pub hardware_identity: SystemInfo,
+  pub sample: HardwareSample,
+}
+```
+
+### `ProviderDiagnostics`
+Per-provider orchestration visibility used by diagnostics and support bundles.
+
+```rust
+pub struct ProviderDiagnostics {
+  pub id: String,
+  pub label: String,
+  pub vendor: String,
+  pub load_order: u32,
+  pub state: String,
+  pub active: bool,
+  pub dll: String,
+  pub dll_available: bool,
+  pub symbols_resolved: bool,
+  pub symbols: Vec<String>,
+  pub notes: String,
+  pub warnings: Vec<String>,
+  pub errors: Vec<String>,
+}
+```
+
+### `SensorProvenance`
+Per-sensor transparency metadata for the provenance matrix.
+
+```rust
+pub struct SensorProvenance {
+  pub id: String,
+  pub sensor: String,
+  pub provider: String,
+  pub provider_state: String,
+  pub state: String,
+  pub confidence: String,
+  pub telemetry_quality: String,
+  pub fallback_status: String,
+  pub notes: String,
+  pub oem_support_status: String,
+  pub icon: String,
+}
+```
 ```
 
 ---

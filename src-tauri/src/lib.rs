@@ -6,18 +6,21 @@ mod wmi_provider;
 mod nvml_provider;
 #[cfg(windows)]
 mod amd_provider;
+#[cfg(windows)]
+mod igcl_provider;
 mod windows_util;
 
 use serde::Deserialize;
 use std::io::Write;
 use std::sync::Arc;
+use log::LevelFilter;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
-use hardware::{HardwareSample, MetricPoint, MonitoringEngine, SystemInfo};
+use hardware::{HardwareCapability, HardwareSample, MetricPoint, MonitoringEngine, SystemInfo, TelemetryDiagnosticsSnapshot};
 
 
 
@@ -35,6 +38,10 @@ struct DiagnosticsExport {
     path: String,
     created_at: String,
     message: String,
+    sections: Vec<String>,
+    provider_count: usize,
+    capability_count: usize,
+    sensor_count: usize,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -88,6 +95,16 @@ fn get_hardware_sample(
 }
 
 #[tauri::command]
+fn get_hardware_capabilities(engine: tauri::State<'_, MonitoringEngine>) -> Vec<HardwareCapability> {
+    engine.capability_snapshot()
+}
+
+#[tauri::command]
+fn get_telemetry_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> TelemetryDiagnosticsSnapshot {
+    engine.telemetry_diagnostics_snapshot()
+}
+
+#[tauri::command]
 fn optimize_ram(_mode: Option<String>) -> cleanup::RamCleanupResult {
     cleanup::optimize_ram()
 }
@@ -100,6 +117,11 @@ fn scan_bloatware() -> Vec<windows_util::BloatwareItem> {
 #[tauri::command]
 fn remove_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
     windows_util::remove_bloatware(ids, dry_run)
+}
+
+#[tauri::command]
+fn restore_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
+    windows_util::restore_bloatware(ids, dry_run)
 }
 
 #[tauri::command]
@@ -138,21 +160,21 @@ fn clean_registry_issues(ids: Vec<String>, backup_id: String, dry_run: bool) -> 
 }
 
 #[tauri::command]
+fn restore_registry_backup(backup_id: String) -> Vec<String> {
+    windows_util::restore_registry_backup(backup_id)
+}
+
+#[tauri::command]
 fn export_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> DiagnosticsExport {
-    let sample = engine.snapshot();
-    let system_info = {
-        let sys_guard = engine.sysinfo.lock().expect("sysinfo lock");
-        engine.system_info_snapshot(&sys_guard.sys)
-    };
-    let created_at = hardware::timestamp_now().1;
+    let diagnostics = engine.telemetry_diagnostics_snapshot();
+    let created_at = diagnostics.created_at.clone();
     let export_dir = diagnostics_dir();
     let _ = std::fs::create_dir_all(&export_dir);
     let path = export_dir.join(format!("diagnostics-{}.json", chrono_like_file_stamp()));
     let payload = serde_json::json!({
         "createdAt": created_at,
         "format": "radium-diagnostics-v1",
-        "systemInfo": system_info,
-        "sample": sample,
+        "diagnostics": diagnostics,
         "notes": [
             "Generated locally.",
             "No automatic upload or telemetry.",
@@ -167,6 +189,15 @@ fn export_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> Diagnostics
         path: path.to_string_lossy().to_string(),
         created_at,
         message,
+        sections: vec![
+            "Provider orchestration".to_string(),
+            "Capability matrix".to_string(),
+            "Sensor provenance".to_string(),
+            "Support tooling".to_string(),
+        ],
+        provider_count: diagnostics.providers.len(),
+        capability_count: diagnostics.capabilities.len(),
+        sensor_count: diagnostics.sensors.len(),
     }
 }
 
@@ -228,12 +259,14 @@ fn apply_performance_profile(id: String, dry_run: bool) -> PerformanceProfileRes
     ];
     if dry_run {
         actions.push("Skipped power plan write (dry-run mode).".to_string());
+        actions.push("Skipped processor power tuning (dry-run mode).".to_string());
         actions.push("Skipped timer resolution change (dry-run mode).".to_string());
     } else {
         actions.push(match set_windows_power_plan(&id) {
             Ok(msg) => msg,
             Err(err) => format!("Power plan update failed: {err}"),
         });
+        actions.push(crate::windows_util::apply_power_mode_tweaks(&id));
         actions.push(crate::windows_util::set_timer_resolution(&id));
     }
     PerformanceProfileResult {
@@ -395,7 +428,13 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(engine)
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(LevelFilter::Info)
+                .level_for("wmi", LevelFilter::Warn)
+                .level_for("wmi::result_enumerator", LevelFilter::Error)
+                .build()
+        )
         .on_window_event(|window, event| {
             if window.label() == "main" {
                 if let WindowEvent::CloseRequested { api, .. } = event {
@@ -420,9 +459,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_system_info,
             get_hardware_sample,
+            get_hardware_capabilities,
+            get_telemetry_diagnostics,
             optimize_ram,
             scan_bloatware,
             remove_bloatware,
+            restore_bloatware,
             set_tray_status,
             set_tray_icon_data,
             show_main_window,
@@ -435,6 +477,7 @@ pub fn run() {
             scan_registry_issues,
             backup_registry_issues,
             clean_registry_issues,
+            restore_registry_backup,
             export_diagnostics,
             get_performance_profiles,
             apply_performance_profile,
@@ -496,16 +539,17 @@ fn chrono_like_file_stamp() -> String {
 }
 
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open-dashboard", "Open Dashboard", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open-dashboard", "Open Command Center", true, None::<&str>)?;
+    let passport = MenuItem::with_id(app, "open-passport", "Open System Passport", true, None::<&str>)?;
     let overview = MenuItem::with_id(app, "performance-overview", "Performance Overview", true, None::<&str>)?;
-    let toggle_osd = MenuItem::with_id(app, "toggle-osd", "Toggle OSD", true, None::<&str>)?;
-    let ram_clean = MenuItem::with_id(app, "quick-ram-clean", "Quick RAM Clean", true, None::<&str>)?;
-    let performance = MenuItem::with_id(app, "performance-mode", "Performance Mode", true, None::<&str>)?;
-    let quiet = MenuItem::with_id(app, "quiet-mode", "Quiet Mode", true, None::<&str>)?;
+    let toggle_osd = MenuItem::with_id(app, "toggle-osd", "Toggle OSD Overlay", true, None::<&str>)?;
+    let ram_clean = MenuItem::with_id(app, "quick-ram-clean", "Quick Memory Optimization", true, None::<&str>)?;
+    let performance = MenuItem::with_id(app, "performance-mode", "Set Performance Mode", true, None::<&str>)?;
+    let quiet = MenuItem::with_id(app, "quiet-mode", "Set Quiet Mode", true, None::<&str>)?;
     let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&open, &overview, &toggle_osd, &ram_clean, &performance, &quiet, &exit],
+        &[&open, &passport, &overview, &toggle_osd, &ram_clean, &performance, &quiet, &exit],
     )?;
 
     let icon = app.default_window_icon().cloned();
@@ -515,6 +559,9 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open-dashboard" | "performance-overview" => {
                 let _ = app.emit("tray://open-dashboard", ());
+            }
+            "open-passport" => {
+                let _ = app.emit("tray://open-passport", ());
             }
             "toggle-osd" => {
                 let _ = app.emit("tray://toggle-osd", ());

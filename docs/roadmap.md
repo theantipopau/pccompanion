@@ -49,7 +49,7 @@
 - [x] Add Windows Update delivery optimisation cache to storage scanner
 - [x] Startup scanner: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce` support
 - [x] Startup scanner: Startup folder (`shell:startup`) support
-- [ ] Unit tests for `cleanup.rs` and `windows_util.rs` (dry-run paths)
+- [x] Unit tests for `cleanup.rs` and `windows_util.rs` (safety + helper coverage, initial pass)
 - [x] Error boundary wired around all page renders (IPC failures show recovery UI)
 - [x] Retry logic in MonitorContext — exponential backoff on consecutive IPC errors (capped at 30 s)
 - [x] Gauge circle readability fix (dark-on-dark text was unreadable; now explicit bright colors)
@@ -94,6 +94,7 @@
 - [ ] Process priority management
 - [ ] CPU park/unpark control
 - [x] Timer resolution optimisation — `NtSetTimerResolution` via ntdll (Gaming/Creator → 0.5 ms, Balanced → 1.0 ms, Quiet → system default)
+- [x] Processor power tuning via `powercfg` subgroup values (`PROCTHROTTLEMIN`, `PROCTHROTTLEMAX`, `PERFBOOSTMODE`) on both AC/DC, per profile intent
 
 ---
 
@@ -131,9 +132,13 @@
 - [ ] Export diagnostics report (HTML/PDF)
 - [ ] Remote monitoring (optional local network)
 - [ ] OSD themes and layout customisation
-- [ ] Search functionality (the search bar in the topbar is currently decorative)
+- [x] Search functionality (topbar search now supports keyboard navigation and quick actions)
 - [ ] Startup folder (`shell:startup`) scanning in StartupManagerPage
 - [ ] `RunOnce` key scanning in registry startup sources
+- [x] Registry cleaner live safe-path execution (startup value removal + stale uninstall/app-path key removal) gated by backup existence
+- [x] System cleaner expansion: Recycle Bin target + Downloads review target with safe-only one-click gate
+- [x] Bloatware remover hardening: action-by-spec matching, consumer-content policy write path, scheduled-task mapping hook, and post-action rescan in UI
+- [x] Restore paths: registry backup import command + bloatware restore command surface (UI and service wired)
 
 ---
 
@@ -173,10 +178,29 @@
 
 ### Pending ❌
 - [ ] Shell.tsx — Framer Motion page transition upgrade (slide + fade)
-- [ ] Panel component — subtle hover elevation (box-shadow transition)
-- [ ] Chart tooltips — custom styled Recharts tooltip component
-- [ ] Topbar — search bar activation (currently decorative)
+- [x] Panel component — subtle hover elevation (box-shadow transition)
+- [x] Chart tooltips — custom styled Recharts tooltip component
+- [x] Topbar — search bar activation (keyboard nav + quick actions)
 - [ ] trayIcon.ts — richer arc glow and sharper text rendering
+
+---
+
+## Phase 8 — Embedded Hardware Access + OEM Ecosystem 🏁 In Progress
+
+- [x] System Passport page foundation (identity, deployment metadata placeholders, telemetry access matrix)
+- [x] Radium Performance Score foundation (weighted model: thermals, CPU/memory headroom, storage health, telemetry confidence)
+- [x] Dashboard score surface for quick readiness visibility
+- [x] LibreHardwareMonitor adaptation analysis doc (`docs/lhm_oem_analysis.md`)
+- [x] Backend hardware capability registry (per-board feature gates and confidence contracts)
+- [x] Intel Arc IGCL provider module (dynamic load + fallback strategy)
+- [ ] Intel Arc sensor bindings (temps, clocks, power, fan %, VRAM)
+- [x] Telemetry diagnostics page + sensor provenance matrix
+- [x] Capability intelligence states and confidence scoring contracts
+- [x] Diagnostics export evolution (provider states, provenance, fallback paths)
+- [x] OEM support tooling groundwork (Support Snapshot / OEM report / health validation)
+- [ ] Storage SMART confidence expansion (wear/TBW/health channels)
+- [ ] OEM certification data feed integration (serial/build batch/QC seal)
+- [ ] Safe write-policy engine for embedded controller and fan-control operations
 
 ---
 

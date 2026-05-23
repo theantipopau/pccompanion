@@ -4,13 +4,15 @@ import { Activity, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus,
 import { listen } from '@tauri-apps/api/event';
 import { Shell } from './components/Shell';
 import { SplashScreen } from './components/SplashScreen';
+import { OnboardingFlow } from './components/OnboardingFlow';
 import { OsdOverlay } from './components/OsdOverlay';
 import { DashboardPage } from './pages/DashboardPage';
 import { RamCleanerPage } from './pages/RamCleanerPage';
 import { BloatwarePage } from './pages/BloatwarePage';
 import { UtilitiesPage } from './pages/UtilitiesPage';
-import { DiagnosticsPage } from './pages/DiagnosticsPage';
+import { TelemetryDiagnosticsPage } from './pages/TelemetryDiagnosticsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SystemPassportPage } from './pages/SystemPassportPage';
 import { ThermalsPage } from './pages/ThermalsPage';
 import { StartupManagerPage } from './pages/StartupManagerPage';
 import { StorageCleanerPage } from './pages/StorageCleanerPage';
@@ -35,7 +37,8 @@ const navItems: NavItem[] = [
   { id: 'storage', label: 'System Clean', icon: HardDrive },
   { id: 'profiles', label: 'Profiles', icon: Gauge },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
-  { id: 'diagnostics', label: 'Diagnostics', icon: ShieldCheck },
+  { id: 'diagnostics', label: 'Telemetry Diagnostics', icon: ShieldCheck },
+  { id: 'passport', label: 'System Passport', icon: Gauge },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -61,6 +64,13 @@ function OverlayOnlyApp() {
 }
 
 function CompanionApp() {
+  const [onboardingVisible, setOnboardingVisible] = useState(() => {
+    try {
+      return window.localStorage.getItem('radium-onboarding-complete-v1') !== '1';
+    } catch {
+      return true;
+    }
+  });
   const [activeView, setActiveView] = useState('dashboard');
   const [splashVisible, setSplashVisible] = useState(true);
   const { settings, updateSettings } = useSettings();
@@ -87,11 +97,13 @@ function CompanionApp() {
       case 'utilities':
         return <UtilitiesPage mode={activeView} />;
       case 'diagnostics':
-        return <DiagnosticsPage />;
+        return <TelemetryDiagnosticsPage />;
+      case 'passport':
+        return <SystemPassportPage />;
       case 'settings':
         return <SettingsPage />;
       default:
-        return <DashboardPage />;
+        return <DashboardPage onNavigate={setActiveView} />;
     }
   }, [activeView]);
 
@@ -105,6 +117,10 @@ function CompanionApp() {
 
     listenSafely('tray://open-dashboard', () => {
       setActiveView('dashboard');
+      void showMainWindow();
+    });
+    listenSafely('tray://open-passport', () => {
+      setActiveView('passport');
       void showMainWindow();
     });
     listenSafely('tray://toggle-osd', () => {
@@ -138,10 +154,16 @@ function CompanionApp() {
           <motion.main
             key={activeView}
             className="page-transition"
-            initial={{ opacity: 0, x: 12, filter: 'blur(2px)' }}
-            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, x: -10, filter: 'blur(1.5px)' }}
-            transition={{ duration: 0.2, ease: [0.2, 0, 0.13, 1] }}
+            initial={{ opacity: 0, x: 26, y: 3, scale: 0.986, filter: 'blur(3px)' }}
+            animate={{ opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, x: -20, y: -2, scale: 0.992, filter: 'blur(2px)' }}
+            transition={{
+              x: { type: 'spring', stiffness: 240, damping: 28, mass: 0.64 },
+              y: { type: 'spring', stiffness: 220, damping: 26, mass: 0.64 },
+              opacity: { duration: 0.22, ease: [0.2, 0, 0.13, 1] },
+              scale: { duration: 0.2, ease: [0.2, 0, 0.13, 1] },
+              filter: { duration: 0.2, ease: [0.2, 0, 0.13, 1] },
+            }}
           >
             <ErrorBoundary>
               {page}
@@ -159,6 +181,20 @@ function CompanionApp() {
               { label: 'Loading performance modules', icon: Sparkles },
               { label: 'Preparing monitoring engine', icon: Activity },
             ]}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {!splashVisible && onboardingVisible && (
+          <OnboardingFlow
+            onComplete={() => {
+              setOnboardingVisible(false);
+              try {
+                window.localStorage.setItem('radium-onboarding-complete-v1', '1');
+              } catch {
+                // ignore storage failures and continue onboarding flow.
+              }
+            }}
           />
         )}
       </AnimatePresence>

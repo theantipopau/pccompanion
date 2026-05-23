@@ -16,6 +16,7 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
 
 export function SettingsPage() {
   const { settings, updateSettings, resetSettings } = useSettings();
+  const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
 
   return (
     <div className="page">
@@ -66,15 +67,15 @@ export function SettingsPage() {
           <label className="control-row">
             <span>Live tray icon</span>
             <select
-              value={settings.tray.liveIconMetric}
+              value={normalizedTrayIconMode}
               onChange={(e) => updateSettings((current) => ({ ...current, tray: { ...current.tray, liveIconMetric: e.target.value as TrayMetric } }))}
             >
               <option value="disabled">App icon (static)</option>
-              <option value="cpuTemp">CPU Temperature</option>
-              <option value="gpuTemp">GPU Temperature</option>
-              <option value="cpuUsage">CPU Usage %</option>
-              <option value="gpuUsage">GPU Usage %</option>
-              <option value="ramUsage">RAM Usage %</option>
+              <option value="cpuTemp">CPU temperature gauge</option>
+              <option value="gpuTemp">GPU temperature gauge</option>
+              <option value="cpuUsage">CPU usage gauge</option>
+              <option value="gpuUsage">GPU usage gauge</option>
+              <option value="ramUsage">RAM usage gauge</option>
             </select>
           </label>
         </Panel>
