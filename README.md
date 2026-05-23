@@ -348,6 +348,17 @@ Latest packaging validation (interaction polish pass):
 - `npm.cmd run build:exe` completed end-to-end.
 - Output installer: `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`.
 
+Latest localisation and rebuild update (2026-05-24):
+
+- User-facing copy was standardised to Australian English in key UI flows (for example: optimise, initialise, minimise, analyse, Command Centre).
+- Scope was limited to visible interface text; internal API/function identifiers were intentionally unchanged.
+- Fresh release artifacts were rebuilt and validated:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Artifact metadata snapshot:
+  - `radium_pcs_companion.exe` - `13,793,280` bytes - `24/05/2026 7:43:23 AM`
+  - `Radium PCs Companion_0.1.0-pre_x64-setup.exe` - `5,804,123` bytes - `24/05/2026 7:43:22 AM`
+
 Manual validation still required before broad external rollout:
 
 - full interactive installer and uninstall walkthrough,

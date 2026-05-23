@@ -59,6 +59,34 @@
 
 ---
 
+### Phase: Australian English Localisation Pass + Fresh Release Rebuild (2026-05-24)
+
+#### Scope guardrails applied
+- Frontend copy/localisation pass only.
+- No telemetry provider/backend changes.
+- No diagnostics contract, lifecycle, or installer architecture changes.
+
+#### Localisation outcomes
+- Standardised user-facing copy to Australian English in key visible flows:
+  - onboarding copy (`Command Centre`, `initialise`, `initialisation`, `optimisation`),
+  - memory cleaner labels and action text (`Optimiser`, `Optimising`, `Optimise RAM`, `Last optimisation`),
+  - storage cleaner headline copy (`Analyse ...`),
+  - utilities module label (`Network optimisation`),
+  - shell topbar tooltip (`Minimise to tray`),
+  - performance score summaries (`optimisation`).
+- Internal identifiers were intentionally preserved (for example `optimizeRam`, minimise policy keys) to avoid contract breakage.
+
+#### Build and packaging evidence
+- `npm.cmd run build` passed.
+- `npm.cmd run build:exe` passed and produced:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Artifact metadata captured after rebuild:
+  - `radium_pcs_companion.exe`: `13,793,280` bytes, `24/05/2026 7:43:23 AM`
+  - `Radium PCs Companion_0.1.0-pre_x64-setup.exe`: `5,804,123` bytes, `24/05/2026 7:43:22 AM`
+
+---
+
 ### Phase: Premium Visual Identity & Dashboard Presentation (2026-05-23)
 
 #### Scope guardrails applied
