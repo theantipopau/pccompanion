@@ -1,8 +1,14 @@
 # Radium PCs Companion
 
+<p align="center">
+  <img src="images/radiumcompanion-marketing.png" alt="Radium PCs Companion marketing banner" width="960" />
+</p>
+
 Premium Windows companion utility for Radium PCs systems.
 
 Built with Tauri v2, React 19, TypeScript, and a Rust hardware backend.
+
+Main project marketing image: `images/radiumcompanion-marketing.png`.
 
 ## Current Status
 
@@ -23,6 +29,8 @@ Built with Tauri v2, React 19, TypeScript, and a Rust hardware backend.
 - Telemetry diagnostics with provider provenance and confidence states.
 - Sensor discovery report listing source attempts, accepted values, and rejected values.
 - Safety-gated cleanup tools and performance profile controls.
+- Compact desktop-native shell tuned for 1366x768 up to ultrawide displays.
+- Premium dark Radium visual language with restrained orange accents and high telemetry density.
 
 ## Dell CPU Temperature Limitation
 
@@ -65,8 +73,66 @@ Diagnostics export bundles this report under ProgramData diagnostics output.
 - The X button follows the Settings toggle:
   - Enabled: close request hides to tray.
   - Disabled: close request exits the app.
+- The minimise button follows a separate setting:
+  - Enabled: minimise request hides to tray.
+  - Disabled: minimise request uses standard window minimise.
 - Tray Exit performs full app exit.
 - Settings sync the close-to-tray policy to the native runtime.
+
+## Startup and Lifecycle Settings
+
+The desktop settings surface now includes:
+
+- Start with Windows.
+- Start minimised.
+- Minimise to tray on close.
+- Minimise to tray on minimise.
+- Launch overlay on startup.
+- Launch monitoring on startup.
+
+Startup registration writes current-user Run entries and now respects the start-minimised mode toggle.
+
+## Tray Menu (Desktop Polish)
+
+Current tray actions:
+
+- Open Companion
+- Toggle OSD Overlay
+- Quick RAM Clean
+- Performance Mode
+- Quiet Mode
+- Diagnostics Export
+- Restart Monitoring Engine
+- Exit
+
+Tray tooltip includes:
+
+- CPU temperature and usage
+- GPU temperature and usage
+- RAM usage
+- Active GPU provider
+- Telemetry state
+
+## UI and Density Direction
+
+The current shell and dashboard pass focuses on:
+
+- compact navigation rows and tighter topbar spacing,
+- high-density telemetry cards with clear provider context,
+- reduced hero/marketing surface in favour of monitorable system state,
+- restrained animation and hover behaviour suited to desktop utility workflows,
+- dark industrial surfaces with orange Radium accenting.
+
+Telemetry remains real and provider-backed; unavailable channels are shown as degraded/limited states rather than hidden.
+
+## Commercial Interaction Polish (Latest)
+
+Latest pass focused on refinement, not redesign:
+
+- Reduced shell and dashboard visual noise (lower glow intensity, calmer hover states, tighter typography rhythm).
+- Simplified topbar interaction density for desktop workflows.
+- Improved diagnostics readability with quieter headers, tighter matrix rows, and clearer copy for support interpretation.
+- Kept existing telemetry, tray, startup, and diagnostics architecture unchanged.
 
 ## Quick Start
 
@@ -87,6 +153,28 @@ Output:
 - Development binary: src-tauri/target/debug/
 - Release binary: src-tauri/target/release/
 - NSIS installer: src-tauri/target/release/bundle/nsis/
+
+Installer notes:
+
+- NSIS install mode is configured as `both` (per-user or per-machine).
+- Icon metadata is sourced from packaged app icons (`icons/icon.ico` and project favicon assets).
+
+Latest validation snapshot:
+
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path Cargo.toml` passed from `src-tauri`.
+- `npm.cmd run build:exe` produced release EXE and NSIS installer output.
+- Viewport overflow checks passed at:
+  - 1366x768,
+  - 1600x900,
+  - 1920x1080,
+  - 2560x1440,
+  - 3440x1440.
+
+Latest packaging validation (interaction polish pass):
+
+- `npm.cmd run build:exe` completed end-to-end.
+- Output installer: `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0_x64-setup.exe`.
 
 ## Safety Model
 
