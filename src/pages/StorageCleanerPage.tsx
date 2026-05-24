@@ -3,41 +3,110 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { gb } from '../lib/format';
-import { runStorageCleanup, scanStorageCleanup } from '../services/systemService';
-import type { StorageCleanupItem } from '../types/system';
+import {
+  cancelStorageCleanupScan,
+  getStorageCleanupScanStatus,
+  runStorageCleanup,
+  scanStorageCleanup,
+  startStorageCleanupScan,
+} from '../services/systemService';
+import type { StorageCleanupItem, StorageScanStatus } from '../types/system';
 
 export function StorageCleanerPage() {
   const [items, setItems] = useState<StorageCleanupItem[]>([]);
   const [log, setLog] = useState<string[]>([]);
-  const [busy, setBusy] = useState(true);
+  const [scanning, setScanning] = useState(true);
+  const [cleaning, setCleaning] = useState(false);
+  const [scanStatus, setScanStatus] = useState<StorageScanStatus>({
+    running: true,
+    completed: false,
+    cancelled: false,
+    progressPct: 0,
+    currentStep: 0,
+    totalSteps: 9,
+    message: 'Starting storage scan',
+  });
+  const busy = scanning || cleaning;
   const selected = useMemo(() => items.filter((item) => item.selected), [items]);
   const reviewSelected = useMemo(() => selected.filter((item) => !item.safe), [selected]);
   const reclaimable = selected.reduce((sum, item) => sum + item.sizeGb, 0);
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
+    let disposed = false;
+    let pollTimer: number | undefined;
+
+    async function pollStatus() {
       try {
-        const result = await scanStorageCleanup();
-        if (!cancelled) {
-          setItems(result);
+        const payload = await getStorageCleanupScanStatus();
+        if (disposed) {
+          return;
         }
+
+        setScanStatus(payload.status);
+        if (payload.items) {
+          setItems(payload.items);
+        }
+
+        if (payload.status.running) {
+          pollTimer = window.setTimeout(() => {
+            void pollStatus();
+          }, 280);
+          return;
+        }
+
+        setScanning(false);
       } catch (error) {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : 'Unknown scan error';
-          setLog([`[error] Storage scan failed: ${message}`]);
-        }
-      } finally {
-        if (!cancelled) {
-          setBusy(false);
+        if (!disposed) {
+          const message = error instanceof Error ? error.message : 'Unknown scan status error';
+          setLog((current) => [`[error] Storage scan status failed: ${message}`, ...current]);
+          setScanning(false);
         }
       }
     }
+
+    async function load() {
+      try {
+        setScanning(true);
+        setScanStatus((current) => ({ ...current, running: true, message: 'Starting storage scan' }));
+        await startStorageCleanupScan();
+        await pollStatus();
+      } catch (error) {
+        if (!disposed) {
+          const message = error instanceof Error ? error.message : 'Unknown scan error';
+          setLog([`[error] Storage scan failed: ${message}`]);
+          const fallback = await scanStorageCleanup();
+          if (!disposed) {
+            setItems(fallback);
+          }
+        }
+      }
+
+      if (!disposed) {
+        setScanning(false);
+      }
+    }
+
     void load();
+
     return () => {
-      cancelled = true;
+      disposed = true;
+      if (pollTimer) {
+        window.clearTimeout(pollTimer);
+      }
     };
   }, []);
+
+  async function cancelScan() {
+    try {
+      const status = await cancelStorageCleanupScan();
+      setScanStatus(status);
+      setScanning(false);
+      setLog((current) => ['[info] Storage scan cancellation requested.', ...current]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown cancellation error';
+      setLog((current) => [`[error] Could not cancel scan: ${message}`, ...current]);
+    }
+  }
 
   function toggle(id: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)));
@@ -60,11 +129,11 @@ export function StorageCleanerPage() {
       return;
     }
 
-    setBusy(true);
+    setCleaning(true);
     try {
       setLog(await runStorageCleanup(selected));
     } finally {
-      setBusy(false);
+      setCleaning(false);
     }
   }
 
@@ -86,13 +155,28 @@ export function StorageCleanerPage() {
             </button>
             <button className="primary-button" onClick={runCleanup} disabled={busy || selected.length === 0}>
               <Trash2 size={17} />
-              <span>{busy ? 'Scanning' : `Clean ${gb(reclaimable)}`}</span>
+              <span>{cleaning ? 'Cleaning' : scanning ? 'Scanning' : `Clean ${gb(reclaimable)}`}</span>
             </button>
           </div>
         }
       />
       <div className="cleaner-shell">
         <Panel className="cleaner-summary">
+          <div className="scan-progress-row">
+            <div>
+              <span className="eyebrow">Scan status</span>
+              <strong>{scanStatus.message}</strong>
+              <small>{scanStatus.currentStep}/{scanStatus.totalSteps} steps</small>
+            </div>
+            {scanning ? (
+              <button className="secondary-button" onClick={cancelScan}>
+                Cancel scan
+              </button>
+            ) : null}
+          </div>
+          <div className="scan-progress-track" role="progressbar" aria-valuenow={scanStatus.progressPct} aria-valuemin={0} aria-valuemax={100}>
+            <span style={{ width: `${scanStatus.progressPct}%` }} />
+          </div>
           <div className="summary-item">
             <HardDrive size={18} />
             <span>Selected</span>

@@ -12,6 +12,7 @@ mod windows_util;
 
 use serde::Deserialize;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use log::LevelFilter;
@@ -41,11 +42,52 @@ struct AppRuntimeState {
     minimize_to_tray_on_minimize: Mutex<bool>,
 }
 
+#[derive(Debug, serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StorageScanStatus {
+    running: bool,
+    completed: bool,
+    cancelled: bool,
+    progress_pct: u8,
+    current_step: usize,
+    total_steps: usize,
+    message: String,
+}
+
+#[derive(Debug, serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StorageScanStatusPayload {
+    status: StorageScanStatus,
+    items: Option<Vec<cleanup::StorageCleanupItem>>,
+}
+
+#[derive(Default)]
+struct StorageScanState {
+    running: Arc<Mutex<bool>>,
+    cancel_flag: Arc<AtomicBool>,
+    status: Arc<Mutex<StorageScanStatus>>,
+    items: Arc<Mutex<Option<Vec<cleanup::StorageCleanupItem>>>>,
+}
+
 impl Default for AppRuntimeState {
     fn default() -> Self {
         Self {
             close_to_tray: Mutex::new(true),
             minimize_to_tray_on_minimize: Mutex::new(true),
+        }
+    }
+}
+
+impl Default for StorageScanStatus {
+    fn default() -> Self {
+        Self {
+            running: false,
+            completed: false,
+            cancelled: false,
+            progress_pct: 0,
+            current_step: 0,
+            total_steps: 9,
+            message: "Idle".to_string(),
         }
     }
 }
@@ -131,23 +173,31 @@ fn get_platform_telemetry_discovery(
 }
 
 #[tauri::command]
-fn optimize_ram(_mode: Option<String>) -> cleanup::RamCleanupResult {
-    cleanup::optimize_ram()
+async fn optimize_ram(_mode: Option<String>) -> Result<cleanup::RamCleanupResult, String> {
+    tauri::async_runtime::spawn_blocking(cleanup::optimize_ram)
+        .await
+        .map_err(|e| format!("optimize_ram join error: {e}"))
 }
 
 #[tauri::command]
-fn scan_bloatware() -> Vec<windows_util::BloatwareItem> {
-    windows_util::scan_bloatware()
+async fn scan_bloatware() -> Result<Vec<windows_util::BloatwareItem>, String> {
+    tauri::async_runtime::spawn_blocking(windows_util::scan_bloatware)
+        .await
+        .map_err(|e| format!("scan_bloatware join error: {e}"))
 }
 
 #[tauri::command]
-fn remove_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
-    windows_util::remove_bloatware(ids, dry_run)
+async fn remove_bloatware(ids: Vec<String>, dry_run: bool) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || windows_util::remove_bloatware(ids, dry_run))
+        .await
+        .map_err(|e| format!("remove_bloatware join error: {e}"))
 }
 
 #[tauri::command]
-fn restore_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
-    windows_util::restore_bloatware(ids, dry_run)
+async fn restore_bloatware(ids: Vec<String>, dry_run: bool) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || windows_util::restore_bloatware(ids, dry_run))
+        .await
+        .map_err(|e| format!("restore_bloatware join error: {e}"))
 }
 
 #[tauri::command]
@@ -161,13 +211,126 @@ fn set_startup_item_enabled(id: String, enabled: bool, dry_run: bool) -> String 
 }
 
 #[tauri::command]
-fn scan_storage_cleanup() -> Vec<cleanup::StorageCleanupItem> {
-    cleanup::scan_storage_cleanup()
+async fn scan_storage_cleanup() -> Result<Vec<cleanup::StorageCleanupItem>, String> {
+    tauri::async_runtime::spawn_blocking(cleanup::scan_storage_cleanup)
+        .await
+        .map_err(|e| format!("scan_storage_cleanup join error: {e}"))
 }
 
 #[tauri::command]
-fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Vec<String> {
-    cleanup::run_storage_cleanup(ids, dry_run)
+async fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || cleanup::run_storage_cleanup(ids, dry_run))
+        .await
+        .map_err(|e| format!("run_storage_cleanup join error: {e}"))
+}
+
+#[tauri::command]
+fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> StorageScanStatus {
+    let mut running = state.running.lock().expect("storage scan running lock");
+    if *running {
+        return state.status.lock().expect("storage scan status lock").clone();
+    }
+
+    *running = true;
+    state.cancel_flag.store(false, Ordering::Relaxed);
+
+    {
+        let mut items = state.items.lock().expect("storage scan items lock");
+        *items = None;
+    }
+
+    {
+        let mut status = state.status.lock().expect("storage scan status lock");
+        *status = StorageScanStatus {
+            running: true,
+            completed: false,
+            cancelled: false,
+            progress_pct: 0,
+            current_step: 0,
+            total_steps: 9,
+            message: "Starting storage scan".to_string(),
+        };
+    }
+
+    let cancel_flag = Arc::clone(&state.cancel_flag);
+    let status_arc = Arc::clone(&state.status);
+    let items_arc = Arc::clone(&state.items);
+    let running_arc = Arc::clone(&state.running);
+
+    tauri::async_runtime::spawn(async move {
+        let cancel_for_scan = Arc::clone(&cancel_flag);
+        let status_for_scan = Arc::clone(&status_arc);
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            cleanup::scan_storage_cleanup_with_progress(&cancel_for_scan, |done, total, label| {
+                let pct = if total == 0 {
+                    0
+                } else {
+                    ((done as f32 / total as f32) * 100.0).round().clamp(0.0, 100.0) as u8
+                };
+                if let Ok(mut status) = status_for_scan.lock() {
+                    status.running = true;
+                    status.completed = false;
+                    status.cancelled = false;
+                    status.current_step = done;
+                    status.total_steps = total;
+                    status.progress_pct = pct;
+                    status.message = label.to_string();
+                }
+            })
+        })
+        .await;
+
+        let cancelled = cancel_flag.load(Ordering::Relaxed);
+
+        if let Ok(items) = result {
+            if let Ok(mut stored) = items_arc.lock() {
+                *stored = if cancelled { None } else { Some(items) };
+            }
+        }
+
+        if let Ok(mut status) = status_arc.lock() {
+            status.running = false;
+            status.completed = !cancelled;
+            status.cancelled = cancelled;
+            status.progress_pct = if cancelled { status.progress_pct } else { 100 };
+            status.message = if cancelled {
+                "Storage scan cancelled".to_string()
+            } else {
+                "Storage scan complete".to_string()
+            };
+        }
+
+        if let Ok(mut running) = running_arc.lock() {
+            *running = false;
+        }
+    });
+
+    state.status.lock().expect("storage scan status lock").clone()
+}
+
+#[tauri::command]
+fn get_storage_cleanup_scan_status(
+    state: tauri::State<'_, StorageScanState>,
+) -> StorageScanStatusPayload {
+    let status = state.status.lock().expect("storage scan status lock").clone();
+    let items = if status.completed {
+        state.items.lock().expect("storage scan items lock").clone()
+    } else {
+        None
+    };
+
+    StorageScanStatusPayload { status, items }
+}
+
+#[tauri::command]
+fn cancel_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> StorageScanStatus {
+    state.cancel_flag.store(true, Ordering::Relaxed);
+
+    let mut status = state.status.lock().expect("storage scan status lock");
+    if status.running {
+        status.message = "Cancelling storage scan".to_string();
+    }
+    status.clone()
 }
 
 #[tauri::command]
@@ -528,6 +691,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(engine)
         .manage(AppRuntimeState::default())
+        .manage(StorageScanState::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(LevelFilter::Info)
@@ -604,6 +768,9 @@ pub fn run() {
             scan_startup_items,
             set_startup_item_enabled,
             scan_storage_cleanup,
+            start_storage_cleanup_scan,
+            get_storage_cleanup_scan_status,
+            cancel_storage_cleanup_scan,
             run_storage_cleanup,
             scan_registry_issues,
             backup_registry_issues,

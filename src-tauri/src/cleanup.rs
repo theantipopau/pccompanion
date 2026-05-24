@@ -4,6 +4,7 @@
 /// are used — no undocumented kernel APIs.
 
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const HEAVY_SCAN_MAX_ENTRIES: usize = 40_000;
 
@@ -111,11 +112,40 @@ pub struct StorageCleanupItem {
 
 /// Scan known temp / cache directories and return real file-system sizes.
 pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
+    let cancel = AtomicBool::new(false);
+    scan_storage_cleanup_with_progress(&cancel, |_done, _total, _label| {})
+}
+
+/// Scan known temp / cache directories with coarse progress updates and
+/// cancellation support.
+pub fn scan_storage_cleanup_with_progress<F>(
+    cancel: &AtomicBool,
+    mut on_progress: F,
+) -> Vec<StorageCleanupItem>
+where
+    F: FnMut(usize, usize, &str),
+{
     let mut items = Vec::new();
+    let total_steps = 9usize;
+    let mut done_steps = 0usize;
+
+    let mut bump = |label: &str| {
+        done_steps = done_steps.saturating_add(1);
+        on_progress(done_steps, total_steps, label);
+    };
+
+    let cancelled = || cancel.load(Ordering::Relaxed);
 
     // ----- %TEMP% -----
+    if cancelled() {
+        return items;
+    }
     if let Ok(temp_dir) = std::env::var("TEMP") {
-        let size = dir_size(std::path::Path::new(&temp_dir));
+        let (size, _, _) = dir_size_estimate_cancel(
+            std::path::Path::new(&temp_dir),
+            HEAVY_SCAN_MAX_ENTRIES,
+            cancel,
+        );
         items.push(StorageCleanupItem {
             id: "user-temp".to_string(),
             name: "User temporary files".to_string(),
@@ -127,12 +157,16 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             description: "Files in %TEMP% left over by installers and apps.".to_string(),
         });
     }
+    bump("Scanned user temporary files");
 
     // ----- Windows\Temp -----
+    if cancelled() {
+        return items;
+    }
     {
         let path = std::path::Path::new(r"C:\Windows\Temp");
         if path.exists() {
-            let size = dir_size(path);
+            let (size, _, _) = dir_size_estimate_cancel(path, HEAVY_SCAN_MAX_ENTRIES, cancel);
             items.push(StorageCleanupItem {
                 id: "windows-temp".to_string(),
                 name: "Windows system temporary files".to_string(),
@@ -145,8 +179,12 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             });
         }
     }
+    bump("Scanned Windows temp");
 
     // ----- NVIDIA DXCache / GLCache -----
+    if cancelled() {
+        return items;
+    }
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         let shader_paths = [
             ("nvidia-dxcache", "NVIDIA DX shader cache", r"NVIDIA\DXCache"),
@@ -158,7 +196,8 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
         for (id, name, rel) in &shader_paths {
             let full = std::path::Path::new(&local).join(rel);
             if full.exists() {
-                let size = dir_size(&full);
+                let (size, _, _) =
+                    dir_size_estimate_cancel(&full, HEAVY_SCAN_MAX_ENTRIES, cancel);
                 items.push(StorageCleanupItem {
                     id: id.to_string(),
                     name: name.to_string(),
@@ -170,10 +209,18 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
                     description: "Driver shader cache — automatically rebuilt on next game launch.".to_string(),
                 });
             }
+
+            if cancelled() {
+                return items;
+            }
         }
     }
+    bump("Scanned shader caches");
 
     // ----- Windows Error Reporting -----
+    if cancelled() {
+        return items;
+    }
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         let path = std::path::Path::new(&local)
             .join("Microsoft")
@@ -181,7 +228,7 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             .join("WER")
             .join("ReportArchive");
         if path.exists() {
-            let size = dir_size(&path);
+            let (size, _, _) = dir_size_estimate_cancel(&path, HEAVY_SCAN_MAX_ENTRIES, cancel);
             items.push(StorageCleanupItem {
                 id: "wer-reports".to_string(),
                 name: "Windows Error Reporting archives".to_string(),
@@ -194,8 +241,12 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             });
         }
     }
+    bump("Scanned diagnostics logs");
 
     // ----- Browser caches: cache files only, no cookies/history/session data -----
+    if cancelled() {
+        return items;
+    }
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         let browser_paths = [
             (
@@ -222,7 +273,7 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
 
         for (id, name, path) in browser_paths {
             if path.exists() {
-                let size = dir_size(&path);
+                let (size, _, _) = dir_size_estimate_cancel(&path, HEAVY_SCAN_MAX_ENTRIES, cancel);
                 items.push(StorageCleanupItem {
                     id: id.to_string(),
                     name: name.to_string(),
@@ -233,6 +284,10 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
                     safe: true,
                     description: "Browser cache files only. Cookies, history, passwords, and sessions are excluded.".to_string(),
                 });
+            }
+
+            if cancelled() {
+                return items;
             }
         }
     }
@@ -247,7 +302,12 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             for entry in entries.flatten() {
                 let cache = entry.path().join("cache2");
                 if cache.exists() {
-                    total += dir_size(&cache);
+                    let (cache_size, _, was_cancelled) =
+                        dir_size_estimate_cancel(&cache, HEAVY_SCAN_MAX_ENTRIES / 2, cancel);
+                    total += cache_size;
+                    if was_cancelled {
+                        return items;
+                    }
                 }
             }
             if total > 0 {
@@ -264,11 +324,19 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             }
         }
     }
+    bump("Scanned browser caches");
 
     // ----- Windows Update / Delivery Optimization caches -----
+    if cancelled() {
+        return items;
+    }
     let update_cache = std::path::Path::new(r"C:\Windows\SoftwareDistribution\Download");
     if update_cache.exists() {
-        let (size, estimated) = dir_size_estimate(update_cache, HEAVY_SCAN_MAX_ENTRIES);
+        let (size, estimated, was_cancelled) =
+            dir_size_estimate_cancel(update_cache, HEAVY_SCAN_MAX_ENTRIES, cancel);
+        if was_cancelled {
+            return items;
+        }
         items.push(StorageCleanupItem {
             id: "windows-update-cache".to_string(),
             name: "Windows Update download cache".to_string(),
@@ -287,7 +355,11 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
 
     let delivery_cache = std::path::Path::new(r"C:\ProgramData\Microsoft\Windows\DeliveryOptimization\Cache");
     if delivery_cache.exists() {
-        let (size, estimated) = dir_size_estimate(delivery_cache, HEAVY_SCAN_MAX_ENTRIES);
+        let (size, estimated, was_cancelled) =
+            dir_size_estimate_cancel(delivery_cache, HEAVY_SCAN_MAX_ENTRIES, cancel);
+        if was_cancelled {
+            return items;
+        }
         items.push(StorageCleanupItem {
             id: "delivery-optimization-cache".to_string(),
             name: "Delivery Optimization cache".to_string(),
@@ -303,12 +375,20 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             },
         });
     }
+    bump("Scanned Windows update caches");
 
     // ----- Downloads folder (review-only) -----
+    if cancelled() {
+        return items;
+    }
     if let Ok(profile) = std::env::var("USERPROFILE") {
         let downloads = std::path::Path::new(&profile).join("Downloads");
         if downloads.exists() {
-            let (size, estimated) = dir_size_estimate(&downloads, HEAVY_SCAN_MAX_ENTRIES);
+            let (size, estimated, was_cancelled) =
+                dir_size_estimate_cancel(&downloads, HEAVY_SCAN_MAX_ENTRIES, cancel);
+            if was_cancelled {
+                return items;
+            }
             items.push(StorageCleanupItem {
                 id: "user-downloads".to_string(),
                 name: "User Downloads (review)".to_string(),
@@ -325,8 +405,12 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             });
         }
     }
+    bump("Scanned Downloads review target");
 
     // ----- Recycle Bin -----
+    if cancelled() {
+        return items;
+    }
     let (recycle_estimate, recycle_estimated) = estimate_recycle_bin_bytes();
     if recycle_estimate > 0 {
         items.push(StorageCleanupItem {
@@ -344,6 +428,7 @@ pub fn scan_storage_cleanup() -> Vec<StorageCleanupItem> {
             },
         });
     }
+    bump("Scanned Recycle Bin");
 
     items
 }
@@ -415,6 +500,17 @@ fn dir_size_estimate(path: &std::path::Path, max_entries: usize) -> (u64, bool) 
     (size, budget == 0)
 }
 
+fn dir_size_estimate_cancel(
+    path: &std::path::Path,
+    max_entries: usize,
+    cancel: &AtomicBool,
+) -> (u64, bool, bool) {
+    let mut budget = max_entries;
+    let size = dir_size_limited_cancel(path, &mut budget, cancel);
+    let cancelled = cancel.load(Ordering::Relaxed);
+    (size, budget == 0, cancelled)
+}
+
 fn dir_size_limited(path: &std::path::Path, budget: &mut usize) -> u64 {
     if *budget == 0 {
         return 0;
@@ -438,6 +534,35 @@ fn dir_size_limited(path: &std::path::Path, budget: &mut usize) -> u64 {
                 }
             } else if p.is_dir() {
                 size += dir_size_limited(&p, budget);
+            }
+        }
+    }
+    size
+}
+
+fn dir_size_limited_cancel(path: &std::path::Path, budget: &mut usize, cancel: &AtomicBool) -> u64 {
+    if *budget == 0 || cancel.load(Ordering::Relaxed) {
+        return 0;
+    }
+
+    let mut size = 0u64;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if *budget == 0 || cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            *budget = budget.saturating_sub(1);
+
+            let p = entry.path();
+            if p.is_symlink() {
+                continue;
+            }
+            if p.is_file() {
+                if let Ok(meta) = p.metadata() {
+                    size += meta.len();
+                }
+            } else if p.is_dir() {
+                size += dir_size_limited_cancel(&p, budget, cancel);
             }
         }
     }

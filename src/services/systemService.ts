@@ -27,6 +27,8 @@ import type {
   RegistryIssue,
   StartupItem,
   StorageCleanupItem,
+  StorageScanStatus,
+  StorageScanStatusPayload,
   SensorDiscoveryReport,
   TelemetryDiagnosticsSnapshot,
   SystemInfo,
@@ -101,6 +103,57 @@ export async function setStartupItemEnabled(item: StartupItem, enabled: boolean)
 
 export async function scanStorageCleanup(): Promise<StorageCleanupItem[]> {
   return callNative<StorageCleanupItem[]>('scan_storage_cleanup', undefined, mockStorageCleanupItems);
+}
+
+export async function startStorageCleanupScan(): Promise<StorageScanStatus> {
+  return callNative<StorageScanStatus>(
+    'start_storage_cleanup_scan',
+    undefined,
+    async () => ({
+      running: true,
+      completed: false,
+      cancelled: false,
+      progressPct: 0,
+      currentStep: 0,
+      totalSteps: 9,
+      message: 'Starting storage scan',
+    }),
+  );
+}
+
+export async function getStorageCleanupScanStatus(): Promise<StorageScanStatusPayload> {
+  return callNative<StorageScanStatusPayload>(
+    'get_storage_cleanup_scan_status',
+    undefined,
+    async () => ({
+      status: {
+        running: false,
+        completed: true,
+        cancelled: false,
+        progressPct: 100,
+        currentStep: 9,
+        totalSteps: 9,
+        message: 'Storage scan complete',
+      },
+      items: mockStorageCleanupItems(),
+    }),
+  );
+}
+
+export async function cancelStorageCleanupScan(): Promise<StorageScanStatus> {
+  return callNative<StorageScanStatus>(
+    'cancel_storage_cleanup_scan',
+    undefined,
+    async () => ({
+      running: false,
+      completed: false,
+      cancelled: true,
+      progressPct: 0,
+      currentStep: 0,
+      totalSteps: 9,
+      message: 'Storage scan cancelled',
+    }),
+  );
 }
 
 export async function runStorageCleanup(items: StorageCleanupItem[]): Promise<string[]> {

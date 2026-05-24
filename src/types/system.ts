@@ -160,6 +160,21 @@ export type StorageCleanupItem = {
   description: string;
 };
 
+export type StorageScanStatus = {
+  running: boolean;
+  completed: boolean;
+  cancelled: boolean;
+  progressPct: number;
+  currentStep: number;
+  totalSteps: number;
+  message: string;
+};
+
+export type StorageScanStatusPayload = {
+  status: StorageScanStatus;
+  items: StorageCleanupItem[] | null;
+};
+
 export type RegistryIssue = {
   id: string;
   hive: 'HKCU' | 'HKLM' | 'HKCR' | 'HKU';

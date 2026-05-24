@@ -32,6 +32,24 @@ Current release candidate target:
 
 This phase focuses on regression prevention, lifecycle correctness, installer quality, and support transparency.
 
+## Utility Stability, Async Operations And Trusted Maintenance UX (Latest)
+
+This pass focused on utility responsiveness and operational trust without changing telemetry architecture.
+
+- Moved heavy utility commands to async blocking workers in Tauri command handlers to reduce UI stall risk.
+- Added storage scan lifecycle commands with real progress/cancellation state:
+  - start scan,
+  - poll status,
+  - cancel scan.
+- Hardened storage scanning with bounded traversal and cancellation checks for large directory trees.
+- Updated Storage Cleaner UI to show scan status, progress, step counts, and cancellation controls.
+- Hardened Windows utility subprocess execution by enforcing hidden process creation (`CREATE_NO_WINDOW`) for PowerShell/schtasks/reg flows to reduce console flash behavior.
+
+Validation after this pass:
+
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build` passed.
+
 ## Real Hardware Validation Matrix
 
 Compatibility tracking for this phase lives in:

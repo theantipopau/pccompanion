@@ -1129,16 +1129,17 @@ fn delete_registry_tree(
 /// Query installed AppX package names via PowerShell.
 /// Returns an empty vec gracefully on failure.
 fn query_appx_packages() -> Vec<String> {
-    let output = std::process::Command::new("powershell")
-        .args([
+    let output = run_hidden_output(
+        "powershell",
+        &[
             "-NoProfile",
             "-NonInteractive",
             "-WindowStyle",
             "Hidden",
             "-Command",
             "Get-AppxPackage | Select-Object -ExpandProperty Name",
-        ])
-        .output();
+        ],
+    );
 
     match output {
         Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -1170,9 +1171,10 @@ fn remove_appx_package_for_id(id: &str) -> String {
         "Get-AppxPackage | Where-Object {{ $_.Name -like '*{}*' }} | Remove-AppxPackage",
         pattern.replace('\'', "")
     );
-    let result = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &cmd])
-        .output();
+    let result = run_hidden_output(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &cmd],
+    );
 
     match result {
         Ok(out) if out.status.success() => format!("[ok] {}: package removed", spec.name),
@@ -1246,9 +1248,7 @@ fn disable_scheduled_task(id: &str) -> String {
         return format!("[blocked] {id}: no mapped scheduled task");
     };
 
-    let result = std::process::Command::new("schtasks")
-        .args(["/Change", "/TN", task_name, "/Disable"])
-        .output();
+    let result = run_hidden_output("schtasks", &["/Change", "/TN", task_name, "/Disable"]);
 
     match result {
         Ok(out) if out.status.success() => format!("[ok] {id}: scheduled task disabled"),
@@ -1321,9 +1321,7 @@ fn enable_scheduled_task(id: &str) -> String {
         return format!("[blocked] {id}: no mapped scheduled task restore path");
     };
 
-    let result = std::process::Command::new("schtasks")
-        .args(["/Change", "/TN", task_name, "/Enable"])
-        .output();
+    let result = run_hidden_output("schtasks", &["/Change", "/TN", task_name, "/Enable"]);
 
     match result {
         Ok(out) if out.status.success() => format!("[ok] {id}: scheduled task enabled"),
@@ -1356,16 +1354,17 @@ if ($ok -eq 0) {{ throw 'Package manifests found but registration failed' }}
         pattern = spec.match_pattern.replace('"', "")
     );
 
-    let result = std::process::Command::new("powershell")
-        .args([
+    let result = run_hidden_output(
+        "powershell",
+        &[
             "-NoProfile",
             "-NonInteractive",
             "-WindowStyle",
             "Hidden",
             "-Command",
             &script,
-        ])
-        .output();
+        ],
+    );
 
     match result {
         Ok(out) if out.status.success() => format!("[ok] {}: restore attempt completed", spec.name),
@@ -1498,16 +1497,27 @@ fn resolve_backup_manifest_path(backup_id: &str) -> Option<std::path::PathBuf> {
 }
 
 #[cfg(windows)]
-fn export_registry_key(full_key: &str, output_path: &std::path::Path) -> Result<(), String> {
-    let out = std::process::Command::new("reg")
-        .args([
-            "export",
-            full_key,
-            &output_path.to_string_lossy(),
-            "/y",
-        ])
+fn run_hidden_output(program: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    cmd.output().map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+fn run_hidden_output(program: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    std::process::Command::new(program)
+        .args(args)
         .output()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(windows)]
+fn export_registry_key(full_key: &str, output_path: &std::path::Path) -> Result<(), String> {
+    let output_path_arg = output_path.to_string_lossy().to_string();
+    let out = run_hidden_output("reg", &["export", full_key, &output_path_arg, "/y"])?;
 
     if out.status.success() {
         Ok(())
@@ -1522,10 +1532,8 @@ fn import_registry_file(path: &std::path::Path) -> Result<(), String> {
         return Err(format!("backup file missing: {}", path.to_string_lossy()));
     }
 
-    let out = std::process::Command::new("reg")
-        .args(["import", &path.to_string_lossy()])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let path_arg = path.to_string_lossy().to_string();
+    let out = run_hidden_output("reg", &["import", &path_arg])?;
 
     if out.status.success() {
         Ok(())

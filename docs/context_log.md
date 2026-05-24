@@ -59,6 +59,49 @@
 
 ---
 
+### Phase: Utility Stability, Async Operations & Trusted Maintenance UX (2026-05-25)
+
+#### Scope guardrails applied
+- No telemetry architecture redesign.
+- No fake optimisation behavior or placebo cleanup results.
+- No aggressive registry deletion logic added.
+- No dangerous cleaning targets introduced.
+
+#### Backend stability outcomes
+- Utility-heavy commands were moved off synchronous invocation paths using `tauri::async_runtime::spawn_blocking` for:
+  - RAM optimisation,
+  - bloatware scan/remove/restore,
+  - storage scan/cleanup.
+- Added storage scan task lifecycle commands in `lib.rs`:
+  - `start_storage_cleanup_scan`,
+  - `get_storage_cleanup_scan_status`,
+  - `cancel_storage_cleanup_scan`.
+- Added coarse but real scan progress reporting (`step/total/message/progressPct`) and cancellation signaling.
+- Storage scan traversal now uses bounded directory estimation plus cancellation-aware recursion checks to reduce UI stall risk on very large trees.
+
+#### Windows process UX hardening
+- Added hidden-subprocess helper in `windows_util.rs` that uses `CREATE_NO_WINDOW` on Windows.
+- Applied hidden execution path to utility subprocess operations:
+  - PowerShell AppX queries/removal/restore,
+  - scheduled task toggles (`schtasks`),
+  - registry export/import (`reg`).
+- Goal: prevent visible console flashes during utility operations.
+
+#### Frontend trusted maintenance UX
+- Storage Cleaner now uses async scan lifecycle instead of a single blocking call.
+- Added scan status rail with:
+  - live progress percentage,
+  - step counters,
+  - current scan message,
+  - explicit cancel action.
+- Added service contracts/types for scan status payloads in TypeScript.
+
+#### Validation evidence
+- `cargo check --manifest-path src-tauri/Cargo.toml` ✅ passed.
+- `npm.cmd run build` ✅ passed.
+
+---
+
 ### Phase: Repository Identity Verification & Wrong-Stack Audit (2026-05-24)
 
 #### Verification commands executed
