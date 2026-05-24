@@ -266,6 +266,10 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             </strong>
           </div>
         </div>
+        <div className="sidebar-brand-promo" aria-label="Radium Companion premium support panel">
+          <img src={assets.radiumHeaderNew} alt="Radium Companion" />
+          <p>Premium local support, diagnostics-first workflows, and lifecycle-safe tuning in one desktop suite.</p>
+        </div>
         <div className="sidebar-contact">
           <span className="sidebar-metrics-label">Radium PCs Contact</span>
           <a className="sidebar-contact-link" href={companyWebsite} target="_blank" rel="noreferrer noopener">
@@ -334,9 +338,9 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                 >×</button>
               )}
             </div>
-            {searchFocused && searchResults.length > 0 && (
+            {searchFocused && (
               <div className="search-results" role="listbox">
-                {searchResults.map((item, index) => {
+                {searchResults.length > 0 ? searchResults.map((item, index) => {
                   const Icon = item.icon;
                   const activeResult = index === activeSearchIndex;
                   return (
@@ -353,7 +357,12 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                       <span>{item.label}</span>
                     </button>
                   );
-                })}
+                }) : (
+                  <div className="search-empty" role="status" aria-live="polite">
+                    <strong>No matches found</strong>
+                    <span>Try terms like diagnostics, passport, memory, or settings.</span>
+                  </div>
+                )}
               </div>
             )}
           </div>

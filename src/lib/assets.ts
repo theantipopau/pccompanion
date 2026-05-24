@@ -2,6 +2,7 @@ import type { Vendor } from '../types/system';
 
 export const assets = {
   radiumHeader: new URL('../../images/radiumcompanion-header.png', import.meta.url).href,
+  radiumHeaderNew: new URL('../../images/radiumheader-new.png', import.meta.url).href,
   radiumLogo: new URL('../../images/radiumlogo.png', import.meta.url).href,
   trayBase: new URL('../../images/icon-source.png', import.meta.url).href,
   intel: new URL('../../images/clean/intel-transparent.png', import.meta.url).href,

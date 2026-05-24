@@ -3,6 +3,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
+import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
 import { setStartupMode } from '../services/systemService';
 import type { OverlayPreset, TrayMetric } from '../types/system';
 
@@ -19,6 +20,9 @@ export function SettingsPage() {
   const { sample, systemInfo, native } = useMonitor();
   const { settings, updateSettings, resetSettings } = useSettings();
   const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
+  const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : assets.radiumLogo;
+  const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : assets.radiumLogo;
+  const boardAsset = oemLogoForText(systemInfo?.motherboard ?? '') ?? assets.radiumLogo;
 
   return (
     <div className="page">
@@ -35,6 +39,33 @@ export function SettingsPage() {
       />
 
       <div className="settings-grid">
+        <Panel className="settings-panel settings-hero wide">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Companion profile</span>
+              <h2>Current platform identity</h2>
+            </div>
+            <img className="settings-hero-wordmark" src={assets.radiumHeaderNew} alt="Radium Companion" />
+          </div>
+          <div className="settings-identity-row">
+            <span className="settings-identity-pill">
+              <img src={cpuVendorAsset} alt="CPU vendor" />
+              <strong>{systemInfo?.cpuVendor?.toUpperCase() ?? 'CPU'}</strong>
+            </span>
+            <span className="settings-identity-pill">
+              <img src={gpuVendorAsset} alt="GPU vendor" />
+              <strong>{systemInfo?.gpuVendor?.toUpperCase() ?? 'GPU'}</strong>
+            </span>
+            <span className="settings-identity-pill">
+              <img src={boardAsset} alt="Mainboard vendor" />
+              <strong>{systemInfo?.motherboard ?? 'Mainboard pending'}</strong>
+            </span>
+            <span className="settings-identity-pill no-image">
+              <strong>{sample ? `Runtime ${sample.state.toUpperCase()}` : 'Runtime initialising'}</strong>
+            </span>
+          </div>
+        </Panel>
+
         <Panel className="settings-panel">
           <div className="panel-heading">
             <div>

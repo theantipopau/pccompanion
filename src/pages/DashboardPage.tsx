@@ -148,6 +148,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </span>
                 ))}
               </div>
+              <div className="hero-premium-asset" aria-hidden="true">
+                <img src={assets.radiumHeaderNew} alt="" />
+                <span>Premium support workflow</span>
+              </div>
             </div>
           </div>
           <div className="gauge-row">
