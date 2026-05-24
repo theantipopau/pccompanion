@@ -103,6 +103,51 @@
 
 ---
 
+### Phase: Unstaged UI Change Audit (2026-05-25)
+
+#### Scope audited
+- `src/components/Shell.tsx`
+- `src/lib/assets.ts`
+- `src/pages/DashboardPage.tsx`
+- `src/pages/SettingsPage.tsx`
+- `src/pages/UtilitiesPage.tsx`
+- `src/styles.css`
+
+#### Audit result summary
+- All six unstaged changes are valid for Radium PCs Companion's current UI direction.
+- No wrong-stack additions were detected.
+- Changes align with existing premium desktop visual language and AU English copy direction.
+
+#### Key findings by file
+- `Shell.tsx`:
+  - Added sidebar premium promo block and search empty-state helper.
+  - Valid for UX clarity; low regression risk.
+- `assets.ts`:
+  - Added `radiumHeaderNew` mapped to `images/radiumheader-new.png`.
+  - Valid and used by updated surfaces.
+- `DashboardPage.tsx`:
+  - Added compact hero premium asset block.
+  - Valid; no telemetry contract changes.
+- `SettingsPage.tsx`:
+  - Added identity summary panel (CPU/GPU/mainboard/runtime) with vendor assets.
+  - Valid; uses existing monitor/settings state.
+- `UtilitiesPage.tsx`:
+  - Added OEM icon accents and Live/Staged status pills.
+  - Valid and improves module scanability.
+- `styles.css`:
+  - Added matching styles and responsive guards for new UI elements.
+  - Valid; no clipping regressions found in build validation.
+
+#### Validation executed
+- `npm.cmd run build` ✅ passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` ✅ passed.
+
+#### Decision
+- Keep current unstaged UI changes.
+- Commit as dedicated UI audit-approved update.
+
+---
+
 ### Phase: Australian English Localisation Pass + Fresh Release Rebuild (2026-05-24)
 
 #### Scope guardrails applied
