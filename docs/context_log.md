@@ -59,6 +59,50 @@
 
 ---
 
+### Phase: Repository Identity Verification & Wrong-Stack Audit (2026-05-24)
+
+#### Verification commands executed
+- `git remote -v`
+- `git branch --show-current`
+- `git status`
+- `dir`
+- `dir src-tauri`
+- `dir src`
+- `type package.json`
+- `type src-tauri/Cargo.toml`
+
+#### Repository identity result
+- Workspace path confirmed: `F:\radiumpcs`
+- Remote confirmed: `https://github.com/theantipopau/pccompanion.git`
+- Branch confirmed: `main`
+- Stack confirmed present: Tauri + Rust backend + React/TypeScript frontend
+- Required structure confirmed present: `src-tauri/`, `Cargo.toml`, `package.json`, `build:exe` script
+- Expected files confirmed present:
+  - `src-tauri/src/hardware.rs`
+  - `src-tauri/src/wmi_provider.rs`
+  - `src/pages/DashboardPage.tsx`
+  - `src/pages/StorageCleanerPage.tsx`
+  - `src/pages/RegistryCleanerPage.tsx`
+  - `src/pages/BloatwarePage.tsx`
+
+#### Commit audit (`8590ad2`)
+- `git show --stat 8590ad2`, `git show --name-only 8590ad2`, and `git show --summary 8590ad2` all returned unknown revision.
+- Conclusion: commit `8590ad2` does not exist in this repository history and is not part of current `main`.
+- Wrong-stack Python files were checked and not found (`cleanup.py`, `system.py`, `models.py`).
+
+#### Recovery action
+- No revert was applied because there was no matching wrong-stack commit in this repository and no wrong-stack files present.
+- Validation sequence executed:
+  - `npm.cmd run build` ✅ passed
+  - `cargo check --manifest-path src-tauri/Cargo.toml` ✅ passed
+  - `npm.cmd run build:exe` ✅ passed (after clearing transient Windows file lock)
+
+#### Safe next steps
+- Continue only within the verified `pccompanion` repository.
+- If `8590ad2` exists elsewhere, audit that other repository directly before applying any revert there.
+
+---
+
 ### Phase: Australian English Localisation Pass + Fresh Release Rebuild (2026-05-24)
 
 #### Scope guardrails applied
