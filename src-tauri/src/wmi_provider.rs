@@ -102,6 +102,14 @@ struct WmiProcessor {
     Manufacturer: Option<String>,
 }
 
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct WmiExternalSensor {
+    Name: Option<String>,
+    SensorType: Option<String>,
+    Value: Option<f64>,
+}
+
 // ─── WMI context ────────────────────────────────────────────────────────────
 
 /// Holds the long-lived WMI connections for the monitoring thread.
@@ -114,6 +122,10 @@ pub struct WmiContext {
     pub root_dcim_sysman: Option<WMIConnection>,
     /// `ROOT\dcim` - optional Dell OEM namespace root.
     pub root_dcim: Option<WMIConnection>,
+    /// `ROOT\LibreHardwareMonitor` - optional external LHM sensor bridge.
+    pub root_libre_hardware_monitor: Option<WMIConnection>,
+    /// `ROOT\OpenHardwareMonitor` - optional external OHM sensor bridge.
+    pub root_open_hardware_monitor: Option<WMIConnection>,
 }
 
 impl WmiContext {
@@ -134,13 +146,32 @@ impl WmiContext {
             let com4 = unsafe { COMLibrary::assume_initialized() };
             WMIConnection::with_namespace_path("ROOT\\dcim", com4).ok()
         };
+        let root_libre_hardware_monitor = {
+            let com5 = unsafe { COMLibrary::assume_initialized() };
+            WMIConnection::with_namespace_path("ROOT\\LibreHardwareMonitor", com5).ok()
+        };
+        let root_open_hardware_monitor = {
+            let com6 = unsafe { COMLibrary::assume_initialized() };
+            WMIConnection::with_namespace_path("ROOT\\OpenHardwareMonitor", com6).ok()
+        };
         Ok(Self {
             cimv2,
             root_wmi,
             root_dcim_sysman,
             root_dcim,
+            root_libre_hardware_monitor,
+            root_open_hardware_monitor,
         })
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ExternalHardwareMonitorSample {
+    pub provider: String,
+    pub cpu_temp_c: Option<f32>,
+    pub gpu_temp_c: Option<f32>,
+    pub cpu_fan_rpm: Option<u32>,
+    pub gpu_fan_rpm: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -282,7 +313,112 @@ pub fn collect_namespace_inventory(ctx: &WmiContext) -> Vec<NamespaceClassInvent
         collect_namespace_classes("ROOT\\CIMV2", Some(&ctx.cimv2)),
         collect_namespace_classes("ROOT\\dcim", ctx.root_dcim.as_ref()),
         collect_namespace_classes("ROOT\\dcim\\sysman", ctx.root_dcim_sysman.as_ref()),
+        collect_namespace_classes(
+            "ROOT\\LibreHardwareMonitor",
+            ctx.root_libre_hardware_monitor.as_ref(),
+        ),
+        collect_namespace_classes(
+            "ROOT\\OpenHardwareMonitor",
+            ctx.root_open_hardware_monitor.as_ref(),
+        ),
     ]
+}
+
+fn looks_like_cpu_label(label: &str) -> bool {
+    let l = label.to_lowercase();
+    l.contains("cpu")
+        || l.contains("package")
+        || l.contains("tctl")
+        || l.contains("tdie")
+        || l.contains("ccd")
+        || l.contains("core")
+}
+
+fn looks_like_gpu_label(label: &str) -> bool {
+    let l = label.to_lowercase();
+    l.contains("gpu") || l.contains("graphics")
+}
+
+fn update_external_sample_from_rows(
+    provider: &str,
+    rows: &[WmiExternalSensor],
+) -> ExternalHardwareMonitorSample {
+    let mut sample = ExternalHardwareMonitorSample {
+        provider: provider.to_string(),
+        ..Default::default()
+    };
+
+    for row in rows {
+        let name = row.Name.clone().unwrap_or_default();
+        let sensor_type = row.SensorType.clone().unwrap_or_default().to_lowercase();
+        let value = row.Value.unwrap_or_default() as f32;
+
+        if value <= 0.0 {
+            continue;
+        }
+
+        if sensor_type == "temperature" && (0.0..=120.0).contains(&value) {
+            if looks_like_cpu_label(&name) {
+                sample.cpu_temp_c = Some(sample.cpu_temp_c.map_or(value, |curr| curr.max(value)));
+            } else if looks_like_gpu_label(&name) {
+                sample.gpu_temp_c = Some(sample.gpu_temp_c.map_or(value, |curr| curr.max(value)));
+            }
+        }
+
+        if sensor_type == "fan" {
+            let rpm = value.round() as u32;
+            if rpm > 0 {
+                if looks_like_cpu_label(&name) {
+                    sample.cpu_fan_rpm = Some(sample.cpu_fan_rpm.map_or(rpm, |curr| curr.max(rpm)));
+                } else if looks_like_gpu_label(&name) {
+                    sample.gpu_fan_rpm = Some(sample.gpu_fan_rpm.map_or(rpm, |curr| curr.max(rpm)));
+                }
+            }
+        }
+    }
+
+    sample
+}
+
+fn query_external_sensor_namespace(
+    connection: Option<&WMIConnection>,
+    provider: &str,
+) -> Option<ExternalHardwareMonitorSample> {
+    let conn = connection?;
+    let res: Result<Vec<WmiExternalSensor>, _> =
+        conn.raw_query("SELECT Name, SensorType, Value FROM Sensor");
+    let rows = res.ok()?;
+    if rows.is_empty() {
+        return None;
+    }
+
+    let sample = update_external_sample_from_rows(provider, &rows);
+    if sample.cpu_temp_c.is_some()
+        || sample.gpu_temp_c.is_some()
+        || sample.cpu_fan_rpm.is_some()
+        || sample.gpu_fan_rpm.is_some()
+    {
+        Some(sample)
+    } else {
+        None
+    }
+}
+
+pub fn query_external_hardware_monitor_sample(
+    ctx: &WmiContext,
+) -> Option<ExternalHardwareMonitorSample> {
+    // Prefer LibreHardwareMonitor namespace when available, fallback to
+    // OpenHardwareMonitor namespace.
+    query_external_sensor_namespace(
+        ctx.root_libre_hardware_monitor.as_ref(),
+        "libre-hardware-monitor",
+    )
+    .or_else(|| {
+        query_external_sensor_namespace(
+            ctx.root_open_hardware_monitor.as_ref(),
+            "open-hardware-monitor",
+        )
+    })
 }
 
 pub fn query_gpu_adapters(ctx: &WmiContext) -> Vec<GpuAdapterDiscovery> {

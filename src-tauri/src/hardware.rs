@@ -276,6 +276,7 @@ pub struct HardwareCache {
     pub gpu_mem_clock_mhz: u64,
     pub gpu_fan_pct: Option<u32>,
     pub gpu_fan_rpm: Option<u32>,
+    pub cpu_fan_rpm: Option<u32>,
     pub gpu_power_watts: Option<f32>,
     pub ram_used_gb: f32,
     pub ram_total_gb: f32,
@@ -483,7 +484,7 @@ impl MonitoringEngine {
             fans: vec![
                 FanSample {
                     label: "CPU cooler".to_string(),
-                    rpm: None,
+                    rpm: c.cpu_fan_rpm,
                     pct: None,
                 },
                 FanSample {
@@ -678,7 +679,8 @@ impl MonitoringEngine {
             write_safe: false,
         });
 
-        let fan_available = c.gpu_fan_pct.is_some() || c.gpu_fan_rpm.is_some();
+        let fan_available =
+            c.gpu_fan_pct.is_some() || c.gpu_fan_rpm.is_some() || c.cpu_fan_rpm.is_some();
         caps.push(HardwareCapability {
             id: "cooling-control".to_string(),
             label: "Fan telemetry and control safety".to_string(),
@@ -1367,9 +1369,15 @@ pub fn monitor_loop(
 
         // --- CPU temperature: WMI paths first, then sysinfo Components fallback ---
         #[cfg(windows)]
+        let external_monitor_sample = wmi_opt
+            .as_ref()
+            .and_then(crate::wmi_provider::query_external_hardware_monitor_sample);
+
+        #[cfg(windows)]
         let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
             discover_cpu_temperature(
                 wmi_opt.as_ref(),
+                external_monitor_sample.as_ref(),
                 machine_profile_opt.as_ref(),
                 &namespace_inventory,
                 &gpu_adapters,
@@ -1506,6 +1514,19 @@ pub fn monitor_loop(
                 c.gpu_fan_rpm = gpu.fan_rpm;
                 c.gpu_power_watts = gpu.power_watts;
             }
+
+            #[cfg(windows)]
+            {
+                if let Some(ref external) = external_monitor_sample {
+                    c.cpu_fan_rpm = external.cpu_fan_rpm;
+                    if c.gpu_fan_rpm.is_none() {
+                        c.gpu_fan_rpm = external.gpu_fan_rpm;
+                    }
+                    if c.gpu_temp.is_none() {
+                        c.gpu_temp = external.gpu_temp_c;
+                    }
+                }
+            }
             c.gpu_provider = gpu_provider.to_string();
 
             // Rolling history (60 points ≈ 1 minute).
@@ -1544,6 +1565,7 @@ pub fn monitor_loop(
 #[cfg(windows)]
 fn discover_cpu_temperature(
     wmi_ctx: Option<&crate::wmi_provider::WmiContext>,
+    external_monitor: Option<&crate::wmi_provider::ExternalHardwareMonitorSample>,
     machine_profile: Option<&crate::wmi_provider::MachineProfile>,
     namespace_inventory: &[NamespaceClassInventory],
     gpu_adapters: &[GpuAdapterDiscovery],
@@ -1552,6 +1574,26 @@ fn discover_cpu_temperature(
     let mut attempts: Vec<SensorDiscoveryAttempt> = Vec::new();
     let mut wmi_max_temp: Option<f32> = None;
     let mut dell_class_hints = Vec::new();
+    let external_temp = external_monitor.and_then(|sample| sample.cpu_temp_c);
+
+    if let Some(sample) = external_monitor {
+        attempts.push(SensorDiscoveryAttempt {
+            source: format!("{}-bridge", sample.provider),
+            query: "SELECT Name, SensorType, Value FROM Sensor".to_string(),
+            label: "External monitor CPU package".to_string(),
+            raw_value: sample
+                .cpu_temp_c
+                .map(|temp| format!("{temp:.2}"))
+                .unwrap_or_else(|| "none".to_string()),
+            value_c: sample.cpu_temp_c,
+            accepted: sample.cpu_temp_c.is_some(),
+            reason: if sample.cpu_temp_c.is_some() {
+                "accepted external hardware monitor CPU temperature".to_string()
+            } else {
+                "no CPU temperature sensor row matched in external namespace".to_string()
+            },
+        });
+    }
 
     let (machine_vendor, machine_model, machine_family, is_dell) = if let Some(profile) = machine_profile {
         (
@@ -1663,7 +1705,9 @@ fn discover_cpu_temperature(
         });
     }
 
-    let cpu_temp = if wmi_max_temp.is_some() {
+    let cpu_temp = if external_temp.is_some() {
+        external_temp
+    } else if wmi_max_temp.is_some() {
         wmi_max_temp
     } else {
         sysinfo_candidate_temp
@@ -1694,7 +1738,12 @@ fn discover_cpu_temperature(
         package_temp_available: cpu_temp.is_some(),
         requires_driver,
         recommended_action: if cpu_temp.is_some() {
-            "CPU package temperature is available through user-mode telemetry paths.".to_string()
+            if external_temp.is_some() {
+                "CPU package temperature is available through external hardware monitor bridge sensors."
+                    .to_string()
+            } else {
+                "CPU package temperature is available through user-mode telemetry paths.".to_string()
+            }
         } else if is_dell {
             "No reliable package temperature channel found. This Dell system likely needs an OEM/driver-backed provider for package sensors.".to_string()
         } else {
