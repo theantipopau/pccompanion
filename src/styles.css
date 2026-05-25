@@ -105,6 +105,11 @@ body.overlay-window-body {
   background: transparent;
 }
 
+body.overlay-window-body,
+body.overlay-window-body #root {
+  background: transparent !important;
+}
+
 button,
 input,
 textarea,
@@ -1034,6 +1039,7 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 8px;
+  align-items: stretch;
 }
 
 .dashboard-theme-nvidia {
@@ -1641,6 +1647,7 @@ textarea:focus-visible {
   flex-direction: column;
   min-height: 68px;
   padding: 7px;
+  min-width: 0;
   transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
 
@@ -1735,6 +1742,11 @@ textarea:focus-visible {
   margin-top: 2px;
   color: var(--muted);
   font-size: 9.5px;
+  line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .meter {
@@ -4019,7 +4031,7 @@ textarea:focus-visible {
 
 .cleaner-shell {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 0.42fr);
+  grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(260px, 0.42fr);
   gap: 16px;
   align-items: start;
 }
@@ -4692,83 +4704,6 @@ textarea:focus-visible {
   font-size: 13px;
 }
 
-@media (max-width: 1180px) {
-  .dashboard-grid,
-  .utility-grid,
-  .settings-grid,
-  .passport-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .hero-monitor,
-  .wide,
-  .optimizer-panel,
-  .sensor-status-panel {
-    grid-column: span 2;
-  }
-
-  .hero-monitor-top {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-identity-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .hero-status-pills {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .metric-cpu,
-  .metric-gpu,
-  .metric-ram,
-  .metric-network,
-  .health-overview,
-  .primary-trend,
-  .secondary-trend,
-  .identity-panel,
-  .cooling-panel {
-    grid-column: span 2;
-  }
-
-  .hero-telemetry-ribbon {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .passport-hero,
-  .passport-panel.wide {
-    grid-column: span 2;
-  }
-
-  .cleanup-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .thermals-grid,
-  .manager-layout,
-  .case-visual,
-  .cleaner-shell,
-  .profiles-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .registry-categories {
-    order: 2;
-  }
-
-  .registry-results {
-    order: 3;
-  }
-
-  .cleaner-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .thermal-panel {
-    min-height: auto;
-  }
-}
-
 @media (max-width: 1500px) {
   .dashboard-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -4806,6 +4741,83 @@ textarea:focus-visible {
   .identity-panel,
   .cooling-panel {
     grid-column: span 3;
+  }
+}
+
+@media (max-width: 1180px) {
+  .dashboard-grid,
+  .utility-grid,
+  .settings-grid,
+  .passport-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-monitor,
+  .wide,
+  .optimizer-panel,
+  .sensor-status-panel,
+  .passport-hero,
+  .passport-panel.wide {
+    grid-column: span 2;
+  }
+
+  .hero-monitor-top {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-cpu,
+  .metric-gpu,
+  .metric-ram,
+  .metric-network,
+  .health-overview,
+  .primary-trend,
+  .secondary-trend,
+  .identity-panel,
+  .cooling-panel {
+    grid-column: span 2;
+  }
+
+  .hero-telemetry-ribbon,
+  .hero-status-pills,
+  .settings-identity-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cleanup-layout,
+  .thermals-grid,
+  .manager-layout,
+  .case-visual,
+  .cleaner-shell,
+  .profiles-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cleaner-shell > .manager-table:not(.registry-results),
+  .cleaner-summary,
+  .scan-progress-row,
+  .scan-progress-track,
+  .sensor-status-panel {
+    grid-column: 1;
+  }
+
+  .cleaner-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .reg-how-it-works {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registry-categories {
+    order: 2;
+  }
+
+  .registry-results {
+    order: 3;
+  }
+
+  .thermal-panel {
+    min-height: auto;
   }
 }
 
@@ -5028,11 +5040,26 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .toggle-row,
+  .control-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .control-row select {
+    width: 100%;
+    min-width: 0;
+  }
+
   .sensor-source-grid {
     grid-template-columns: 1fr;
   }
 
   .settings-identity-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reg-how-it-works {
     grid-template-columns: 1fr;
   }
 
@@ -5088,4 +5115,3 @@ textarea:focus-visible {
   max-height: 6rem;
   overflow: auto;
 }
-

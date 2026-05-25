@@ -243,12 +243,11 @@ The desktop runtime now exposes native lifecycle controls so tray behavior and s
 - **Latency:** ~100 ms for stable reading (sysinfo requires two samples to compute delta)
 
 ### CPU Temperature
-- **Source:** WMI — `Win32_PerfFormattedData_Counters_ThermalZoneInformation`
-- **Namespace:** `ROOT\CIMV2`
-- **Method:** Query all thermal zones, convert Kelvin → Celsius, return hottest in 0–120 °C range
-- **Formula:** `celsius = temperature_value - 273.15` (formatted class returns Kelvin)
-- **Fallback:** `None` if WMI unavailable or all zones out of range
-- **Known risk:** Some BIOSes expose thermal zones in tenths-of-Kelvin via the formatted class. If temperatures report as ~3000 °C, apply `/10` before the `−273.15` conversion. The 0–120 °C range filter provides graceful degradation.
+- **Primary source:** WMI `ROOT\WMI\MSAcpi_ThermalZoneTemperature`
+- **Primary formula:** decikelvin to Celsius: `celsius = raw / 10.0 - 273.15`
+- **Fallback sources:** WMI perf thermal classes, sysinfo component labels, and OEM namespace discovery hints
+- **Acceptance rule:** readings outside a realistic CPU package range are rejected and recorded in diagnostics
+- **Degraded state:** if no reliable package channel is available, diagnostics classify the limitation instead of showing a silent zero
 
 ### RAM
 - **Source:** `sysinfo` — `System::refresh_memory()`
@@ -355,11 +354,12 @@ pub struct MetricPoint {
     pub time: String,        // "MM:SS" formatted
     pub cpu_temp: f32,       // 0.0 if unavailable
     pub cpu_usage: f32,
-    pub gpu_temp: f32,       // 0.0 currently
+    pub gpu_temp: f32,       // 0.0 if unavailable
     pub gpu_usage: f32,
     pub ram_usage: f32,
     pub network_down: f32,   // Mbps
 }
+```
 
 ### `TelemetryDiagnosticsSnapshot`
 Support-ready, cached snapshot exposed to the frontend and diagnostics export.
@@ -421,7 +421,6 @@ pub struct SensorProvenance {
   pub icon: String,
 }
 ```
-```
 
 ---
 
@@ -431,7 +430,7 @@ pub struct SensorProvenance {
 `COMLibrary::new()` is called once when `radium-monitor` thread starts. The `COMLibrary` value is kept alive for the thread's lifetime by being held inside `WmiContext`. WMI connections are stable within a COM apartment.
 
 ### Connection
-Single `WMIConnection` to `ROOT\CIMV2`. All queries share this connection. No second namespace needed — thermal zone data is accessible from `CIMV2` via the performance counter class.
+`WmiContext` keeps WMI access on the monitoring thread and uses the namespaces required by each probe. `ROOT\WMI` is used for ACPI thermal zones, while `ROOT\CIMV2` remains the main inventory/performance namespace.
 
 ### Error Handling
 - WMI init failure → `wmi_opt = None` → sensor fields remain `None`/`0.0` → state = "degraded"
@@ -475,21 +474,13 @@ The frontend should display a degraded indicator when `state == "degraded"` but 
 
 ---
 
-## Future: Enhanced Sensors (LibreHardwareMonitor)
+## Future: Enhanced Sensors
 
-**When to add:** After core functionality is validated and shipped.
+Deeper CPU package, fan, board, EC, and storage health telemetry should stay behind an optional signed provider path. LibreHardwareMonitor remains useful as a research reference for sensor mapping and risk boundaries, but the current release should not add a bundled sidecar or unsafe driver path.
 
-**Integration path:**
-1. Embed LHM as a sidecar process (separate `.exe`)
-2. LHM exposes HTTP or named-pipe sensor API
-3. `hardware.rs` monitor loop queries LHM alongside WMI
-4. Gates behind user opt-in (requires UAC elevation for driver load)
+Candidate additions after the hardware matrix is stronger:
 
-**What LHM adds:**
-- Per-core temperatures and voltages
-- GPU temperature (NVML/ADL via LHM's own vendor integration)
-- Fan RPM for MB headers, GPU fans, AIO pumps
-- NVMe SSD temperatures
-- VRM temperatures
-
-**Licence compliance:** MPL 2.0 — must include LHM licence notice in the application.
+- Intel IGCL sensor bindings for Arc and Intel iGPU telemetry.
+- SMART/NVMe health and temperature channels with explicit confidence states.
+- Signed OEM provider abstraction for model-validated board, EC, and fan telemetry.
+- Strict read-only defaults, capability gating, consent, logging, and rollback before any write-capable path.

@@ -15,7 +15,7 @@
 
 ---
 
-## Phase 1 — Real Telemetry Backend ✅ Complete (pending build validation)
+## Phase 1 — Real Telemetry Backend ✅ Complete
 
 - [x] Hardware abstraction layer (`hardware.rs`)
 - [x] Background monitoring thread (1 Hz polling)
@@ -32,17 +32,17 @@
 - [x] Real storage scanner (actual file sizes)
 - [x] Real startup manager (registry read/write)
 - [x] Real bloatware scanner (PowerShell AppX queries)
-- [ ] **Build validation** ← next immediate step
+- [x] Build validation (`npm.cmd run build`, `cargo check`, and release build passes recorded in release notes)
 
 ---
 
 ## Phase 2 — Polish & Reliability ✅ Mostly Complete
 
-- [x] Fix any Phase 1 build errors *(pending first build validation)*
+- [x] Fix Phase 1 build errors
 - [x] TypeScript type update: `StartupItem.location` → `string`
 - [x] Improve degraded state UI (sensor source availability cards on dashboard)
-- [ ] Error boundary in React for IPC failures
-- [ ] Retry logic in MonitorContext if invoke throws
+- [x] Error boundary in React for IPC failures
+- [x] Retry logic in MonitorContext if invoke throws
 - [x] Thermal zone formula validation at runtime (range check 0–120°C; ACPI path uses decikelvin formula)
 - [ ] Add more bloatware entries to `BLOATWARE_SPECS`
 - [x] Add browser cache paths to storage scanner (Edge, Chrome, Firefox)
@@ -76,7 +76,7 @@
 - [x] GPU fan speed % and RPM (NVML / ADL2)
 - [x] GPU power draw in watts (NVML / ADL2)
 - [x] Intel Arc GPU: WMI usage% with UI notice (IGCL deferred)
-- [ ] LibreHardwareMonitor sidecar *(deferred — NVML/ADL2 covers main GPU metrics directly)*
+- [ ] Optional signed embedded provider path *(deferred; NVML/ADL2 covers main GPU metrics directly)*
 - [ ] Per-core CPU temperatures *(kernel driver / MSR required — deferred)*
 - [ ] Fan RPM for CPU cooler / case fans *(SuperIO kernel driver required — deferred)*
 - [ ] NVMe SSD temperatures via SMART *(DeviceIoControl — future)*
@@ -100,7 +100,7 @@
 
 ## Phase 5 — Packaging & Distribution ✅ Mostly Complete
 
-- [x] NSIS installer bundle configured (`tauri.conf.json` — targets: nsis, publisher, installer icon, per-machine install)
+- [x] NSIS installer bundle configured (`tauri.conf.json` — targets: nsis, publisher, installer icon, per-user/per-machine install)
 - [x] Desktop run scripts (`npm run desktop` / `npm run dev:desktop`)
 - [x] Standalone build script (`npm run build:exe` / `npm run package:windows`)
 - [x] Portable package script (`npm run package:portable` → PowerShell script)
@@ -109,8 +109,8 @@
 - [x] Runtime launch log written to `%ProgramData%\Radium PCs Companion\logs\`
 - [x] Window close → hides to tray (does not exit process)
 - [x] Double-click tray icon → restores main window
-- [ ] **Validate Tauri dev/build once Rust is installed on PATH** ← next immediate step
-- [ ] Generate first signed release EXE/installer
+- [x] Validate Tauri build once Rust is installed on PATH
+- [x] Generate unsigned pre-release EXE/installer
 - [ ] Auto-update mechanism (tauri-plugin-updater)
 - [ ] Code signing certificate
 - [ ] Windows Defender / SmartScreen reputation building

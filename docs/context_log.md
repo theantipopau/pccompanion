@@ -2,6 +2,8 @@
 
 > **READ THIS FIRST.** Every AI agent working on this repository must read this file at session start and update it at session end. This is the single source of truth for cross-session and cross-agent continuity.
 
+> **Short current brief:** use `docs/current-state.md` for the release-ready snapshot and next best work. This file keeps the detailed running history, including older blockers that may now be resolved.
+
 ---
 
 ## Current Project State
@@ -99,6 +101,36 @@
 #### Validation evidence
 - `cargo check --manifest-path src-tauri/Cargo.toml` ✅ passed.
 - `npm.cmd run build` ✅ passed.
+
+---
+
+### Phase: Runtime Log Review & Diagnostics Noise Hardening (2026-05-25)
+
+#### Log sources reviewed
+- `%ProgramData%\Radium PCs Companion\logs\companion-launch-*.log`
+- `%LOCALAPPDATA%\com.radiumpcs.companion\logs\Radium PCs Companion.log`
+
+#### Findings
+- Recent ProgramData launch logs show successful Tauri setup and tray registration.
+- No crash, panic, or hard error entries were found in the app log.
+- The main repeated runtime warning is the known Dell Latitude 5330 CPU package temperature limitation:
+  - `missing_or_invalid_wmi_class`
+  - ACPI thermal path unsupported (`0x8004100C`)
+  - Dell DCIM thermal classes unavailable (`0x80041010`)
+- Tauri plugin log timestamps appear UTC-based while file timestamps are local, which can make recent log review look confusing.
+- Companion launch logs only wrote compact `MM:SS` timestamps, which was insufficient for support triage.
+
+#### Improvements applied
+- Launch logs now include `created_at_unix_ms` while retaining the compact clock label.
+- Runtime launch-log append entries now include exact `unix_ms=...` plus the compact clock label.
+- Stable CPU-temperature-unavailable warnings are now throttled to approximately every 15 minutes instead of every minute unless the classification changes.
+
+#### Validation evidence
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `cargo build --manifest-path src-tauri/Cargo.toml --release` passed.
+- Fresh release EXE rebuilt:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - timestamp: `25/05/2026 9:19:54 AM`
 
 ---
 

@@ -1370,7 +1370,7 @@ pub fn monitor_loop(
             );
             let should_log = warning_signature != last_cpu_warning_signature
                 || last_cpu_warning_at
-                    .map(|last| last.elapsed() >= Duration::from_secs(60))
+                    .map(|last| last.elapsed() >= Duration::from_secs(15 * 60))
                     .unwrap_or(true);
 
             if should_log {

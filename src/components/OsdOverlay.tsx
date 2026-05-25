@@ -5,7 +5,11 @@ import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { gb, mhz, pct, temp } from '../lib/format';
 
-export function OsdOverlay() {
+type OsdOverlayProps = {
+  forceVisible?: boolean;
+};
+
+export function OsdOverlay({ forceVisible = false }: OsdOverlayProps) {
   const { sample } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dragRef = useRef<HTMLDivElement>(null);
@@ -45,7 +49,7 @@ export function OsdOverlay() {
     [sample, settings.monitoring.temperatureUnit],
   ).filter((metric) => settings.overlay.metrics.includes(metric.id as never));
 
-  if (!settings.overlay.enabled) return null;
+  if (!forceVisible && !settings.overlay.enabled) return null;
 
   return (
     <motion.div

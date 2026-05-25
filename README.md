@@ -12,6 +12,8 @@ Main project marketing image: `images/radiumcompanion-marketing.png`.
 
 ## Current Status
 
+Short release handoff: [docs/current-state.md](docs/current-state.md)
+
 | Area | Status |
 |---|---|
 | Live hardware monitoring | Live |

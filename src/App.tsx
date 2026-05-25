@@ -68,7 +68,7 @@ function OverlayOnlyApp() {
     return () => document.body.classList.remove('overlay-window-body');
   }, []);
 
-  return <OsdOverlay />;
+  return <OsdOverlay forceVisible />;
 }
 
 function CompanionApp() {

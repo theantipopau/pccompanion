@@ -40,6 +40,8 @@ struct TrayStatus {
 struct AppRuntimeState {
     close_to_tray: Mutex<bool>,
     minimize_to_tray_on_minimize: Mutex<bool>,
+    osd_enabled: Mutex<bool>,
+    osd_click_through: Mutex<bool>,
 }
 
 #[derive(Debug, serde::Serialize, Clone)]
@@ -74,6 +76,8 @@ impl Default for AppRuntimeState {
         Self {
             close_to_tray: Mutex::new(true),
             minimize_to_tray_on_minimize: Mutex::new(true),
+            osd_enabled: Mutex::new(false),
+            osd_click_through: Mutex::new(false),
         }
     }
 }
@@ -649,6 +653,19 @@ fn set_startup_enabled(enabled: bool, start_minimized: bool) -> Result<bool, Str
 
 #[tauri::command]
 fn set_overlay_window(app: AppHandle, enabled: bool, click_through: bool) -> Result<(), String> {
+    if let Some(runtime) = app.try_state::<AppRuntimeState>() {
+        if let Ok(mut osd_enabled) = runtime.osd_enabled.lock() {
+            *osd_enabled = enabled;
+        }
+        if let Ok(mut osd_click_through) = runtime.osd_click_through.lock() {
+            *osd_click_through = click_through;
+        }
+    }
+
+    apply_overlay_window(app.clone(), enabled, click_through)
+}
+
+fn apply_overlay_window(app: AppHandle, enabled: bool, click_through: bool) -> Result<(), String> {
     if enabled {
         let window = if let Some(existing) = app.get_webview_window("osd") {
             existing
@@ -817,7 +834,8 @@ fn create_launch_log() -> Option<std::path::PathBuf> {
         .ok()?;
 
     let _ = writeln!(file, "Radium PCs Companion launch log");
-    let _ = writeln!(file, "created_at={}", hardware::timestamp_now().1);
+    let _ = writeln!(file, "created_at_unix_ms={}", unix_timestamp_ms());
+    let _ = writeln!(file, "created_at_clock={}", hardware::timestamp_now().1);
     let _ = writeln!(file, "version={}", env!("CARGO_PKG_VERSION"));
     let _ = writeln!(file, "exe={}", std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|err| format!("unavailable: {err}")));
     let _ = writeln!(file, "args={:?}", std::env::args().collect::<Vec<_>>());
@@ -826,7 +844,13 @@ fn create_launch_log() -> Option<std::path::PathBuf> {
 
 fn append_runtime_log(path: &std::path::Path, message: &str) {
     if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(path) {
-        let _ = writeln!(file, "{} {}", hardware::timestamp_now().1, message);
+        let _ = writeln!(
+            file,
+            "unix_ms={} clock={} {}",
+            unix_timestamp_ms(),
+            hardware::timestamp_now().1,
+            message
+        );
     }
 }
 
@@ -836,6 +860,13 @@ fn chrono_like_file_stamp() -> String {
         .unwrap_or_default()
         .as_secs()
         .to_string()
+}
+
+fn unix_timestamp_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 
 fn prune_old_files(dir: &std::path::Path, prefix: &str, suffix: &str, keep: usize) {
@@ -891,9 +922,28 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .tooltip("Radium PCs Companion")
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open-dashboard" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
                 let _ = app.emit("tray://open-dashboard", ());
             }
             "toggle-osd" => {
+                let mut next_enabled = true;
+                let mut click_through = false;
+                if let Some(runtime) = app.try_state::<AppRuntimeState>() {
+                    if let Ok(osd_enabled) = runtime.osd_enabled.lock() {
+                        next_enabled = !*osd_enabled;
+                    }
+                    if let Ok(osd_click) = runtime.osd_click_through.lock() {
+                        click_through = *osd_click;
+                    }
+                    if let Ok(mut osd_enabled) = runtime.osd_enabled.lock() {
+                        *osd_enabled = next_enabled;
+                    }
+                }
+                let _ = apply_overlay_window(app.clone(), next_enabled, click_through);
                 let _ = app.emit("tray://toggle-osd", ());
             }
             "quick-ram-clean" => {
@@ -918,6 +968,11 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::DoubleClick { .. } = event {
+                if let Some(window) = tray.app_handle().get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
                 let _ = tray.app_handle().emit("tray://open-dashboard", ());
             }
         });

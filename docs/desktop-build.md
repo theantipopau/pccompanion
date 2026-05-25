@@ -54,19 +54,20 @@ Expected outputs:
 
 The packaged app does not require `npm`, Vite, or a browser. It runs as a standalone Windows desktop program.
 
-## Current Build Blocker
+## Troubleshooting: Cargo Missing
 
-The active terminal currently cannot run Tauri because `cargo` is missing from `PATH`.
-
-Observed failure:
+If a fresh terminal cannot run Tauri because `cargo` is missing from `PATH`, the usual failure is:
 
 ```text
 failed to run 'cargo metadata' command ... program not found
 ```
 
-Fix by installing Rust from `https://rustup.rs`, then opening a fresh terminal and running:
+Fix by installing Rust from `https://rustup.rs`, then opening a fresh terminal so PATH refreshes:
 
 ```powershell
 cargo --version
+npm.cmd run check:desktop
 npm.cmd run desktop
 ```
+
+Current release validation should be tracked in `docs/current-state.md` and `docs/compatibility-matrix.md`, not in this troubleshooting note.

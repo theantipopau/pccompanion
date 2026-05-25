@@ -100,8 +100,8 @@ src-tauri/src/
 - Diagnostics helpers: provider orchestration snapshots, sensor provenance, capability intelligence, OEM support export seeds
 
 #### `wmi_provider.rs` (Windows only)
-- `WmiContext` — holds a live `WMIConnection` to `ROOT\CIMV2`; initialised once on the monitoring thread
-- `query_cpu_temp()` — thermal zone temperature via `Win32_PerfFormattedData_Counters_ThermalZoneInformation`
+- `WmiContext` — holds WMI connections for `ROOT\CIMV2` and `ROOT\WMI`; initialised once on the monitoring thread
+- `query_cpu_temp()` — ACPI thermal zones first, with perf thermal classes and sysinfo component fallbacks
 - `query_gpu_usage()` — 3D engine utilisation via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`
 - `query_static_system_info()` — GPU name/VRAM, CPU name, MB, BIOS, RAM speed from `Win32_*` inventory classes
 
@@ -109,12 +109,15 @@ src-tauri/src/
 - `optimize_ram()` — calls `K32EmptyWorkingSet` on all accessible processes, measures before/after
 - `scan_storage_cleanup()` — enumerates known safe-to-clean locations with real file system sizes
 - `run_storage_cleanup()` — executes or dry-runs `delete_dir_contents()`
+- Storage scan lifecycle commands in `lib.rs` wrap scanning with progress and cancellation state
 
 #### `windows_util.rs`
 - `scan_startup_items()` — reads HKCU/HKLM Run keys + `StartupApproved` registry state
 - `set_startup_item_enabled()` — modifies `StartupApproved` key (Task Manager mechanism)
 - `scan_bloatware()` — PowerShell `Get-AppxPackage` matched against known removable packages
 - `remove_bloatware()` — executes removal via PowerShell / policy key writes
+- Registry scan, backup, clean, and restore helpers
+- Performance profile helpers for Windows power plan, processor power tuning, and timer resolution
 
 #### `lib.rs`
 - Thin command handlers — each is a 1–2 line delegation to a module function
@@ -164,7 +167,7 @@ MonitorContext.tsx
 
 ## IPC Contract
 
-All Tauri commands are synchronous Rust functions registered in `tauri::generate_handler![]`.
+Tauri commands are registered in `tauri::generate_handler![]`. Fast telemetry commands read from the cache synchronously. Heavy utility commands use `tauri::async_runtime::spawn_blocking` or task lifecycle state so the WebView is not held hostage by filesystem scans, PowerShell, registry, or cleanup work.
 
 | Command | Input | Output | Module |
 |---|---|---|---|
@@ -172,17 +175,33 @@ All Tauri commands are synchronous Rust functions registered in `tauri::generate
 | `get_hardware_sample` | `history?: MetricPoint[]` | `HardwareSample` | `hardware` |
 | `get_hardware_capabilities` | — | `HardwareCapability[]` | `hardware` |
 | `get_telemetry_diagnostics` | — | `TelemetryDiagnosticsSnapshot` | `hardware` |
+| `get_platform_telemetry_discovery` | — | `SensorDiscoveryReport` | `hardware` |
 | `optimize_ram` | `mode?: string` | `RamCleanupResult` | `cleanup` |
 | `scan_bloatware` | — | `BloatwareItem[]` | `windows_util` |
 | `remove_bloatware` | `ids: string[], dry_run: bool` | `string[]` | `windows_util` |
+| `restore_bloatware` | `ids: string[], dry_run: bool` | `string[]` | `windows_util` |
 | `scan_startup_items` | — | `StartupItem[]` | `windows_util` |
 | `set_startup_item_enabled` | `id: string, enabled: bool, dry_run: bool` | `string` | `windows_util` |
 | `scan_storage_cleanup` | — | `StorageCleanupItem[]` | `cleanup` |
+| `start_storage_cleanup_scan` | — | `StorageScanStatus` | `lib` |
+| `get_storage_cleanup_scan_status` | — | `StorageScanStatusPayload` | `lib` |
+| `cancel_storage_cleanup_scan` | — | `StorageScanStatus` | `lib` |
 | `run_storage_cleanup` | `ids: string[], dry_run: bool` | `string[]` | `cleanup` |
+| `scan_registry_issues` | — | `RegistryIssue[]` | `windows_util` |
+| `backup_registry_issues` | `ids: string[]` | `RegistryBackup` | `windows_util` |
+| `clean_registry_issues` | `ids: string[], backup_id: string, dry_run: bool` | `string[]` | `windows_util` |
+| `restore_registry_backup` | `backup_id: string` | `string[]` | `windows_util` |
 | `set_tray_status` | `TrayStatus` | `Result<(), string>` | `lib` |
+| `set_tray_icon_data` | `rgba, width, height` | `Result<(), string>` | `lib` |
 | `show_main_window` | — | `Result<(), string>` | `lib` |
-| `set_startup_enabled` | `enabled: bool` | `Result<bool, string>` | `lib` |
+| `set_startup_enabled` | `enabled: bool, start_minimized: bool` | `Result<bool, string>` | `lib` |
+| `set_close_to_tray` | `enabled: bool` | `Result<(), string>` | `lib` |
+| `set_minimize_to_tray_on_minimize` | `enabled: bool` | `Result<(), string>` | `lib` |
 | `set_overlay_window` | `enabled: bool, click_through: bool` | `Result<(), string>` | `lib` |
+| `restart_monitoring_engine` | — | `Result<string, string>` | `hardware` |
+| `get_performance_profiles` | — | `PerformanceProfile[]` | `lib` |
+| `apply_performance_profile` | `id: string, dry_run: bool` | `PerformanceProfileResult` | `lib/windows_util` |
+| `list_top_processes` | `limit?: number` | `ProcessInfo[]` | `hardware` |
 | `export_diagnostics` | — | `DiagnosticsExport` | `lib` |
 
 ---
