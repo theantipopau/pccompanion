@@ -548,15 +548,6 @@ impl MonitoringEngine {
             .unwrap_or_default()
     }
 
-    /// Return the cached GPU name (from the live provider or WMI fallback).
-    pub fn get_gpu_name(&self) -> String {
-        self.cache
-            .read()
-            .ok()
-            .map(|c| c.gpu_name.clone())
-            .unwrap_or_default()
-    }
-
     /// Return the cached GPU vendor string ("nvidia", "amd", "intel", or empty).
     pub fn get_gpu_vendor(&self) -> String {
         self.cache
