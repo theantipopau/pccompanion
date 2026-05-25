@@ -1,10 +1,13 @@
-import { Bell, Gauge, MonitorDot, Palette, Power, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, Gauge, MonitorDot, Palette, Power, RotateCcw, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
 import { setStartupMode } from '../services/systemService';
+import { SystemPassportPage } from './SystemPassportPage';
+import { TelemetryDiagnosticsPage } from './TelemetryDiagnosticsPage';
 import type { OverlayPreset, TrayMetric } from '../types/system';
 
 const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
@@ -12,17 +15,24 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
   { id: 'corner-widget',  label: 'Corner widget' },
   { id: 'vertical-list',  label: 'Vertical list' },
   { id: 'minimal-card',   label: 'Minimal card' },
-  { id: 'cinematic',      label: 'Cinematic — big numbers' },
-  { id: 'benchmark',      label: 'Benchmark — dense grid' },
+  { id: 'cinematic',      label: 'Cinematic - big numbers' },
+  { id: 'benchmark',      label: 'Benchmark - dense grid' },
 ];
 
-export function SettingsPage() {
+type SettingsTab = 'general' | 'passport' | 'diagnostics';
+
+export function SettingsPage({ initialTab = 'general' }: { initialTab?: SettingsTab }) {
   const { sample, systemInfo, native } = useMonitor();
   const { settings, updateSettings, resetSettings } = useSettings();
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
   const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : assets.radiumLogo;
   const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : assets.radiumLogo;
   const boardAsset = oemLogoForText(systemInfo?.motherboard ?? '') ?? assets.radiumLogo;
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   return (
     <div className="page">
@@ -38,6 +48,24 @@ export function SettingsPage() {
         }
       />
 
+      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button className={activeTab === 'general' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'general'} onClick={() => setActiveTab('general')}>
+          <SlidersHorizontal size={16} />
+          <span>General</span>
+        </button>
+        <button className={activeTab === 'passport' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'passport'} onClick={() => setActiveTab('passport')}>
+          <Gauge size={16} />
+          <span>System Passport</span>
+        </button>
+        <button className={activeTab === 'diagnostics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'diagnostics'} onClick={() => setActiveTab('diagnostics')}>
+          <ShieldCheck size={16} />
+          <span>Telemetry Diagnostics</span>
+        </button>
+      </div>
+
+      {activeTab === 'passport' && <SystemPassportPage embedded />}
+      {activeTab === 'diagnostics' && <TelemetryDiagnosticsPage embedded />}
+      {activeTab === 'general' && (
       <div className="settings-grid">
         <Panel className="settings-panel settings-hero wide">
           <div className="panel-heading">
@@ -272,7 +300,12 @@ export function SettingsPage() {
           )}
           <div className="sensor-source-grid">
             <SensorSource label="CPU load / RAM / disks" value="sysinfo" live={!!sample} />
-            <SensorSource label="CPU temperature" value="WMI thermal zone / OEM fallback" live={sample?.cpu.temperature != null} />
+            <SensorSource
+              label="CPU temperature"
+              value={sample?.cpu.temperature != null ? 'CPU package sensor' : 'Radium low-level provider required'}
+              live={sample?.cpu.temperature != null}
+              hint={sample?.cpu.temperature == null ? 'Ryzen desktop package temperature needs bundled SMN/MSR access; generic Windows WMI cannot expose it reliably.' : undefined}
+            />
             <SensorSource
               label="GPU sensors"
               value={systemInfo?.gpuVendor === 'nvidia' ? 'NVML internal' : systemInfo?.gpuVendor === 'amd' ? 'AMD ADL internal' : systemInfo?.gpuVendor === 'intel' ? 'WMI (usage only)' : 'WMI fallback'}
@@ -293,10 +326,11 @@ export function SettingsPage() {
           </div>
           <div className="integration-row">
             <SlidersHorizontal size={18} />
-            <span>Tray menu, close-to-tray policy, OSD window creation, restore-safe cleanup, startup registration, and notifications are exposed as native command boundaries.</span>
+            <span>Tray menu, close-to-tray policy, OSD window creation, restore-safe cleanup, startup registration, notifications, and the planned low-level sensor provider are exposed as native command boundaries.</span>
           </div>
         </Panel>
       </div>
+      )}
     </div>
   );
 }

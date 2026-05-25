@@ -81,7 +81,7 @@ export function RegistryCleanerPage() {
   }
 
   return (
-    <div className="page desktop-page">
+    <div className="page desktop-page maintenance-page">
       <PageHeader
         eyebrow="Maintenance"
         title="Registry Cleaner"
@@ -111,6 +111,11 @@ export function RegistryCleanerPage() {
           </div>
         }
       />
+      <div className="maintenance-command-strip">
+        <CommandSignal icon={ScanLine} label="Scan" value="Registry references" />
+        <CommandSignal icon={Archive} label="Backup" value={backup ? 'Snapshot ready' : 'Required'} tone={backup ? 'green' : 'amber'} />
+        <CommandSignal icon={ShieldCheck} label="Clean" value="Safe items only" tone="green" />
+      </div>
 
       {/* How it works — step guide */}
       <div className="reg-how-it-works">
@@ -234,6 +239,16 @@ function SummaryItem({ icon: Icon, label, value, accent = 'cyan' }: { icon: Luci
   return (
     <div className={`summary-item tone-${accent}`}>
       <Icon size={18} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function CommandSignal({ icon: Icon, label, value, tone = 'cyan' }: { icon: LucideIcon; label: string; value: string; tone?: 'cyan' | 'green' | 'amber' }) {
+  return (
+    <div className={`maintenance-signal tone-${tone}`}>
+      <Icon size={16} />
       <span>{label}</span>
       <strong>{value}</strong>
     </div>

@@ -63,6 +63,8 @@ type FnGetMem   = unsafe extern "system" fn(device: NvmlDevice, mem: *mut NvmlMe
 type FnGetClock = unsafe extern "system" fn(device: NvmlDevice, clock_type: u32, clock: *mut u32) -> i32;
 type FnGetFan   = unsafe extern "system" fn(device: NvmlDevice, speed: *mut u32) -> i32;
 type FnGetPower = unsafe extern "system" fn(device: NvmlDevice, power_mw: *mut u32) -> i32;
+/// System-level driver version query (not per-device).
+type FnGetDriverVersion = unsafe extern "system" fn(version: *mut u8, length: u32) -> i32;
 
 // ─── NvmlContext ──────────────────────────────────────────────────────────────
 
@@ -79,6 +81,7 @@ pub struct NvmlContext {
     fn_get_clock: FnGetClock,
     fn_get_fan:   FnGetFan,
     fn_get_power: FnGetPower,
+    fn_get_driver_ver: Option<FnGetDriverVersion>,
 }
 
 impl NvmlContext {
@@ -117,6 +120,17 @@ impl NvmlContext {
                 }
             }};
         }
+        // Optional symbol: does not fail init if not found.
+        macro_rules! sym_opt {
+            ($name:literal, $ty:ty) => {{
+                let raw = unsafe {
+                    GetProcAddress(lib, PCSTR(concat!($name, "\0").as_bytes().as_ptr()))
+                };
+                raw.map(|f| unsafe {
+                    std::mem::transmute::<unsafe extern "system" fn() -> isize, $ty>(f)
+                })
+            }};
+        }
 
         let fn_init:    FnInit    = sym!("nvmlInit_v2",                    FnInit);
         let fn_shutdown: FnShutdown = sym!("nvmlShutdown",                 FnShutdown);
@@ -129,6 +143,8 @@ impl NvmlContext {
         let fn_get_clock: FnGetClock = sym!("nvmlDeviceGetClockInfo",      FnGetClock);
         let fn_get_fan:   FnGetFan   = sym!("nvmlDeviceGetFanSpeed",       FnGetFan);
         let fn_get_power: FnGetPower = sym!("nvmlDeviceGetPowerUsage",     FnGetPower);
+        let fn_get_driver_ver: Option<FnGetDriverVersion> =
+            sym_opt!("nvmlSystemGetDriverVersion", FnGetDriverVersion);
 
         // Initialise NVML library.
         if unsafe { fn_init() } != NVML_SUCCESS {
@@ -175,6 +191,7 @@ impl NvmlContext {
             fn_get_clock,
             fn_get_fan,
             fn_get_power,
+            fn_get_driver_ver,
         })
     }
 
@@ -270,6 +287,21 @@ impl NvmlContext {
             fan_rpm: None,
             power_watts,
         })
+    }
+
+    /// Query the NVIDIA driver version in clean format (e.g. "560.94").
+    /// Uses `nvmlSystemGetDriverVersion` which returns the user-visible version
+    /// string — not the long Windows driver version like "31.0.15.6094".
+    pub fn query_driver_version(&self) -> Option<String> {
+        let f = self.fn_get_driver_ver?;
+        const LEN: u32 = 80;
+        let mut buf = vec![0u8; LEN as usize];
+        if unsafe { f(buf.as_mut_ptr(), LEN) } != NVML_SUCCESS {
+            return None;
+        }
+        let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        let ver = String::from_utf8_lossy(&buf[..nul]).trim().to_string();
+        if ver.is_empty() { None } else { Some(ver) }
     }
 }
 

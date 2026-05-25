@@ -6,6 +6,69 @@
 
 ---
 
+### Phase: Sidecar Packaging, Dashboard Layout, and Settings Consolidation (2026-05-25)
+
+#### Implementation
+- Fixed the sensor sidecar packaging path so the installer no longer bundles the stale `radium-sensor-sidecar-x86_64-pc-windows-msvc.exe` apphost.
+- `tools/radium-sensor-sidecar/RadiumSensorSidecar.csproj` now publishes a DLL-only sidecar with `UseAppHost=false`.
+- `scripts/build-sensor-sidecar.ps1` now clears stale publish output, removes stale sidecar EXEs from `src-tauri/binaries`, copies LibreHardwareMonitor dependencies, and bundles a private .NET 8 runtime under `src-tauri/binaries/dotnet-runtime/`.
+- `src-tauri/src/sidecar_provider.rs` now prefers the sidecar DLL before any legacy EXE and launches it with the bundled runtime when available.
+- `src-tauri/tauri.conf.json` now packages `binaries/**/*` so nested runtime files are included in the NSIS installer.
+- The NSIS installer is now forced to per-machine mode so the PawnIO driver setup runs from an elevated installer context.
+- The NSIS PawnIO hook now resolves `PawnIO_setup.exe` from `$INSTDIR\binaries\` first, falls back to `$INSTDIR\resources\binaries\`, runs it with `/S`, logs the setup exit code, and queries `sc.exe query PawnIO` for install verification.
+- Dashboard layout now uses explicit CSS grid areas instead of auto-placement and row spans, removing the large blank region under the hero on wide screens.
+- Fixed a follow-up dashboard regression where reset rules overrode the named grid areas and collapsed panels into narrow columns.
+- OSD window creation now uses a transparent window/webview background, no shadow, hidden-until-loaded behavior, and overlay-root CSS so it should no longer flash/show as a blank white rectangle.
+- Sidecar `available` now means CPU package temperature was actually found. Storage/fan-only sidecar data is reported as `partial_no_cpu_temp` with sensor/driver notes instead of misleadingly claiming the CPU path is live.
+- System Passport and Telemetry Diagnostics are now Settings sub-tabs while legacy navigation targets still deep-link into those Settings tabs.
+
+#### Validation
+- `npm.cmd run build:sensor-sidecar` passed after NuGet restore/network access.
+- Direct sidecar smoke test through the bundled runtime passed:
+  - `src-tauri\binaries\dotnet-runtime\dotnet.exe src-tauri\binaries\radium-sensor-sidecar-x86_64-pc-windows-msvc.dll --once`
+  - returned `no_matching_sensors` on this laptop with the note `No temperature sensors were exposed to the sidecar; PawnIO may be missing, blocked, or not started.`
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed with one existing dead-code warning for `get_gpu_name`.
+- `npm.cmd run build:exe` passed and rebuilt:
+  - `src-tauri\target\release\radium_pcs_companion.exe`
+  - `src-tauri\target\release\bundle\nsis\Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Latest installer timestamp: `2026-05-25 19:52:12`, size `36,379,796` bytes.
+
+#### Notes
+- The Ryzen test server should no longer show the missing .NET/hostfxr sidecar failure after installing the rebuilt package.
+- If CPU temperature still does not appear after reinstall, the next diagnostic signal to check is whether PawnIO actually installed and whether LibreHardwareMonitorLib exposes an AMD `Tctl/Tdie` sensor row through the sidecar.
+- Updated installer mode from `both` to `perMachine` after target testing suggested PawnIO was not being installed from the prior per-user-capable path.
+- Fixed the PawnIO hook path after target testing showed Tauri resources install to `$INSTDIR\binaries`, not `$INSTDIR\resources\binaries`.
+
+---
+
+### Phase: Sidebar and Maintenance UX Polish (2026-05-25)
+
+#### Implementation
+- Reworked the sidebar brand block from two competing logo images into a clear icon-plus-header treatment:
+  - Radium logo icon on the left,
+  - `Radium PCs` primary text,
+  - `Companion` secondary header text.
+- Refined sidebar card surfaces for live sensors and support promo with calmer spacing, clearer hierarchy, and more consistent radius/border treatment.
+- Added a compact maintenance command strip to:
+  - Bloatware Remover,
+  - Registry Cleaner,
+  - System Cleaner.
+- Bloatware Remover now surfaces detected, low-risk, review, and selected counts above the main list and has an empty state for clean systems.
+- Registry Cleaner now has a clearer scan/backup/clean status strip before the existing step guide.
+- System Cleaner now surfaces analyse/guardrail/selected status before the scan/cleanup panels.
+- Tightened maintenance row styling, action-log surfaces, panel spacing, hover behavior, and summary tiles across the three maintenance tools.
+
+#### Validation
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed with one existing dead-code warning for `get_gpu_name`.
+- `npm.cmd run build:exe` passed and rebuilt:
+  - `src-tauri\target\release\radium_pcs_companion.exe`
+  - `src-tauri\target\release\bundle\nsis\Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Latest installer timestamp: `2026-05-25 20:01:52`, size `36,373,411` bytes.
+
+---
+
 ## Current Project State
 
 | Area | Status |
@@ -17,6 +80,9 @@
 | WMI telemetry — CPU temp (ACPI path) | ✅ Primary: `ROOT\WMI\MSAcpi_ThermalZoneTemperature`; fallback: perf-counter path |
 | WMI telemetry — GPU usage | ✅ Implemented via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine` |
 | NVML telemetry (NVIDIA GPU full) | ✅ Implemented (dynamic `nvml.dll` loading) |
+| NVML driver version (clean format) | ✅ `nvmlSystemGetDriverVersion` → "560.94" format; overwrites WMI version in cache |
+| GPU / chipset driver version display | ✅ Dashboard identity panel — `v560.94` with Update Available badge or "Up to date" |
+| GPU driver update check (NVIDIA async) | ✅ `check_driver_update` command — NVIDIA GeForce API, spawn_blocking, silently degrades |
 | ADL2 telemetry (AMD GPU full) | ✅ Implemented (dynamic `atiadlxx.dll` loading) |
 | Intel Arc telemetry | 🟨 IGCL loader groundwork active + WMI fallback usage; full Arc sensor bindings staged |
 | Network adapter detection | ✅ Most-active adapter name + type (wifi/ethernet/unknown) |
@@ -49,7 +115,7 @@
 | HRESULT error classification | ✅ Discovery reasons now classify invalid-class/not-supported/invalid-namespace/access-denied HRESULTs |
 | GPU fallback clarity (Intel/Dell) | ✅ Discovery report includes GPU adapters + GPU engine counter availability state |
 | CPU temp limitation surfacing | ✅ CPU package telemetry now marks `driver_required` when user-mode channels are unavailable |
-| CPU temp warning spam control | ✅ Monitor loop warning is throttled (signature-based; re-log at most once/minute unless classification changes) |
+| CPU temp warning spam control | ✅ Monitor loop warning is throttled (signature-based; re-log at most once/15 minutes unless classification changes) |
 | Close behavior control | ✅ Native close-to-tray behavior now follows Settings toggle via runtime command |
 | Sidebar compact grouping | ✅ Sidebar now supports grouped nav sections and compact-shell mode tied to settings |
 | Minimise lifecycle control | ✅ Separate native policy added for minimise-to-tray on minimise |
@@ -58,6 +124,114 @@
 | NSIS install mode | ✅ Configured for `both` (per-user and per-machine) |
 | Compatibility matrix tracking | ✅ `docs/compatibility-matrix.md` added for real-hardware validation phase |
 | Diagnostics export runtime metadata | ✅ Export now includes app version/build + startup/tray/window lifecycle state |
+
+---
+
+### Phase: Staged PawnIO/LHM Headless Sensor Sidecar (2026-05-25)
+
+#### Implementation
+- Added a hidden .NET sidecar scaffold in `tools/radium-sensor-sidecar/`.
+- The sidecar dynamically loads `LibreHardwareMonitorLib.dll` if it is bundled beside it, enables hardware sensors, and emits JSON for CPU package temperature, CPU fan RPM, and storage temperature candidates.
+- Added official `LibreHardwareMonitorLib` NuGet dependency (`0.9.6`) to the sidecar project; the build script copies the win-x64 DLL beside the sidecar.
+- Added `scripts/build-sensor-sidecar.ps1` and wired:
+  - `npm run build:sensor-sidecar`,
+  - `npm run build:exe`,
+  - `npm run package:windows`.
+- The sidecar is published to `src-tauri/binaries/` and packaged by Tauri through `bundle.resources: ["binaries/**/*"]`.
+- Added `src-tauri/src/sidecar_provider.rs`:
+  - finds bundled or development sidecar files,
+  - runs the sidecar hidden,
+  - supports DLL launch through bundled `dotnet-runtime\dotnet.exe` before falling back to system `dotnet`,
+  - applies a short timeout,
+  - parses provider JSON into Rust telemetry state.
+- The monitoring loop now probes the Radium sidecar every 10 seconds and prefers its CPU package temperature if present.
+- Diagnostics now includes `Radium Sensor Sidecar` as a staged/live provider with status, path, and notes.
+- Added `vendor/README.md` to describe where reviewed third-party binaries must be placed:
+  - `vendor/LibreHardwareMonitor/LibreHardwareMonitorLib.dll`,
+  - `vendor/PawnIO/PawnIO_setup.exe`.
+- Added `src-tauri/windows/hooks.nsh` and wired it via `tauri.conf.json` so NSIS post-install silently runs `PawnIO_setup.exe /S` from per-machine install mode if the reviewed installer is bundled.
+
+#### Current runtime behavior
+- The sidecar DLL, LibreHardwareMonitorLib dependencies, bundled .NET 8 runtime, and reviewed `vendor/PawnIO/PawnIO_setup.exe` are included in `src-tauri/binaries/` for the installer.
+- The previous stale sidecar EXE apphost has been removed so target machines do not need a separate .NET runtime install.
+- Direct sidecar test currently returns:
+  - provider: `radium-lhm-pawnio`,
+  - status: `no_matching_sensors`,
+  - note: `LibreHardwareMonitor loaded, but no CPU package temperature sensor was returned.`
+- This is expected on machines where PawnIO is not installed or where the low-level provider does not expose a matching CPU package sensor row.
+
+#### Validation
+- `npm.cmd run build:sensor-sidecar` passed.
+- Direct sidecar JSON smoke test passed with expected staged `no_matching_sensors` state on this laptop.
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and rebuilt:
+  - `src-tauri\target\release\radium_pcs_companion.exe`
+  - `src-tauri\target\release\bundle\nsis\Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Latest installer timestamp: `2026-05-25 15:02:34`, size `8,051,558` bytes.
+
+#### Remaining work before live Ryzen CPU temps
+- Validate that the NSIS post-install hook completes PawnIO setup on the Ryzen 5 5500 + ASUS PRIME X370-PRO test server.
+- Confirm CPU Tctl/Tdie appears in Dashboard, Thermals, Passport, and Diagnostics after reinstall.
+
+---
+
+### Phase: All-In-One Sensor Provider Direction & UI Sweep (2026-05-25)
+
+#### Sensor provider direction
+- Confirmed from LibreHardwareMonitor source that Ryzen package temperatures are read through AMD Zen SMN/MSR access with a low-level provider layer, not generic Windows WMI.
+- Added `docs/radium-sensor-provider.md` to capture the all-in-one Radium provider path:
+  - signed/elevated read-only provider,
+  - AMD Zen Tctl/Tdie package temperature first,
+  - diagnostics provenance for every low-level read,
+  - no fabricated DIMM/PSU/ambient values.
+- Linked the provider plan from `README.md`.
+- Settings now labels missing CPU temperature as requiring the Radium low-level provider instead of implying WMI can solve every desktop board.
+- Utilities now includes a planned "Radium sensor provider" module card so the product surface reflects the all-in-one direction.
+
+#### UI/UX sweep outcomes
+- `PageHeader` now has dedicated copy/action regions so action buttons wrap cleanly instead of crowding headers.
+- Added compact summary bars to Startup Manager and Bloatware Remover for quick scan/readiness state.
+- Added empty states for startup and bloatware lists.
+- Tightened cleanup/startup/list hover states and made long cleanup target lists scroll within their panels.
+- Rebalanced Bloatware cleanup layout from a very wide list/narrow side column into a calmer two-column manager layout.
+- Converted Process Monitor summary from a wrapping flex strip into a stable responsive grid.
+- Improved responsive behavior for header actions, operation summaries, and process sorting controls.
+
+#### Validation
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and rebuilt:
+  - `src-tauri\target\release\radium_pcs_companion.exe`
+  - `src-tauri\target\release\bundle\nsis\Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Latest installer timestamp: `2026-05-25 14:27:57`, size `6,822,891` bytes.
+
+---
+
+### Phase: Ryzen Desktop Thermal Honesty & Thermals UI Cleanup (2026-05-25)
+
+#### Backend telemetry outcomes
+- Confirmed the Ryzen 5 5500 / PRIME X370-PRO test build is now correctly resolving CPU, GPU, motherboard, BIOS, RAM speed, and NVIDIA NVML telemetry.
+- Improved WMI namespace diagnostics by enumerating `meta_class` with `SELECT * FROM meta_class`, reducing false diagnostic failures when a namespace exists but direct `__CLASS` projection is rejected.
+- CPU package temperature discovery now records explicit LibreHardwareMonitor/OpenHardwareMonitor bridge attempts when those WMI namespaces are absent.
+- If CPU package temperature is unavailable after WMI, sysinfo, and external monitor bridge checks, diagnostics now classifies the channel as `driver_level_telemetry_required` unless access is denied.
+- Recommended action now points at a Radium hardware provider or Libre/Open Hardware Monitor WMI bridge instead of implying the app can infer Ryzen package temperature from generic Windows user-mode sources.
+
+#### Thermals UI outcomes
+- Removed estimated/fake Memory Bank and PSU Bay temperatures from the thermal map.
+- Thermal zones now show measured temperatures only; load-only zones explain that DIMM, PSU, ambient, or SMART temperature sensors are unavailable.
+- CPU thermal card now falls back to CPU Load with exact CPU name/logo when package temperature is unavailable.
+- GPU thermal card now shows the exact GPU name/logo using live provider/sample identity.
+- Rebalanced the Thermals layout so the case visual, legend, metric cards, GPU detail, and sensor-accuracy note fit together more cleanly.
+- Replaced large numbered in-case pins with compact sensor dots while keeping numbered legend rows and accessible labels.
+
+#### Validation
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `npm.cmd run build:exe` passed and rebuilt:
+  - `src-tauri\target\release\radium_pcs_companion.exe`
+  - `src-tauri\target\release\bundle\nsis\Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+- Latest installer timestamp: `2026-05-25 14:14:46`, size `6,820,828` bytes.
 
 ---
 
@@ -131,6 +305,109 @@
 - Fresh release EXE rebuilt:
   - `src-tauri/target/release/radium_pcs_companion.exe`
   - timestamp: `25/05/2026 9:19:54 AM`
+
+---
+
+### Phase: AMD/NVIDIA Desktop Identity Accuracy Fix (2026-05-25)
+
+#### Trigger
+- Test desktop with Ryzen 5 5500 + NVIDIA GTX 1660-class GPU was showing stale homepage identity:
+  - GPU provider was live as NVML,
+  - GPU temperature/VRAM telemetry was live,
+  - but homepage/system passport still showed `GPU telemetry initialising…` and an unknown GPU logo.
+
+#### Root causes
+- Frontend fetched `get_system_info` once at startup, often before NVML had published the live GPU name/vendor into the backend cache.
+- `HardwareSample.gpu` did not expose live GPU `name`/`vendor`, so dashboard surfaces depended on stale static identity.
+- Vendor logo selection trusted `systemInfo.gpuVendor` even when it was `unknown`, producing the generic app logo instead of NVIDIA/AMD/Intel.
+- WMI GPU static selection preferred max `AdapterRAM`; this can be capped/wrapped by Windows and is weaker than discrete vendor/name quality.
+- Placeholder motherboard/BIOS identity strings were not filtered consistently.
+
+#### Fixes applied
+- Added live `gpu.name` and `gpu.vendor` to the backend `GpuSample` IPC payload.
+- Dashboard now prefers live sample GPU identity over static system info.
+- Dashboard and System Passport infer GPU vendor from:
+  1. live sample vendor,
+  2. active provider (`nvml` -> NVIDIA, `adl2` -> AMD, `igcl` -> Intel),
+  3. static system info vendor,
+  4. GPU name text.
+- Homepage GPU temperature card now shows the exact GPU name and NVIDIA/AMD/Intel logo when detected.
+- Homepage CPU card now shows the exact CPU name and falls back to CPU load when package temperature is unavailable.
+- Memory card now shows detected mainboard identity and ASUS/ASRock/MSI logo when matched.
+- MonitorContext now resynchronises system identity after telemetry providers resolve instead of keeping startup placeholders.
+- WMI static GPU selection now prefers real discrete NVIDIA/AMD adapters over weak generic display entries.
+- WMI motherboard/BIOS identity filters generic placeholders such as `System Product Name`, `System manufacturer`, `To be filled by O.E.M.`, and `Default string`.
+- OEM logo matching expanded for `ASUSTeK` and `Micro-Star` strings.
+
+#### Validation evidence
+- `npm.cmd run build` passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `cargo build --manifest-path src-tauri/Cargo.toml --release` passed.
+- `npm.cmd run build:exe` passed and rebuilt the NSIS installer.
+- Fresh release EXE rebuilt:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - timestamp: `25/05/2026 2:00:56 PM`
+- Fresh NSIS installer rebuilt:
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+  - timestamp: `25/05/2026 2:00:56 PM`
+
+---
+
+### Phase: Dashboard Grid Layout Fix, Driver Version Display & Update Check (2026-05-25)
+
+#### Dashboard grid gap fix
+- Identified root cause of empty grid space: `.hero-monitor` had no `grid-row: span 2`, so it occupied only one row while adjacent panels spanned two, leaving a gap.
+- Added `grid-row: span 2` to `.hero-monitor` at all grid breakpoints.
+- Fixed 1500px breakpoint overflow: `.identity-panel` and `.cooling-panel` were `span 3` each (sum 8 > 6-column grid); changed to `span 2`.
+- Added `grid-row: auto` reset for `.hero-monitor` at the 1180px breakpoint to allow natural stacking.
+- Added `.driver-version-row`, `.driver-check-link`, `.driver-update-badge`, and `.driver-up-to-date` CSS.
+
+#### GPU driver version — clean format
+- Added `type FnGetDriverVersion` and `fn_get_driver_ver: Option<FnGetDriverVersion>` to `NvmlContext` in `nvml_provider.rs`.
+- Added `sym_opt!` macro variant (optional symbol — does not fail `init()` if absent).
+- Added `pub fn query_driver_version(&self) -> Option<String>` which calls `nvmlSystemGetDriverVersion` and returns a clean version string like `"560.94"`.
+- In `hardware.rs` monitor loop, after NVML init, an optional patch block overwrites `SystemInfo.gpu_driver_version` with the NVML version (replaces WMI's Windows-internal "31.0.15.6094" format).
+
+#### WMI driver version fallback (already present from previous turn)
+- `wmi_provider.rs::query_gpu_driver_version()` — WMI `Win32_VideoController.DriverVersion`.
+- `wmi_provider.rs::query_chipset_driver_version()` — WMI `Win32_PnPSignedDriver` AMD SMBus / Intel chipset.
+- Both fields in `SystemInfo`: `gpu_driver_version`, `chipset_driver_version`.
+
+#### Driver update check — backend
+- Added `ureq = { version = "2", default-features = false, features = ["json", "native-tls"] }` to `[target.'cfg(windows)'.dependencies]` in `Cargo.toml`.
+  - Uses `native-tls` (Windows SChannel) for HTTPS — no bundled CA certificates, uses OS trust store.
+- Created `src-tauri/src/driver_update.rs`:
+  - `check_nvidia_driver_update(current: &str) -> Option<DriverUpdateInfo>` — hits NVIDIA GeForce driver lookup API (psid=120/pfid=978/osID=57, WHQL only), parses JSON version field, compares with installed version.
+  - `version_is_newer(latest, current)` — part-by-part u32 comparison.
+  - Silently returns `None` on network failure, API shape change, or timeout (8s).
+- Added `pub struct DriverUpdateInfo` to `hardware.rs` (always compiled):
+  - `current_version`, `latest_version`, `update_available`, `download_url`.
+- Added helper methods to `MonitoringEngine`:
+  - `get_gpu_driver_version() -> String`
+  - `get_gpu_name() -> String`
+- Added `#[cfg(windows)] mod driver_update;` to `lib.rs`.
+- Added async `check_driver_update` command (uses `spawn_blocking` so HTTP call does not block the async runtime).
+- Registered `check_driver_update` in the Tauri `invoke_handler`.
+
+#### Driver update check — frontend
+- Added `DriverUpdateInfo` type to `src/types/system.ts`.
+- Added `useState<DriverUpdateInfo | null | undefined>` and `useEffect` in `DashboardPage.tsx`:
+  - `undefined` = check pending (shows fallback "Check →" link while waiting).
+  - `null` = check failed/N/A (same fallback "Check →" link).
+  - `{ updateAvailable: true, ... }` = shows **Update Available** badge (opens download URL).
+  - `{ updateAvailable: false, ... }` = shows **Up to date** text.
+- GPU driver version now displays as `v{version}` (e.g., `v560.94`).
+- Added `callNative` and `DriverUpdateInfo` imports to `DashboardPage.tsx`.
+- Added `.driver-update-badge` and `.driver-up-to-date` CSS classes.
+
+#### PawnIO pipeline status
+- Superseded by the later sidecar-packaging phase above.
+- The build now removes stale sidecar EXEs, stages the DLL sidecar, bundles a private .NET runtime, and copies reviewed `vendor/PawnIO/*` artifacts into `src-tauri/binaries/`.
+- The NSIS hook now runs `PawnIO_setup.exe /S` when present and records the setup exit code in the installer log.
+
+#### Validation
+- `cargo check --manifest-path src-tauri/Cargo.toml` ✅ passed (1 expected dead_code warning for `get_gpu_name` which is used by command).
+- `tsc --noEmit` ✅ passed (no errors).
 
 ---
 

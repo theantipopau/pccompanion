@@ -97,6 +97,17 @@ type FnAdl2OD5Activity = unsafe extern "system" fn(ctx: AdlContext, adapter: i32
 type FnAdl2OdnTemp  = unsafe extern "system" fn(ctx: AdlContext, adapter: i32, temp_type: i32, temp: *mut i32) -> i32;
 /// `ADL2_Adapter_DedicatedVRAMUsage_Get(ctx, adapter, *usageMB)`.
 type FnAdl2VramUsage = unsafe extern "system" fn(ctx: AdlContext, adapter: i32, usage_mb: *mut i32) -> i32;
+/// `ADL2_Graphics_Versions_Get(ctx, adapter, *info)` — driver + Adrenalin version strings.
+type FnAdlGetVersions = unsafe extern "system" fn(ctx: AdlContext, adapter: i32, info: *mut AdlVersionsInfo) -> i32;
+
+/// `ADLVersionsInfo` — returned by `ADL2_Graphics_Versions_Get`.
+/// All fields are null-terminated ASCII strings in 256-byte buffers.
+#[repr(C)]
+struct AdlVersionsInfo {
+    str_driver_ver:   [u8; 256], // Windows driver version, e.g. "32.0.11033.1003"
+    str_catalyst_ver: [u8; 256], // Adrenalin marketing version, e.g. "24.12.1"
+    str_web_link:     [u8; 256], // URL to AMD support page
+}
 
 // ─── AmdAdlContext ────────────────────────────────────────────────────────────
 
@@ -115,6 +126,8 @@ pub struct AmdAdlContext {
     fn_odn_temp: Option<FnAdl2OdnTemp>,
     /// Optional — may not be present on older ADL versions.
     fn_vram_usage: Option<FnAdl2VramUsage>,
+    /// Optional — returns Adrenalin marketing version string (e.g. "24.12.1").
+    fn_get_versions: Option<FnAdlGetVersions>,
 }
 
 impl AmdAdlContext {
@@ -169,6 +182,7 @@ impl AmdAdlContext {
         let fn_od5_act:  FnAdl2OD5Activity = sym_required!("ADL2_Overdrive5_CurrentActivity_Get", FnAdl2OD5Activity);
         let fn_odn_temp: Option<FnAdl2OdnTemp>   = sym_optional!("ADL2_OverdriveN_Temperature_Get",   FnAdl2OdnTemp);
         let fn_vram_usage: Option<FnAdl2VramUsage> = sym_optional!("ADL2_Adapter_DedicatedVRAMUsage_Get", FnAdl2VramUsage);
+        let fn_get_versions: Option<FnAdlGetVersions> = sym_optional!("ADL2_Graphics_Versions_Get", FnAdlGetVersions);
 
         // Create ADL2 context.
         let mut adl_ctx: AdlContext = std::ptr::null_mut();
@@ -221,7 +235,26 @@ impl AmdAdlContext {
             fn_od5_activity: fn_od5_act,
             fn_odn_temp,
             fn_vram_usage,
+            fn_get_versions,
         })
+    }
+
+    /// Return the installed Adrenalin marketing version string (e.g. "24.12.1") via
+    /// `ADL2_Graphics_Versions_Get`.  Returns `None` when the symbol is absent or
+    /// the call fails.
+    pub fn query_driver_version(&self) -> Option<String> {
+        let f = self.fn_get_versions?;
+        let mut info = AdlVersionsInfo {
+            str_driver_ver:   [0u8; 256],
+            str_catalyst_ver: [0u8; 256],
+            str_web_link:     [0u8; 256],
+        };
+        if unsafe { f(self.adl_ctx, self.adapter_index, &mut info) } != ADL_OK {
+            return None;
+        }
+        let nul = info.str_catalyst_ver.iter().position(|&b| b == 0).unwrap_or(256);
+        let ver = String::from_utf8_lossy(&info.str_catalyst_ver[..nul]).trim().to_string();
+        if ver.is_empty() { None } else { Some(ver) }
     }
 
     /// Poll the detected AMD GPU and return a [`GpuReading`].

@@ -16,10 +16,27 @@ export const assets = {
   appIcon: new URL('../../images/favicon.ico', import.meta.url).href,
 };
 
-export function vendorLogo(vendor: Vendor) {
-  if (vendor === 'intel') return assets.intel;
-  if (vendor === 'amd') return assets.amd;
-  if (vendor === 'nvidia') return assets.nvidia;
+export function vendorFromText(label?: string | null): Vendor {
+  const normalized = (label ?? '').toLowerCase();
+  if (normalized.includes('nvidia') || normalized.includes('geforce') || normalized.includes('gtx') || normalized.includes('rtx')) return 'nvidia';
+  if (normalized.includes('amd') || normalized.includes('ryzen') || normalized.includes('radeon')) return 'amd';
+  if (normalized.includes('intel') || normalized.includes('arc')) return 'intel';
+  return 'unknown';
+}
+
+export function vendorFromProvider(provider?: string | null): Vendor {
+  const normalized = (provider ?? '').toLowerCase();
+  if (normalized === 'nvml') return 'nvidia';
+  if (normalized === 'adl2' || normalized === 'adl') return 'amd';
+  if (normalized === 'igcl') return 'intel';
+  return 'unknown';
+}
+
+export function vendorLogo(vendor?: Vendor | string | null) {
+  const normalized = (vendor ?? '').toLowerCase();
+  if (normalized === 'intel') return assets.intel;
+  if (normalized === 'amd') return assets.amd;
+  if (normalized === 'nvidia') return assets.nvidia;
   return assets.radiumLogo;
 }
 
@@ -30,8 +47,8 @@ export function oemLogoForText(label: string) {
   if (normalized.includes('nvidia') || normalized.includes('geforce')) return assets.nvidia;
   if (normalized.includes('intel')) return assets.intel;
   if (normalized.includes('amd') || normalized.includes('ryzen')) return assets.amd;
-  if (normalized.includes('msi')) return assets.msi;
+  if (normalized.includes('msi') || normalized.includes('micro-star')) return assets.msi;
   if (normalized.includes('asrock')) return assets.asrock;
-  if (normalized.includes('asus') || normalized.includes('rog')) return assets.asus;
+  if (normalized.includes('asus') || normalized.includes('asustek') || normalized.includes('rog')) return assets.asus;
   return null;
 }

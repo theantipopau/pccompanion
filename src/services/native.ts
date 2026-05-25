@@ -28,3 +28,18 @@ export async function callNative<T>(
   }
   return invoke<T>(command, args);
 }
+
+/**
+ * Opens a URL in the system default browser.
+ * In native mode uses the `open_url` Rust command (cmd /c start).
+ * In browser preview falls back to window.open.
+ */
+export function openExternalUrl(url: string): void {
+  if (!isNative()) {
+    window.open(url, '_blank', 'noreferrer');
+    return;
+  }
+  invoke('open_url', { url }).catch(() => {
+    window.open(url, '_blank', 'noreferrer');
+  });
+}

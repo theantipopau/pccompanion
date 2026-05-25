@@ -1,10 +1,11 @@
-import { Activity, Fan, Gamepad2, HardDrive, Network, Palette, Rocket, TimerReset } from 'lucide-react';
+import { Activity, Cpu, Fan, Gamepad2, HardDrive, Network, Palette, Rocket, TimerReset } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { assets } from '../lib/assets';
 
 const modules = [
   { title: 'Fan control groundwork', icon: Fan, status: 'Staged', oem: assets.asus, text: 'Capability detection, profile schema, and safe firmware gates before any write controls ship.' },
+  { title: 'Radium sensor provider', icon: Cpu, status: 'Planned', oem: assets.amd, text: 'All-in-one Ryzen CPU package temperatures through a signed low-level provider, without requiring third-party monitor apps.' },
   { title: 'Performance profiles', icon: Rocket, status: 'Live', oem: assets.radiumLogo, text: 'Quiet, balanced, creator, and gaming modes with reversible service and power-plan changes.' },
   { title: 'Startup manager', icon: TimerReset, status: 'Live', oem: assets.radiumLogo, text: 'Implemented as a dedicated module with publisher, impact, and dry-run reversible toggles.' },
   { title: 'Storage cleaner', icon: HardDrive, status: 'Live', oem: assets.asrock, text: 'Implemented as a dedicated module for temp files, shader caches, logs, and owner-reviewed downloads.' },

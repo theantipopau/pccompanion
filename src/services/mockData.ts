@@ -43,6 +43,8 @@ export function mockSystemInfo(): SystemInfo {
     psu: 'Detected by build profile where available',
     windows: 'Windows 11',
     bios: 'UEFI firmware detected',
+    gpuDriverVersion: '560.94',
+    chipsetDriverVersion: '',
   };
 }
 
@@ -74,6 +76,8 @@ export function mockHardwareSample(existingHistory: MetricPoint[] = []): Hardwar
       clockMhz: Math.round(wave(4850, 340, 2.9, 0.4)),
     },
     gpu: {
+      name: 'NVIDIA GeForce RTX 4080 SUPER',
+      vendor: 'nvidia',
       provider: 'mock',
       temperature: gpuTemp,
       usage: gpuUsage,

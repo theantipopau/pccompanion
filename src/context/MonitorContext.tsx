@@ -27,10 +27,21 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
   const visibleRef = useRef(document.visibilityState === 'visible');
   const trayIconRef = useRef<{ lastUpdate: number }>({ lastUpdate: 0 });
   const consecutiveErrorsRef = useRef(0);
+  const systemInfoRef = useRef<SystemInfo | null>(null);
+  const identitySyncRef = useRef<{ lastUpdate: number; signature: string }>({ lastUpdate: 0, signature: '' });
 
   useEffect(() => {
-    getSystemInfo().then(setSystemInfo).catch((err) => setError(String(err)));
+    getSystemInfo()
+      .then((info) => {
+        systemInfoRef.current = info;
+        setSystemInfo(info);
+      })
+      .catch((err) => setError(String(err)));
   }, []);
+
+  useEffect(() => {
+    systemInfoRef.current = systemInfo;
+  }, [systemInfo]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -60,6 +71,41 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           setError(null);
           consecutiveErrorsRef.current = 0;
+          const now = Date.now();
+          const identitySignature = [
+            next.gpu.provider,
+            next.gpu.vendor,
+            next.gpu.name,
+            next.gpu.vramTotalGb.toFixed(1),
+            next.state,
+          ].join('|');
+          const cachedInfo = systemInfoRef.current;
+          const cachedIdentityText = [
+            cachedInfo?.gpu,
+            cachedInfo?.gpuVendor,
+            cachedInfo?.motherboard,
+            cachedInfo?.bios,
+          ].join('|');
+          const identityLooksStale = !cachedInfo
+            || /query|detect|pending|initialising|initializing|unknown/i.test(cachedIdentityText)
+            || (cachedInfo.gpuVendor === 'unknown' && next.gpu.provider && next.gpu.provider !== 'wmi');
+          if (
+            identityLooksStale
+            || (identitySignature !== identitySyncRef.current.signature && now - identitySyncRef.current.lastUpdate > 1500)
+            || now - identitySyncRef.current.lastUpdate > 30000
+          ) {
+            identitySyncRef.current = { lastUpdate: now, signature: identitySignature };
+            void getSystemInfo()
+              .then((info) => {
+                if (!disposed) {
+                  systemInfoRef.current = info;
+                  setSystemInfo(info);
+                }
+              })
+              .catch((err) => {
+                if (!disposed) setError(String(err));
+              });
+          }
           if (settings.tray.showLiveTooltip) {
             const trayMetric = settings.tray.liveIconMetric;
             const provider = next.gpu.provider ? next.gpu.provider.toUpperCase() : 'UNKNOWN';
@@ -82,7 +128,6 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
             });
           }
           if (isNative() && settings.tray.liveIconMetric !== 'disabled') {
-            const now = Date.now();
             if (now - trayIconRef.current.lastUpdate > 2000) {
               trayIconRef.current.lastUpdate = now;
               const { value, isTemp } = extractTrayValue(next, settings.tray.liveIconMetric);
@@ -130,5 +175,4 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
 
   return <MonitorContext.Provider value={value}>{children}</MonitorContext.Provider>;
 }
-
 

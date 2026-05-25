@@ -3,20 +3,36 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
-import { oemLogoForText, vendorLogo } from '../lib/assets';
+import { oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
 import { getHardwareCapabilities } from '../services/systemService';
-import type { HardwareCapability } from '../types/system';
+import type { HardwareCapability, Vendor } from '../types/system';
 
-export function SystemPassportPage() {
+export function SystemPassportPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { systemInfo, sample, native } = useMonitor();
   const [capabilities, setCapabilities] = useState<HardwareCapability[]>([]);
   const score = computePerformanceScore(sample);
   const liveCapabilities = capabilities.filter((capability) => capability.state === 'live').length;
-  const cpuLogo = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : null;
-  const gpuLogo = oemLogoForText(systemInfo?.gpu ?? '') || (systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : null);
-  const boardLogo = oemLogoForText(systemInfo?.motherboard ?? '');
-  const passportIdSeed = `${systemInfo?.cpu ?? 'cpu'}|${systemInfo?.gpu ?? 'gpu'}|${systemInfo?.bios ?? 'bios'}`;
+  const normalizeIdentity = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (!trimmed || /query|detect|pending|unknown|initialising|initializing|system product name|to be filled/i.test(trimmed)) return null;
+    return trimmed;
+  };
+  const cpuName = normalizeIdentity(systemInfo?.cpu) ?? 'Pending detection';
+  const gpuName = normalizeIdentity(sample?.gpu.name) ?? normalizeIdentity(systemInfo?.gpu) ?? 'Pending detection';
+  const boardName = normalizeIdentity(systemInfo?.motherboard) ?? 'Pending detection';
+  const gpuVendor: Vendor = sample?.gpu.vendor && sample.gpu.vendor !== 'unknown'
+    ? sample.gpu.vendor
+    : vendorFromProvider(sample?.gpu.provider) !== 'unknown'
+      ? vendorFromProvider(sample?.gpu.provider)
+      : systemInfo?.gpuVendor && systemInfo.gpuVendor !== 'unknown'
+        ? systemInfo.gpuVendor
+        : vendorFromText(gpuName);
+  const cpuVendor = systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : vendorFromText(cpuName);
+  const cpuLogo = vendorLogo(cpuVendor);
+  const gpuLogo = oemLogoForText(gpuName) || vendorLogo(gpuVendor);
+  const boardLogo = oemLogoForText(boardName);
+  const passportIdSeed = `${cpuName}|${gpuName}|${systemInfo?.bios ?? 'bios'}`;
   const passportId = `RDM-${passportIdSeed
     .split('')
     .reduce((acc, char) => ((acc * 33) ^ char.charCodeAt(0)) >>> 0, 5381)
@@ -24,6 +40,13 @@ export function SystemPassportPage() {
     .toUpperCase()
     .slice(0, 8)}`;
   const validationState = sample?.state === 'valid' ? 'Validated runtime profile' : sample?.state === 'degraded' ? 'Partial telemetry profile' : 'Telemetry baseline pending';
+  const scoreChip = (
+    <div className="passport-score-chip" title="Radium Performance Score">
+      <span>Radium Score</span>
+      <strong>{score.value}</strong>
+      <small>{score.grade}</small>
+    </div>
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -40,19 +63,25 @@ export function SystemPassportPage() {
   }, []);
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="OEM identity"
-        title="System Passport"
-        description="Per-system identity, telemetry confidence, and deployment-grade readiness in a premium support format."
-        action={
-          <div className="passport-score-chip" title="Radium Performance Score">
-            <span>Radium Score</span>
-            <strong>{score.value}</strong>
-            <small>{score.grade}</small>
+    <div className={embedded ? 'settings-subpage' : 'page'}>
+      {!embedded && (
+        <PageHeader
+          eyebrow="OEM identity"
+          title="System Passport"
+          description="Per-system identity, telemetry confidence, and deployment-grade readiness in a premium support format."
+          action={scoreChip}
+        />
+      )}
+      {embedded && (
+        <div className="embedded-page-intro">
+          <div>
+            <span className="eyebrow">OEM identity</span>
+            <h2>System Passport</h2>
+            <p>Per-system identity, telemetry confidence, and deployment-grade readiness.</p>
           </div>
-        }
-      />
+          {scoreChip}
+        </div>
+      )}
 
       {!native && (
         <div className="notice notice-preview">
@@ -97,11 +126,11 @@ export function SystemPassportPage() {
           </div>
           <dl className="passport-dl">
             <dt><Cpu size={15} /> CPU</dt>
-            <dd>{systemInfo?.cpu ?? 'Pending detection'}</dd>
+            <dd>{cpuName}</dd>
             <dt><MonitorUp size={15} /> GPU</dt>
-            <dd>{systemInfo?.gpu ?? 'Pending detection'}</dd>
+            <dd>{gpuName}</dd>
             <dt><CircuitBoard size={15} /> Motherboard</dt>
-            <dd>{systemInfo?.motherboard ?? 'Pending detection'}</dd>
+            <dd>{boardName}</dd>
             <dt><HardDrive size={15} /> Storage</dt>
             <dd>{systemInfo?.storage?.join(' | ') ?? 'Pending detection'}</dd>
             <dt><FileClock size={15} /> BIOS</dt>

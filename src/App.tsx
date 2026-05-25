@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, ShieldCheck, Sparkles, TimerReset, Wrench, FileWarning, Cpu } from 'lucide-react';
+import { Activity, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, Sparkles, TimerReset, Wrench, FileWarning, Cpu } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { Shell } from './components/Shell';
 import { SplashScreen } from './components/SplashScreen';
@@ -10,9 +10,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { RamCleanerPage } from './pages/RamCleanerPage';
 import { BloatwarePage } from './pages/BloatwarePage';
 import { UtilitiesPage } from './pages/UtilitiesPage';
-import { TelemetryDiagnosticsPage } from './pages/TelemetryDiagnosticsPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { SystemPassportPage } from './pages/SystemPassportPage';
 import { ThermalsPage } from './pages/ThermalsPage';
 import { StartupManagerPage } from './pages/StartupManagerPage';
 import { StorageCleanerPage } from './pages/StorageCleanerPage';
@@ -45,8 +43,6 @@ const navItems: NavItem[] = [
   { id: 'storage', label: 'System Clean', icon: HardDrive },
   { id: 'profiles', label: 'Profiles', icon: Gauge },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
-  { id: 'diagnostics', label: 'Telemetry Diagnostics', icon: ShieldCheck },
-  { id: 'passport', label: 'System Passport', icon: Gauge },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -64,8 +60,12 @@ export function App() {
 
 function OverlayOnlyApp() {
   useEffect(() => {
+    document.documentElement.classList.add('overlay-window-root');
     document.body.classList.add('overlay-window-body');
-    return () => document.body.classList.remove('overlay-window-body');
+    return () => {
+      document.documentElement.classList.remove('overlay-window-root');
+      document.body.classList.remove('overlay-window-body');
+    };
   }, []);
 
   return <OsdOverlay forceVisible />;
@@ -105,11 +105,11 @@ function CompanionApp() {
       case 'utilities':
         return <UtilitiesPage mode={activeView} />;
       case 'diagnostics':
-        return <TelemetryDiagnosticsPage />;
+        return <SettingsPage initialTab="diagnostics" />;
       case 'passport':
-        return <SystemPassportPage />;
+        return <SettingsPage initialTab="passport" />;
       case 'settings':
-        return <SettingsPage />;
+        return <SettingsPage initialTab="general" />;
       default:
         return <DashboardPage onNavigate={setActiveView} />;
     }

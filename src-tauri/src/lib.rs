@@ -8,6 +8,10 @@ mod nvml_provider;
 mod amd_provider;
 #[cfg(windows)]
 mod igcl_provider;
+#[cfg(windows)]
+mod sidecar_provider;
+#[cfg(windows)]
+mod driver_update;
 mod windows_util;
 
 use serde::Deserialize;
@@ -19,6 +23,8 @@ use log::LevelFilter;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
+    webview::PageLoadEvent,
+    window::Color,
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
@@ -340,6 +346,53 @@ fn cancel_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> Sto
 #[tauri::command]
 fn scan_registry_issues() -> Vec<windows_util::RegistryIssue> {
     windows_util::scan_registry_issues()
+}
+
+/// Spawn a blocking thread to check for a GPU driver update, dispatching
+/// to the appropriate vendor check based on the cached GPU vendor string.
+/// Returns `None` when the vendor is unknown, the version is empty, or the
+/// network/API call fails (silently degrades — UI shows "Check" fallback link).
+#[tauri::command]
+async fn check_driver_update(
+    engine: tauri::State<'_, MonitoringEngine>,
+) -> Result<Option<hardware::DriverUpdateInfo>, ()> {
+    let current = engine.get_gpu_driver_version();
+    let vendor = engine.get_gpu_vendor();
+    if current.is_empty() {
+        return Ok(None);
+    }
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(windows)]
+        {
+            match vendor.to_lowercase().as_str() {
+                "nvidia" => crate::driver_update::check_nvidia_driver_update(&current),
+                "amd"    => crate::driver_update::check_amd_driver_update(&current),
+                "intel"  => crate::driver_update::check_intel_arc_driver_update(&current),
+                _        => None,
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (current, vendor);
+            None
+        }
+    })
+    .await
+    .unwrap_or(None);
+    Ok(result)
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("Only http/https URLs are permitted".to_string());
+    }
+    #[cfg(windows)]
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", url.as_str()])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -667,23 +720,33 @@ fn set_overlay_window(app: AppHandle, enabled: bool, click_through: bool) -> Res
 
 fn apply_overlay_window(app: AppHandle, enabled: bool, click_through: bool) -> Result<(), String> {
     if enabled {
-        let window = if let Some(existing) = app.get_webview_window("osd") {
-            existing
+        if let Some(existing) = app.get_webview_window("osd") {
+            existing.set_background_color(Some(Color(0, 0, 0, 0))).map_err(|err| err.to_string())?;
+            existing.show().map_err(|err| err.to_string())?;
+            existing.set_ignore_cursor_events(click_through).map_err(|err| err.to_string())?;
         } else {
-            WebviewWindowBuilder::new(&app, "osd", WebviewUrl::App("index.html?overlay=1".into()))
+            let window = WebviewWindowBuilder::new(&app, "osd", WebviewUrl::App("index.html?overlay=1".into()))
                 .title("Radium PCs OSD")
                 .decorations(false)
                 .transparent(true)
+                .background_color(Color(0, 0, 0, 0))
                 .always_on_top(true)
                 .skip_taskbar(true)
+                .shadow(false)
                 .resizable(false)
+                .visible(false)
                 .inner_size(620.0, 260.0)
                 .position(24.0, 24.0)
+                .on_page_load(|window, payload| {
+                    if matches!(payload.event(), PageLoadEvent::Finished) {
+                        let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
+                        let _ = window.show();
+                    }
+                })
                 .build()
-                .map_err(|err| err.to_string())?
+                .map_err(|err| err.to_string())?;
+            window.set_ignore_cursor_events(click_through).map_err(|err| err.to_string())?;
         };
-        window.show().map_err(|err| err.to_string())?;
-        window.set_ignore_cursor_events(click_through).map_err(|err| err.to_string())?;
     } else if let Some(window) = app.get_webview_window("osd") {
         window.hide().map_err(|err| err.to_string())?;
     }
@@ -794,6 +857,8 @@ pub fn run() {
             clean_registry_issues,
             restore_registry_backup,
             export_diagnostics,
+            open_url,
+            check_driver_update,
             get_performance_profiles,
             apply_performance_profile,
             list_top_processes

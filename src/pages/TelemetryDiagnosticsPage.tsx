@@ -26,7 +26,7 @@ const capabilityStates: Array<'live' | 'partial' | 'degraded' | 'staged' | 'unsu
   'unknown',
 ];
 
-export function TelemetryDiagnosticsPage() {
+export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [snapshot, setSnapshot] = useState<TelemetryDiagnosticsSnapshot | null>(null);
   const [exportResult, setExportResult] = useState<DiagnosticsExport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,49 +90,62 @@ export function TelemetryDiagnosticsPage() {
   }, [snapshot]);
 
   const diagnosticsPending = !snapshot && busy;
+  const actions = (
+    <div className="diagnostics-header-actions">
+      <button className="secondary-button" onClick={() => void refreshDiagnostics()} disabled={busy}>
+        <RefreshCw size={16} />
+        <span>{busy ? 'Refreshing' : 'Refresh'}</span>
+      </button>
+      <button className="primary-button" onClick={() => void handleExport()} disabled={busy}>
+        <Download size={16} />
+        <span>{busy ? 'Exporting' : 'Export report'}</span>
+      </button>
+    </div>
+  );
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Diagnostics"
-        title="Telemetry Diagnostics"
-        description="Provider provenance, capability state, and sensor trust signals for support and troubleshooting."
-        action={(
-          <div className="diagnostics-header-actions">
-            <button className="secondary-button" onClick={() => void refreshDiagnostics()} disabled={busy}>
-              <RefreshCw size={16} />
-              <span>{busy ? 'Refreshing' : 'Refresh snapshot'}</span>
-            </button>
-            <button className="primary-button" onClick={() => void handleExport()} disabled={busy}>
-              <Download size={16} />
-              <span>{busy ? 'Exporting' : 'Generate OEM report'}</span>
-            </button>
+    <div className={embedded ? 'settings-subpage' : 'page'}>
+      {!embedded && (
+        <PageHeader
+          eyebrow="Diagnostics"
+          title="Telemetry Diagnostics"
+          description="Provider provenance, capability state, and sensor trust signals for support and troubleshooting."
+          action={actions}
+        />
+      )}
+      {embedded && (
+        <div className="embedded-page-intro">
+          <div>
+            <span className="eyebrow">Diagnostics</span>
+            <h2>Telemetry Diagnostics</h2>
+            <p>Provider state, capability coverage, and sensor trust.</p>
           </div>
-        )}
-      />
+          {actions}
+        </div>
+      )}
 
       <div className="diagnostics-layout">
         <Panel className="diagnostics-hero panel-span-2">
           <div className="diagnostics-hero-top">
             <div>
               <span className="eyebrow">Support readiness</span>
-              <h2>Telemetry trust and availability</h2>
+              <h2>Telemetry readiness</h2>
               <p>
-                Quickly verify active providers, degraded channels, and why each sensor is live, staged, or unavailable.
+                Active providers, degraded channels, and support-ready sensor state.
               </p>
             </div>
             <div className="diagnostics-state-stack">
               <span className={snapshot?.overallState === 'valid' ? 'diagnostics-badge live' : 'diagnostics-badge partial'}>{snapshot ? snapshot.overallState : 'loading'}</span>
               <span className="diagnostics-badge muted">Active: {snapshot?.activeProvider ?? 'loading'}</span>
-              <span className="diagnostics-badge muted">Fallback: {snapshot?.fallbackSequence.join(' → ') ?? 'pending'}</span>
+              <span className="diagnostics-badge muted">Fallbacks: {snapshot ? snapshot.fallbackSequence.length : 'pending'}</span>
             </div>
           </div>
 
           <div className="diagnostics-stat-grid">
-            <StatCard label="Loaded providers" value={`${providerCounts.loaded}`} detail={`${providerCounts.staged} staged · ${providerCounts.unavailable} unavailable`} icon={ShieldCheck} />
-            <StatCard label="Live sensors" value={`${sensorCounts.live}`} detail={`${sensorCounts.partial} partial · ${sensorCounts.staged} staged`} icon={Waves} />
+            <StatCard label="Providers" value={`${providerCounts.loaded}`} detail={`${providerCounts.staged} staged / ${providerCounts.unavailable} off`} icon={ShieldCheck} />
+            <StatCard label="Sensors" value={`${sensorCounts.live}`} detail={`${sensorCounts.partial} partial / ${sensorCounts.staged} staged`} icon={Waves} />
             <StatCard label="Capabilities" value={`${snapshot?.capabilities.length ?? 0}`} detail={`${snapshot?.supportSnapshot.length ?? 0} support notes`} icon={ClipboardList} />
-            <StatCard label="Confidence mix" value={confidenceBandSummary(snapshot)} detail="High / medium / low trust visibility" icon={Sparkles} />
+            <StatCard label="Confidence" value={confidenceBandSummary(snapshot)} detail="High / medium / low" icon={Sparkles} />
           </div>
         </Panel>
 
@@ -140,7 +153,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Sensor discovery report</span>
-              <h2>Thermal probe attempts, labels, and rejected values</h2>
+              <h2>Sensor discovery</h2>
             </div>
             <BadgeInfo size={18} />
           </div>
@@ -183,7 +196,7 @@ export function TelemetryDiagnosticsPage() {
               </div>
               {!snapshot.sensorDiscovery.packageTempAvailable && (
                 <div className={snapshot.sensorDiscovery.requiresDriver ? 'validation-card degraded' : 'validation-card partial'}>
-                  <strong>CPU package temperature is not available from current user-mode sources.</strong>
+                  <strong>CPU package temperature unavailable.</strong>
                   <p>{snapshot.sensorDiscovery.recommendedAction}</p>
                 </div>
               )}
@@ -194,18 +207,16 @@ export function TelemetryDiagnosticsPage() {
               {snapshot.sensorDiscovery.dellClassHints.length > 0 && (
                 <div className="discovery-hints">
                   <span>Dell WMI class hints</span>
-                  <strong>{snapshot.sensorDiscovery.dellClassHints.join(' · ')}</strong>
+                  <strong>{snapshot.sensorDiscovery.dellClassHints.join(' / ')}</strong>
                 </div>
               )}
 
-              <div className="diagnostics-matrix discovery-matrix">
+              <div className="diagnostics-matrix discovery-matrix namespace-matrix">
                 <div className="diagnostics-matrix-head">
                   <span>Namespace</span>
                   <span>Available</span>
                   <span>Status</span>
                   <span>Matching classes</span>
-                  <span></span>
-                  <span></span>
                 </div>
                 {snapshot.sensorDiscovery.namespaceInventory.map((entry) => (
                   <div key={entry.namespace} className="diagnostics-matrix-row">
@@ -214,21 +225,17 @@ export function TelemetryDiagnosticsPage() {
                       {entry.available ? 'Yes' : 'No'}
                     </span>
                     <span>{entry.status}</span>
-                    <span>{entry.matchingClasses.length > 0 ? entry.matchingClasses.slice(0, 6).join(' · ') : 'None'}</span>
-                    <span></span>
-                    <span></span>
+                    <span>{entry.matchingClasses.length > 0 ? entry.matchingClasses.slice(0, 6).join(' / ') : 'None'}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="diagnostics-matrix discovery-matrix">
+              <div className="diagnostics-matrix discovery-matrix gpu-matrix">
                 <div className="diagnostics-matrix-head">
                   <span>GPU adapter</span>
                   <span>Vendor</span>
                   <span>Type</span>
                   <span>VRAM</span>
-                  <span></span>
-                  <span></span>
                 </div>
                 {snapshot.sensorDiscovery.gpuAdapters.length === 0 && (
                   <div className="diagnostics-matrix-row">
@@ -236,8 +243,6 @@ export function TelemetryDiagnosticsPage() {
                     <span>unknown</span>
                     <span>unknown</span>
                     <span>N/A</span>
-                    <span></span>
-                    <span></span>
                   </div>
                 )}
                 {snapshot.sensorDiscovery.gpuAdapters.map((adapter, index) => (
@@ -246,13 +251,11 @@ export function TelemetryDiagnosticsPage() {
                     <span>{adapter.vendor}</span>
                     <span>{adapter.integrated ? 'integrated' : 'discrete'}</span>
                     <span>{adapter.adapterRamGb > 0 ? `${adapter.adapterRamGb.toFixed(1)} GB` : 'Unknown'}</span>
-                    <span></span>
-                    <span></span>
                   </div>
                 ))}
               </div>
 
-              <div className="diagnostics-matrix discovery-matrix">
+              <div className="diagnostics-matrix discovery-matrix probe-matrix">
                 <div className="diagnostics-matrix-head">
                   <span>Source</span>
                   <span>Label</span>
@@ -288,7 +291,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Provider orchestration</span>
-              <h2>Load order, binding state, and active provider</h2>
+              <h2>Provider orchestration</h2>
             </div>
             <BadgeInfo size={18} />
           </div>
@@ -304,7 +307,7 @@ export function TelemetryDiagnosticsPage() {
                 <div className="provider-card-head">
                   <div>
                     <strong>{provider.label}</strong>
-                    <span>{provider.vendor.toUpperCase()} · Load #{provider.loadOrder}</span>
+                    <span>{provider.vendor.toUpperCase()} / Load #{provider.loadOrder}</span>
                   </div>
                   <span className={provider.active ? 'diagnostics-badge live' : provider.state === 'staged' ? 'diagnostics-badge partial' : 'diagnostics-badge muted'}>
                     {provider.active ? 'Active' : provider.state}
@@ -334,7 +337,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Sensor provenance matrix</span>
-              <h2>Every telemetry channel explained</h2>
+              <h2>Telemetry channel state</h2>
             </div>
             <ShieldAlert size={18} />
           </div>
@@ -375,7 +378,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Capability intelligence</span>
-              <h2>Capability states by feature</h2>
+              <h2>Capability states</h2>
             </div>
             <ArrowRight size={18} />
           </div>
@@ -401,7 +404,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Support tooling</span>
-              <h2>Support snapshot workflow</h2>
+              <h2>Support workflow</h2>
             </div>
             <CheckCircle2 size={18} />
           </div>
@@ -453,7 +456,7 @@ export function TelemetryDiagnosticsPage() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Export bundle</span>
-              <h2>Latest bundle and included sections</h2>
+              <h2>Latest bundle</h2>
             </div>
             <Download size={18} />
           </div>
@@ -464,15 +467,15 @@ export function TelemetryDiagnosticsPage() {
             </div>
             <div>
               <span>Status</span>
-              <strong className={exportResult ? 'export-status-ok' : ''}>{exportResult?.message ?? 'Use Generate OEM report to create a support bundle.'}</strong>
+              <strong className={exportResult ? 'export-status-ok' : ''}>{exportResult?.message ?? 'Export a support bundle when needed.'}</strong>
             </div>
             <div>
               <span>Sections</span>
-              <strong>{exportResult ? exportResult.sections.join(' · ') : 'Provider orchestration · Capability matrix · Sensor provenance · Support tooling'}</strong>
+              <strong>{exportResult ? exportResult.sections.join(' / ') : 'Providers / Capabilities / Sensors / Support'}</strong>
             </div>
             <div>
               <span>Coverage</span>
-              <strong>{exportResult ? `${exportResult.providerCount} providers · ${exportResult.capabilityCount} capabilities · ${exportResult.sensorCount} sensors · ${exportResult.discoveryAttemptCount} discovery probes` : 'Live snapshot pending'}</strong>
+              <strong>{exportResult ? `${exportResult.providerCount} providers / ${exportResult.capabilityCount} capabilities / ${exportResult.sensorCount} sensors / ${exportResult.discoveryAttemptCount} probes` : 'Live snapshot pending'}</strong>
             </div>
           </div>
         </Panel>

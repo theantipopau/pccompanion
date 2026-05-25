@@ -138,7 +138,7 @@ export function StorageCleanerPage() {
   }
 
   return (
-    <div className="page desktop-page">
+    <div className="page desktop-page maintenance-page">
       <PageHeader
         eyebrow="Utilities"
         title="System Cleaner"
@@ -160,6 +160,11 @@ export function StorageCleanerPage() {
           </div>
         }
       />
+      <div className="maintenance-command-strip">
+        <CommandSignal icon={HardDrive} label="Analyse" value={scanStatus.running ? 'Scanning now' : 'Scan complete'} />
+        <CommandSignal icon={ShieldCheck} label="Guardrail" value="Safe targets only" tone="green" />
+        <CommandSignal icon={Trash2} label="Selected" value={gb(reclaimable)} tone={reclaimable > 0 ? 'amber' : 'cyan'} />
+      </div>
       <div className="cleaner-shell">
         <Panel className="cleaner-summary">
           <div className="scan-progress-row">
@@ -235,6 +240,16 @@ export function StorageCleanerPage() {
           </ul>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function CommandSignal({ icon: Icon, label, value, tone = 'cyan' }: { icon: typeof HardDrive; label: string; value: string; tone?: 'cyan' | 'green' | 'amber' }) {
+  return (
+    <div className={`maintenance-signal tone-${tone}`}>
+      <Icon size={16} />
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

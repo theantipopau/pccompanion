@@ -105,7 +105,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const searchResults = [...pageResults, ...actionResults].slice(0, 9);
 
   const navGroups: Array<{ label: string; ids: string[] }> = [
-    { label: 'Monitor', ids: ['dashboard', 'thermals', 'processes', 'passport', 'diagnostics'] },
+    { label: 'Monitor', ids: ['dashboard', 'thermals', 'processes'] },
     { label: 'Tuning', ids: ['profiles', 'optimizer', 'utilities'] },
     { label: 'Maintenance', ids: ['cleanup', 'registry', 'startup', 'storage', 'settings'] },
   ];
@@ -190,8 +190,13 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     <div className={compactShell ? 'app-shell compact-shell' : 'app-shell'}>
       <aside className={compactShell ? 'sidebar compact' : 'sidebar'} aria-label="Primary">
         <div className="brand-lockup">
-          <img className="brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
-          <img className="brand-wordmark" src={assets.radiumHeader} alt="Radium PCs Companion" />
+          <span className="brand-icon-frame">
+            <img className="brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
+          </span>
+          <span className="brand-copy">
+            <strong>Radium PCs</strong>
+            <span>Companion</span>
+          </span>
         </div>
         <nav className="nav-list">
           {groupedNavItems.map((group) => (

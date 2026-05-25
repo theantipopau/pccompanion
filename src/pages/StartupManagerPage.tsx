@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Power, TimerReset } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Power, ShieldCheck, TimerReset } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -10,6 +10,9 @@ export function StartupManagerPage() {
   const [log, setLog] = useState<string>('Scan pending.');
   const [busy, setBusy] = useState(true);
   const totalImpact = useMemo(() => items.filter((item) => item.enabled && item.impact !== 'low').length, [items]);
+  const enabledCount = useMemo(() => items.filter((item) => item.enabled).length, [items]);
+  const reviewCount = useMemo(() => items.filter((item) => item.enabled && item.recommended === 'review').length, [items]);
+  const optionalCount = useMemo(() => items.filter((item) => item.enabled && item.recommended === 'optional').length, [items]);
 
   useEffect(() => {
     scanStartupItems().then((result) => {
@@ -38,6 +41,12 @@ export function StartupManagerPage() {
           </button>
         }
       />
+      <div className="ops-summary-bar">
+        <SummaryTile label="Enabled" value={enabledCount.toString()} />
+        <SummaryTile label="Needs review" value={reviewCount.toString()} tone={reviewCount > 0 ? 'amber' : 'green'} />
+        <SummaryTile label="Optional" value={optionalCount.toString()} />
+        <SummaryTile label="Impact" value={totalImpact.toString()} tone={totalImpact > 0 ? 'amber' : 'green'} />
+      </div>
       <div className="manager-layout">
         <Panel className="manager-table">
           <div className="panel-heading">
@@ -62,6 +71,13 @@ export function StartupManagerPage() {
                 <span className={`recommendation rec-${item.recommended}`}>{item.recommended}</span>
               </div>
             ))}
+            {!busy && items.length === 0 && (
+              <div className="empty-state">
+                <ShieldCheck size={18} />
+                <strong>No startup entries found</strong>
+                <span>Windows did not return any user startup apps for review.</span>
+              </div>
+            )}
           </div>
         </Panel>
         <Panel className="manager-inspector">
@@ -80,6 +96,15 @@ export function StartupManagerPage() {
           </ul>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value, tone = 'cyan' }: { label: string; value: string; tone?: 'cyan' | 'green' | 'amber' }) {
+  return (
+    <div className={`ops-summary-tile tone-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

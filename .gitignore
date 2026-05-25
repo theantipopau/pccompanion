@@ -3,6 +3,10 @@ dist
 dist-ssr
 .vite
 src-tauri/target
+src-tauri/binaries
+target
+tools/**/bin
+tools/**/obj
 *.log
 *.tmp
 .DS_Store

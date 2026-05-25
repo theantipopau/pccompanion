@@ -20,6 +20,9 @@ export function BloatwarePage() {
   }, []);
 
   const selected = useMemo(() => items.filter((item) => item.selected && item.detected), [items]);
+  const detectedCount = useMemo(() => items.filter((item) => item.detected).length, [items]);
+  const lowRiskCount = useMemo(() => items.filter((item) => item.detected && item.risk === 'low').length, [items]);
+  const reviewCount = useMemo(() => items.filter((item) => item.detected && item.risk !== 'low').length, [items]);
 
   function toggle(id: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)));
@@ -59,7 +62,7 @@ export function BloatwarePage() {
   }
 
   return (
-    <div className="page">
+    <div className="page desktop-page maintenance-page">
       <PageHeader
         eyebrow="Windows cleanup"
         title="Bloatware Remover"
@@ -85,6 +88,17 @@ export function BloatwarePage() {
           </div>
         }
       />
+      <div className="maintenance-command-strip">
+        <CommandSignal icon={ShieldCheck} label="Scan" value="Known AppX targets" />
+        <CommandSignal icon={CheckCircle2} label="Review" value="Low-risk defaults" tone="green" />
+        <CommandSignal icon={PackageMinus} label="Action" value="Remove or restore" tone="amber" />
+      </div>
+      <div className="ops-summary-bar">
+        <SummaryTile label="Detected" value={busy ? '...' : detectedCount.toString()} />
+        <SummaryTile label="Low risk" value={busy ? '...' : lowRiskCount.toString()} tone="green" />
+        <SummaryTile label="Review" value={busy ? '...' : reviewCount.toString()} tone={reviewCount > 0 ? 'amber' : 'green'} />
+        <SummaryTile label="Selected" value={selected.length.toString()} />
+      </div>
 
       <div className="cleanup-layout">
         <Panel className="cleanup-list">
@@ -109,6 +123,13 @@ export function BloatwarePage() {
                 </div>
               </label>
             ))}
+            {!busy && items.length === 0 && (
+              <div className="empty-state">
+                <ShieldCheck size={18} />
+                <strong>No known bloatware packages found</strong>
+                <span>This Windows install does not currently expose any matching cleanup targets.</span>
+              </div>
+            )}
           </div>
         </Panel>
 
@@ -140,6 +161,25 @@ export function BloatwarePage() {
           </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CommandSignal({ icon: Icon, label, value, tone = 'cyan' }: { icon: typeof ShieldCheck; label: string; value: string; tone?: 'cyan' | 'green' | 'amber' }) {
+  return (
+    <div className={`maintenance-signal tone-${tone}`}>
+      <Icon size={16} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value, tone = 'cyan' }: { label: string; value: string; tone?: 'cyan' | 'green' | 'amber' }) {
+  return (
+    <div className={`ops-summary-tile tone-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

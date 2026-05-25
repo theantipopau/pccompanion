@@ -68,6 +68,21 @@ struct WmiVideoController {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct WmiVideoControllerDriver {
+    Name: Option<String>,
+    DriverVersion: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case, dead_code)]
+struct WmiPnpSignedDriver {
+    FriendlyName: Option<String>,
+    DriverVersion: Option<String>,
+    DriverProvider: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
 #[allow(non_snake_case, dead_code)]
 struct WmiGpuEngine {
     Name: Option<String>,
@@ -286,7 +301,7 @@ fn collect_namespace_classes(
         return inventory;
     };
 
-    match connection.raw_query::<WmiClassName>("SELECT __CLASS FROM meta_class") {
+    match connection.raw_query::<WmiClassName>("SELECT * FROM meta_class") {
         Ok(rows) => {
             let matches = rows
                 .into_iter()
@@ -822,6 +837,8 @@ pub fn query_static_system_info(ctx: &WmiContext) -> StaticSystemInfo {
         windows: sysinfo::System::long_os_version()
             .unwrap_or_else(|| "Windows".to_string()),
         bios,
+        gpu_driver_version: query_gpu_driver_version(ctx),
+        chipset_driver_version: query_chipset_driver_version(ctx),
     };
 
     StaticSystemInfo {
@@ -852,6 +869,29 @@ fn query_cpu_name(ctx: &WmiContext) -> String {
     }
 
     "Unknown CPU".to_string()
+}
+
+fn clean_identity_value(value: Option<String>) -> Option<String> {
+    let trimmed = value?.trim().to_string();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let lower = trimmed.to_lowercase();
+    let placeholders = [
+        "unknown",
+        "querying",
+        "system manufacturer",
+        "system product name",
+        "to be filled by o.e.m.",
+        "to be filled by oem",
+        "default string",
+        "not available",
+        "none",
+    ];
+    if placeholders.iter().any(|placeholder| lower == *placeholder) {
+        return None;
+    }
+    Some(trimmed)
 }
 
 fn read_cpu_name_from_registry() -> Result<Option<String>, ()> {
@@ -930,12 +970,29 @@ fn query_gpu_static(ctx: &WmiContext) -> (String, f32) {
 
     let controllers = res.unwrap_or_default();
 
-    // Prefer the adapter with the most VRAM (discrete GPU heuristic).
-    let best = controllers.into_iter().max_by_key(|vc| vc.AdapterRAM.unwrap_or(0));
+    // Prefer real discrete adapters. AdapterRAM can be capped/wrapped by WMI
+    // above 4 GB, so vendor/name quality is a stronger signal than RAM alone.
+    let best = controllers.into_iter().max_by_key(|vc| {
+        let name = vc.Name.clone().unwrap_or_default();
+        let vendor = vendor_from_str(&name);
+        let vendor_score = match vendor {
+            "nvidia" | "amd" => 1_000_000_000u64,
+            "intel" => 100_000_000u64,
+            _ => 0,
+        };
+        let basic_penalty = if name.to_lowercase().contains("microsoft basic") {
+            900_000_000u64
+        } else {
+            0
+        };
+        vendor_score
+            .saturating_sub(basic_penalty)
+            .saturating_add(vc.AdapterRAM.unwrap_or(0) as u64)
+    });
 
     match best {
         Some(vc) => {
-            let name = vc.Name.unwrap_or_default().trim().to_string();
+            let name = clean_identity_value(vc.Name).unwrap_or_else(|| "GPU unavailable".to_string());
             // AdapterRAM is u32 but can wrap for >4 GB VRAM — treat as rough estimate.
             let vram_gb = vc.AdapterRAM.map(|r| r as f32 / 1_073_741_824.0).unwrap_or(0.0);
             (name, vram_gb)
@@ -950,16 +1007,16 @@ fn query_motherboard(ctx: &WmiContext) -> String {
     res.ok()
         .and_then(|v| v.into_iter().next())
         .map(|b| {
-            let mfr = b.Manufacturer.unwrap_or_default().trim().to_string();
-            let prod = b.Product.unwrap_or_default().trim().to_string();
-            if mfr.is_empty() && prod.is_empty() {
+            let mfr = clean_identity_value(b.Manufacturer);
+            let prod = clean_identity_value(b.Product);
+            if mfr.is_none() && prod.is_none() {
                 "Unknown".to_string()
-            } else if mfr.is_empty() {
-                prod
-            } else if prod.is_empty() {
-                mfr
+            } else if mfr.is_none() {
+                prod.unwrap_or_default()
+            } else if prod.is_none() {
+                mfr.unwrap_or_default()
             } else {
-                format!("{mfr} {prod}")
+                format!("{} {}", mfr.unwrap_or_default(), prod.unwrap_or_default())
             }
         })
         .unwrap_or_else(|| "Unknown".to_string())
@@ -972,12 +1029,18 @@ fn query_bios(ctx: &WmiContext) -> String {
     res.ok()
         .and_then(|v| v.into_iter().next())
         .map(|b| {
-            let ver = b.SMBIOSBIOSVersion.unwrap_or_default().trim().to_string();
-            let mfr = b.Manufacturer.unwrap_or_default().trim().to_string();
-            if mfr.is_empty() {
-                ver
+            let ver = clean_identity_value(b.SMBIOSBIOSVersion).unwrap_or_default();
+            let mfr = clean_identity_value(b.Manufacturer);
+            if ver.is_empty() && mfr.is_none() {
+                "Unknown".to_string()
+            } else if let Some(mfr) = mfr {
+                if ver.is_empty() {
+                    mfr
+                } else {
+                    format!("{mfr} {ver}")
+                }
             } else {
-                format!("{mfr} {ver}")
+                ver
             }
         })
         .unwrap_or_else(|| "Unknown".to_string())
@@ -1134,4 +1197,56 @@ pub fn query_gpu_usage(ctx: &WmiContext) -> f32 {
         .max(1);
 
     (total as f32 / count as f32).min(100.0)
+}
+
+fn query_gpu_driver_version(ctx: &WmiContext) -> String {
+    let res: Result<Vec<WmiVideoControllerDriver>, _> = ctx
+        .cimv2
+        .raw_query("SELECT Name, DriverVersion FROM Win32_VideoController");
+    res.ok()
+        .and_then(|v| {
+            v.into_iter().max_by_key(|vc| {
+                let name = vc.Name.clone().unwrap_or_default().to_lowercase();
+                if name.contains("nvidia") || name.contains("geforce") {
+                    3i32
+                } else if name.contains("amd") || name.contains("radeon") {
+                    2i32
+                } else if name.contains("intel") {
+                    1i32
+                } else {
+                    0i32
+                }
+            })
+        })
+        .and_then(|vc| vc.DriverVersion)
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_default()
+}
+
+fn query_chipset_driver_version(ctx: &WmiContext) -> String {
+    // AMD SMBus is the most reliable indicator of the AMD chipset package version
+    let amd_q = "SELECT FriendlyName, DriverVersion, DriverProvider \
+                 FROM Win32_PnPSignedDriver WHERE FriendlyName LIKE '%SMBus%'";
+    if let Ok(rows) = ctx.cimv2.raw_query::<WmiPnpSignedDriver>(amd_q) {
+        if let Some(v) = rows.into_iter().filter_map(|r| r.DriverVersion).next() {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    // Intel chipset software
+    let intel_q = "SELECT FriendlyName, DriverVersion \
+                   FROM Win32_PnPSignedDriver \
+                   WHERE FriendlyName LIKE '%Chipset%' AND DriverProvider LIKE '%Intel%'";
+    if let Ok(rows) = ctx.cimv2.raw_query::<WmiPnpSignedDriver>(intel_q) {
+        if let Some(v) = rows.into_iter().filter_map(|r| r.DriverVersion).next() {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    String::new()
 }

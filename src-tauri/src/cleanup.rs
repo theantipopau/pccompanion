@@ -48,12 +48,21 @@ pub fn optimize_ram() -> RamCleanupResult {
         after_gb,
         freed_gb,
         mode: "safe",
-        message: format!(
-            "Trimmed working sets of {trimmed} accessible processes ({total} scanned). \
-             Windows memory manager reclaims standby pages on demand. \
-             {:.2} GB reported freed.",
-            freed_gb
-        ),
+        message: if trimmed == 0 {
+            format!(
+                "Scanned {total} processes but could not trim any accessible working sets. \
+                 Windows still reclaims standby pages on demand, so the visible reclaimed amount can be small. \
+                 {:.2} GB reported freed.",
+                freed_gb
+            )
+        } else {
+            format!(
+                "Trimmed working sets of {trimmed} accessible processes ({total} scanned). \
+                 Windows memory manager reclaims standby pages on demand. \
+                 {:.2} GB reported freed.",
+                freed_gb
+            )
+        },
     }
 }
 
@@ -623,24 +632,45 @@ fn estimate_recycle_bin_bytes() -> (u64, bool) {
 fn clear_recycle_bin() -> String {
     #[cfg(windows)]
     {
-        let result = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-WindowStyle",
-                "Hidden",
-                "-Command",
-                "Clear-RecycleBin -Force -ErrorAction Stop",
-            ])
-            .output();
+        let mut emptied_any = false;
+        let mut failures: Vec<String> = Vec::new();
 
-        return match result {
-            Ok(out) if out.status.success() => "[ok] Recycle Bin: emptied".to_string(),
-            Ok(out) => format!(
-                "[error] Recycle Bin: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
-            Err(e) => format!("[error] Recycle Bin: PowerShell unavailable — {e}"),
+        for drive in b'A'..=b'Z' {
+            let root = format!("{}:\\$Recycle.Bin", drive as char);
+            let path = std::path::Path::new(&root);
+            if !path.exists() {
+                continue;
+            }
+
+            emptied_any = true;
+            match std::fs::read_dir(path) {
+                Ok(entries) => {
+                    for entry in entries.flatten() {
+                        let child = entry.path();
+                        let result = if child.is_dir() {
+                            std::fs::remove_dir_all(&child)
+                        } else {
+                            std::fs::remove_file(&child)
+                        };
+                        if let Err(err) = result {
+                            failures.push(format!("{}: {}", child.display(), err));
+                        }
+                    }
+                }
+                Err(err) => failures.push(format!("{}: {}", path.display(), err)),
+            }
+        }
+
+        return if failures.is_empty() {
+            if emptied_any {
+                "[ok] Recycle Bin: emptied".to_string()
+            } else {
+                "[ok] Recycle Bin: nothing to empty".to_string()
+            }
+        } else if emptied_any {
+            format!("[ok] Recycle Bin: emptied with some skipped items ({})", failures.len())
+        } else {
+            format!("[error] Recycle Bin: {}", failures.join("; "))
         };
     }
 

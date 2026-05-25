@@ -1,4 +1,5 @@
-import { Cpu, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Thermometer, Zap } from 'lucide-react';
+import { Cpu, ExternalLink, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Thermometer, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge as RadialGauge } from '../components/Gauge';
@@ -11,8 +12,10 @@ import { StatePill } from '../components/StatePill';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
-import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
+import { assets, oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
+import { openExternalUrl, callNative } from '../services/native';
+import type { DriverUpdateInfo, Vendor } from '../types/system';
 
 type DashboardPageProps = {
   onNavigate?: (view: string) => void;
@@ -21,6 +24,16 @@ type DashboardPageProps = {
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const { systemInfo, sample, loading, error, native } = useMonitor();
   const { settings } = useSettings();
+  // undefined = check pending/not started, null = check failed or N/A, object = result
+  const [driverUpdateInfo, setDriverUpdateInfo] = useState<DriverUpdateInfo | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!systemInfo?.gpuDriverVersion) return;
+    callNative<DriverUpdateInfo | null>('check_driver_update', undefined, () => null)
+      .then((info) => setDriverUpdateInfo(info))
+      .catch(() => setDriverUpdateInfo(null));
+  }, [systemInfo?.gpuDriverVersion]);
+
   const history = sample?.history ?? [];
   const animateCharts = settings.experience.animations;
   const performanceScore = computePerformanceScore(sample);
@@ -29,17 +42,39 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const sampleAgeMs = sample ? Math.max(0, Date.now() - sample.timestamp) : null;
   const sampleAgeLabel = sampleAgeMs == null ? 'Awaiting feed' : sampleAgeMs < 2000 ? 'Live now' : `${Math.round(sampleAgeMs / 1000)}s ago`;
   const activeChannels = [sample?.cpu.temperature != null, sample?.gpu.temperature != null, !!sample, !!sample].filter(Boolean).length;
-  const hardwareTheme = (systemInfo?.gpuVendor && systemInfo.gpuVendor !== 'unknown')
-    ? systemInfo.gpuVendor
-    : (systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : 'unknown');
   const normalizeIdentity = (value?: string | null) => {
     if (!value) return null;
     const trimmed = value.trim();
     if (!trimmed) return null;
-    if (/query|detect|pending|unknown/i.test(trimmed)) return null;
+    if (/query|detect|pending|unknown|initialising|initializing|system manufacturer|system product name|to be filled/i.test(trimmed)) return null;
     return trimmed;
   };
-  const deviceName = normalizeIdentity(systemInfo?.motherboard)
+  const cpuName = normalizeIdentity(systemInfo?.cpu) ?? 'CPU detecting';
+  const gpuName = normalizeIdentity(sample?.gpu.name) ?? normalizeIdentity(systemInfo?.gpu) ?? 'GPU detecting';
+  const boardName = normalizeIdentity(systemInfo?.motherboard);
+
+  /** Abbreviate Intel's WMI-format driver version "31.0.101.5234" → "v101.5234". */
+  const formatDriverVersion = (ver: string, vendor: string): string => {
+    if (vendor === 'intel') {
+      const parts = ver.split('.');
+      if (parts.length === 4 && parts[0] === '31' && parts[1] === '0') {
+        return `v${parts[2]}.${parts[3]}`;
+      }
+    }
+    return `v${ver}`;
+  };
+
+  const inferGpuVendor = (): Vendor => {
+    if (sample?.gpu.vendor && sample.gpu.vendor !== 'unknown') return sample.gpu.vendor;
+    const providerVendor = vendorFromProvider(sample?.gpu.provider);
+    if (providerVendor !== 'unknown') return providerVendor;
+    if (systemInfo?.gpuVendor && systemInfo.gpuVendor !== 'unknown') return systemInfo.gpuVendor;
+    return vendorFromText(gpuName);
+  };
+  const gpuVendor = inferGpuVendor();
+  const cpuVendor = systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : vendorFromText(cpuName);
+  const hardwareTheme = gpuVendor !== 'unknown' ? gpuVendor : (cpuVendor !== 'unknown' ? cpuVendor : 'unknown');
+  const deviceName = boardName
     || normalizeIdentity(systemInfo?.windows)
     || 'System identity pending';
   const telemetryHeadline = loading || !sample
@@ -50,19 +85,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const telemetrySubline = sample
     ? `Provider ${gpuProvider} · ${sampleAgeLabel}`
     : 'Waiting for first telemetry sample';
-  const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : null;
-  const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : null;
-  const boardVendorAsset = oemLogoForText(systemInfo?.motherboard ?? '');
+  const cpuVendorAsset = vendorLogo(cpuVendor);
+  const gpuVendorAsset = oemLogoForText(gpuName) ?? vendorLogo(gpuVendor);
+  const boardVendorAsset = oemLogoForText(boardName ?? '');
   const compactIdentityPills = [
-    { key: 'cpu', label: systemInfo?.cpu ?? 'CPU detecting', icon: cpuVendorAsset },
-    { key: 'gpu', label: systemInfo?.gpu ?? 'GPU detecting', icon: oemLogoForText(systemInfo?.gpu ?? '') ?? gpuVendorAsset },
+    { key: 'cpu', label: cpuName, icon: cpuVendorAsset },
+    { key: 'gpu', label: gpuName, icon: gpuVendorAsset },
     { key: 'os', label: systemInfo?.windows ?? 'OS detecting' },
     { key: 'provider', label: `${gpuProvider} Provider`, icon: gpuVendorAsset },
     { key: 'lanes', label: `Telemetry ${activeChannels}/4` },
     { key: 'support', label: `Support ${nominal ? 'Ready' : 'Degraded'} · ${performanceScore.grade}` },
   ];
   const heroSignals = [
-    { id: 'cpu', label: 'CPU', value: sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.cpu.usage) : 'Pending' },
+    { id: 'cpu', label: 'CPU', value: sample ? pct(sample.cpu.usage) : 'Scan', detail: sample?.cpu.temperature != null ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Temp unavailable' },
     { id: 'gpu', label: 'GPU', value: sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.gpu.usage) : 'Pending' },
     { id: 'ram', label: 'RAM', value: sample ? pct(sample.memory.usage) : 'Scan', detail: sample ? `${gb(sample.memory.usedGb)} used` : 'Pending' },
     { id: 'net', label: 'NET', value: sample ? mbps(sample.network.downMbps) : 'Scan', detail: sample ? `${mbps(sample.network.upMbps)} up` : 'Pending' },
@@ -164,8 +199,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         <MetricCard
           className="metric-primary metric-cpu"
           icon={Thermometer}
-          label="CPU Temperature"
-          value={loading ? 'Scanning' : temp(sample?.cpu.temperature ?? null, settings.monitoring.temperatureUnit)}
+          label={sample?.cpu.temperature == null ? 'CPU Load' : 'CPU Temperature'}
+          componentName={cpuName}
+          value={loading ? 'Scanning' : sample?.cpu.temperature == null ? pct(sample?.cpu.usage ?? 0) : temp(sample?.cpu.temperature ?? null, settings.monitoring.temperatureUnit)}
           detail={sample
             ? sample.cpu.temperature == null
               ? `Provider WMI ACPI · ${mhz(sample.cpu.clockMhz)} · package sensor unavailable`
@@ -180,19 +216,21 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           className="metric-primary metric-gpu"
           icon={MonitorUp}
           label="GPU Temperature"
+          componentName={gpuName}
           value={loading ? 'Scanning' : temp(sample?.gpu.temperature ?? null, settings.monitoring.temperatureUnit)}
           detail={sample
             ? `Provider ${gpuProvider} · ${mhz(sample.gpu.coreClockMhz)} core · VRAM ${gb(sample.gpu.vramUsedGb)} / ${gb(sample.gpu.vramTotalGb)}`
             : 'Awaiting scan'}
           progress={sample?.gpu.temperature ?? 0}
           tone="green"
-          vendorAssetSrc={oemLogoForText(systemInfo?.gpu ?? '') ?? gpuVendorAsset}
-          vendorAssetAlt={`${systemInfo?.gpuVendor ?? 'GPU'} logo`}
+          vendorAssetSrc={gpuVendorAsset}
+          vendorAssetAlt={`${gpuVendor} logo`}
         />
         <MetricCard
           className="metric-primary metric-ram"
           icon={MemoryStick}
           label="Memory"
+          componentName={boardName ?? 'Mainboard detecting'}
           value={sample ? `${gb(sample.memory.usedGb)} / ${gb(sample.memory.totalGb)}` : 'Scanning'}
           detail={sample ? `${pct(sample.memory.usage)} · low-overhead monitor cache` : 'Awaiting scan'}
           progress={sample?.memory.usage ?? 0}
@@ -297,9 +335,43 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
           <dl>
             <dt><CpuIcon size={15} /> CPU</dt>
-            <dd>{systemInfo?.cpu ?? <Skeleton className="text-line" />}</dd>
+            <dd>{cpuName !== 'CPU detecting' ? cpuName : <Skeleton className="text-line" />}</dd>
             <dt><GpuIcon size={15} /> GPU</dt>
-            <dd>{systemInfo?.gpu ?? <Skeleton className="text-line" />}</dd>
+            <dd>{gpuName !== 'GPU detecting' ? gpuName : <Skeleton className="text-line" />}</dd>
+            {systemInfo?.gpuDriverVersion && (
+              <>
+                <dt><MonitorUp size={15} /> GPU Driver</dt>
+                <dd>
+                  <span className="driver-version-row">
+                    <span>{formatDriverVersion(systemInfo.gpuDriverVersion, gpuVendor)}</span>
+                    {driverUpdateInfo?.updateAvailable === true ? (
+                      <a
+                        className="driver-update-badge"
+                        href="#"
+                        title={`Latest: ${driverUpdateInfo.latestVersion}`}
+                        onClick={(e) => { e.preventDefault(); openExternalUrl(driverUpdateInfo.downloadUrl); }}
+                      >
+                        New Driver available
+                      </a>
+                    ) : driverUpdateInfo != null && !driverUpdateInfo.updateAvailable ? (
+                      <span className="driver-up-to-date" title={`Latest checked: ${driverUpdateInfo.latestVersion}`}>Up to date</span>
+                    ) : (
+                      <a
+                        className="driver-check-link"
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); openExternalUrl(
+                          gpuVendor === 'nvidia' ? 'https://www.nvidia.com/Download/index.aspx' :
+                          gpuVendor === 'intel'  ? 'https://www.intel.com/content/www/us/en/download/785597/intel-arc-iris-xe-graphics-windows.html' :
+                          'https://www.amd.com/en/support/download/drivers.html'
+                        ); }}
+                      >
+                        Check <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </span>
+                </dd>
+              </>
+            )}
             <dt><RamIcon size={15} /> RAM</dt>
             <dd>{systemInfo ? `${systemInfo.ram} at ${systemInfo.ramSpeed}` : <Skeleton className="text-line" />}</dd>
             <dt><HardDrive size={15} /> Storage</dt>
@@ -317,6 +389,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             </dd>
             <dt><Gauge size={15} /> BIOS</dt>
             <dd>{systemInfo?.bios ?? <Skeleton className="text-line" />}</dd>
+            {systemInfo?.chipsetDriverVersion && (
+              <>
+                <dt><Cpu size={15} /> Chipset Driver</dt>
+                <dd>
+                  <span className="driver-version-row">
+                    <span>{systemInfo.chipsetDriverVersion}</span>
+                    <a
+                      className="driver-check-link"
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); openExternalUrl(systemInfo.cpuVendor === 'intel' ? 'https://www.intel.com/content/www/us/en/support/detect.html' : 'https://www.amd.com/en/support/download/drivers.html'); }}
+                    >
+                      Check <ExternalLink size={11} />
+                    </a>
+                  </span>
+                </dd>
+              </>
+            )}
           </dl>
         </Panel>
 

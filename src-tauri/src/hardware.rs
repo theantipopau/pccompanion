@@ -35,6 +35,8 @@ pub struct CpuSample {
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GpuSample {
+    pub name: String,
+    pub vendor: String,
     pub provider: String,
     pub temperature: Option<f32>,
     pub usage: f32,
@@ -134,6 +136,18 @@ pub struct SystemInfo {
     pub psu: String,
     pub windows: String,
     pub bios: String,
+    pub gpu_driver_version: String,
+    pub chipset_driver_version: String,
+}
+
+/// Returned by the `check_driver_update` command when a newer driver is found.
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DriverUpdateInfo {
+    pub current_version: String,
+    pub latest_version: String,
+    pub update_available: bool,
+    pub download_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -267,6 +281,12 @@ pub struct HardwareCache {
     pub provider_diagnostics: Vec<ProviderDiagnostics>,
     pub provider_warnings: Vec<String>,
     pub provider_errors: Vec<String>,
+    pub radium_sidecar_available: bool,
+    pub radium_sidecar_driver_available: bool,
+    pub radium_sidecar_status: String,
+    pub radium_sidecar_path: String,
+    pub radium_sidecar_cpu_temp_label: String,
+    pub radium_sidecar_notes: Vec<String>,
     pub sensor_discovery: SensorDiscoveryReport,
     pub gpu_temp: Option<f32>,
     pub gpu_usage: f32,
@@ -466,6 +486,8 @@ impl MonitoringEngine {
                 clock_mhz: c.cpu_clock_mhz,
             },
             gpu: GpuSample {
+                name: c.gpu_name.clone(),
+                vendor: c.gpu_vendor.clone(),
                 provider: c.gpu_provider.clone(),
                 temperature: c.gpu_temp,
                 usage: c.gpu_usage,
@@ -514,6 +536,34 @@ impl MonitoringEngine {
         c.provider_errors.clear();
         c.provider_warnings.clear();
         "Monitoring engine restart scheduled; cache reset for fresh polling cycle.".to_string()
+    }
+
+    /// Return the cached GPU driver version string (NVML format where
+    /// available, WMI fallback otherwise).
+    pub fn get_gpu_driver_version(&self) -> String {
+        self.cache
+            .read()
+            .ok()
+            .and_then(|c| c.system_info.as_ref().map(|s| s.gpu_driver_version.clone()))
+            .unwrap_or_default()
+    }
+
+    /// Return the cached GPU name (from the live provider or WMI fallback).
+    pub fn get_gpu_name(&self) -> String {
+        self.cache
+            .read()
+            .ok()
+            .map(|c| c.gpu_name.clone())
+            .unwrap_or_default()
+    }
+
+    /// Return the cached GPU vendor string ("nvidia", "amd", "intel", or empty).
+    pub fn get_gpu_vendor(&self) -> String {
+        self.cache
+            .read()
+            .ok()
+            .map(|c| c.gpu_vendor.clone())
+            .unwrap_or_default()
     }
 
     /// Read the cached system info (or a sensible placeholder while it
@@ -621,7 +671,11 @@ impl MonitoringEngine {
             detail: if c.cpu_temp.is_some() {
                 "WMI ACPI thermal + sysinfo load active".to_string()
             } else if driver_required {
-                "Package temperature not exposed via user-mode WMI/sysinfo on this machine".to_string()
+                if c.radium_sidecar_status.is_empty() {
+                    "Package temperature not exposed via user-mode WMI/sysinfo on this machine".to_string()
+                } else {
+                    format!("Package temperature requires low-level provider; sidecar {}", c.radium_sidecar_status)
+                }
             } else {
                 "Load active; temperature channel unavailable".to_string()
             },
@@ -867,6 +921,62 @@ fn build_provider_diagnostics(cache: &HardwareCache) -> Vec<ProviderDiagnostics>
                 vec!["Sensor calls remain staged until validation completes".to_string()]
             } else {
                 vec!["Intel Arc telemetry remains on fallback paths".to_string()]
+            },
+            errors: Vec::new(),
+        },
+        ProviderDiagnostics {
+            id: "radium-sidecar".to_string(),
+            label: "Radium Sensor Sidecar".to_string(),
+            vendor: "radium".to_string(),
+            load_order: 5,
+            state: if cache.radium_sidecar_available {
+                "loaded".to_string()
+            } else if !cache.radium_sidecar_path.is_empty() {
+                "staged".to_string()
+            } else {
+                "unavailable".to_string()
+            },
+            active: cache.cpu_temp.is_some()
+                && cache
+                    .sensor_discovery
+                    .attempts
+                    .iter()
+                    .any(|attempt| attempt.source.contains("radium-lhm-pawnio")),
+            dll: "radium-sensor-sidecar.dll + bundled .NET runtime + LibreHardwareMonitorLib + PawnIO".to_string(),
+            dll_available: !cache.radium_sidecar_path.is_empty(),
+            symbols_resolved: cache.radium_sidecar_available || cache.radium_sidecar_driver_available,
+            symbols: vec![
+                "LibreHardwareMonitor.Hardware.Computer".to_string(),
+                "PawnIO low-level sensor access".to_string(),
+                "AMD Zen Tctl/Tdie".to_string(),
+            ],
+            notes: if cache.radium_sidecar_available {
+                if cache.radium_sidecar_cpu_temp_label.is_empty() {
+                    "Headless Radium low-level sensor sidecar returned CPU package telemetry.".to_string()
+                } else {
+                    format!(
+                        "Headless Radium low-level sensor sidecar returned CPU package telemetry from {}.",
+                        cache.radium_sidecar_cpu_temp_label
+                    )
+                }
+            } else if cache.radium_sidecar_driver_available {
+                format!(
+                    "Headless Radium sidecar is running, but CPU package telemetry is not matched yet: {}",
+                    cache.radium_sidecar_status
+                )
+            } else if cache.radium_sidecar_status.is_empty() {
+                "Headless sensor sidecar pending first probe.".to_string()
+            } else {
+                format!("Headless sensor sidecar staged: {}", cache.radium_sidecar_status)
+            },
+            warnings: if cache.radium_sidecar_available {
+                Vec::new()
+            } else if cache.radium_sidecar_driver_available && !cache.radium_sidecar_notes.is_empty() {
+                cache.radium_sidecar_notes.clone()
+            } else if cache.radium_sidecar_notes.is_empty() {
+                vec!["Sidecar has not produced a live sample yet".to_string()]
+            } else {
+                cache.radium_sidecar_notes.clone()
             },
             errors: Vec::new(),
         },
@@ -1171,6 +1281,8 @@ fn build_sysinfo_fallback(sys: &System, cache: &HardwareCache) -> SystemInfo {
         psu: "Unavailable via standard Windows APIs".to_string(),
         windows: System::long_os_version().unwrap_or_else(|| "Windows".to_string()),
         bios: "Querying…".to_string(),
+        gpu_driver_version: String::new(),
+        chipset_driver_version: String::new(),
     }
 }
 
@@ -1269,6 +1381,36 @@ pub fn monitor_loop(
         }
     }
 
+    // Upgrade GPU driver version to NVML clean format (e.g. "560.94") when
+    // NVIDIA hardware is present.  WMI returns the Windows internal version
+    // string ("31.0.15.6094") which is not user-friendly.
+    #[cfg(windows)]
+    {
+        if let Some(nvml) = &nvml_opt {
+            if let Some(ver) = nvml.query_driver_version() {
+                let mut c = cache.write().expect("cache write");
+                if let Some(info) = c.system_info.as_mut() {
+                    info.gpu_driver_version = ver;
+                }
+            }
+        }
+    }
+
+    // Upgrade GPU driver version to the clean Adrenalin marketing version
+    // (e.g. "24.12.1") when AMD hardware is present and ADL2 resolves the
+    // symbol.  WMI returns the Windows internal version ("32.0.11033.1003").
+    #[cfg(windows)]
+    {
+        if let Some(amd) = &amd_opt {
+            if let Some(ver) = amd.query_driver_version() {
+                let mut c = cache.write().expect("cache write");
+                if let Some(info) = c.system_info.as_mut() {
+                    info.gpu_driver_version = ver;
+                }
+            }
+        }
+    }
+
     #[cfg(windows)]
     {
         let provider_load_order = vec![
@@ -1276,6 +1418,7 @@ pub fn monitor_loop(
             "NVIDIA NVML".to_string(),
             "AMD ADL2".to_string(),
             "Intel IGCL".to_string(),
+            "Radium sensor sidecar".to_string(),
         ];
 
         let provider_diagnostics = vec![
@@ -1343,6 +1486,25 @@ pub fn monitor_loop(
                 warnings: if igcl_opt.is_some() { vec!["Sensor calls remain staged until validation completes".to_string()] } else { vec!["Intel Arc telemetry remains on fallback paths".to_string()] },
                 errors: if igcl_opt.is_some() { Vec::new() } else { vec!["IGCL not initialised".to_string()] },
             },
+            ProviderDiagnostics {
+                id: "radium-sidecar".to_string(),
+                label: "Radium Sensor Sidecar".to_string(),
+                vendor: "radium".to_string(),
+                load_order: 5,
+                state: "staged".to_string(),
+                active: false,
+                dll: "radium-sensor-sidecar.dll + bundled .NET runtime + LibreHardwareMonitorLib + PawnIO".to_string(),
+                dll_available: false,
+                symbols_resolved: false,
+                symbols: vec![
+                    "LibreHardwareMonitor.Hardware.Computer".to_string(),
+                    "PawnIO low-level sensor access".to_string(),
+                    "AMD Zen Tctl/Tdie".to_string(),
+                ],
+                notes: "Headless low-level sensor provider staged for CPU package temperatures.".to_string(),
+                warnings: vec!["Sidecar has not produced a live sample yet".to_string()],
+                errors: Vec::new(),
+            },
         ];
 
         let provider_warnings = provider_diagnostics.iter().flat_map(|provider| provider.warnings.clone()).collect();
@@ -1358,6 +1520,10 @@ pub fn monitor_loop(
     // Main polling loop.
     let mut last_cpu_warning_signature = String::new();
     let mut last_cpu_warning_at: Option<Instant> = None;
+    #[cfg(windows)]
+    let mut last_sidecar_probe_at: Option<Instant> = None;
+    #[cfg(windows)]
+    let mut cached_sidecar_sample: Option<crate::sidecar_provider::RadiumSidecarSample> = None;
     loop {
         let tick_start = Instant::now();
 
@@ -1369,9 +1535,39 @@ pub fn monitor_loop(
 
         // --- CPU temperature: WMI paths first, then sysinfo Components fallback ---
         #[cfg(windows)]
-        let external_monitor_sample = wmi_opt
-            .as_ref()
-            .and_then(crate::wmi_provider::query_external_hardware_monitor_sample);
+        let external_monitor_sample = {
+            let should_probe_sidecar = last_sidecar_probe_at
+                .map(|last| last.elapsed() >= Duration::from_secs(10))
+                .unwrap_or(true);
+            if should_probe_sidecar {
+                cached_sidecar_sample = Some(crate::sidecar_provider::query_sensor_sidecar());
+                last_sidecar_probe_at = Some(Instant::now());
+            }
+
+            let sidecar_external = cached_sidecar_sample.as_ref().map(|sample| {
+                crate::wmi_provider::ExternalHardwareMonitorSample {
+                    provider: sample.provider.clone(),
+                    cpu_temp_c: sample.cpu_temp_c,
+                    gpu_temp_c: None,
+                    cpu_fan_rpm: sample.cpu_fan_rpm,
+                    gpu_fan_rpm: None,
+                }
+            });
+
+            let wmi_external = wmi_opt
+                .as_ref()
+                .and_then(crate::wmi_provider::query_external_hardware_monitor_sample);
+
+            if sidecar_external
+                .as_ref()
+                .and_then(|sample| sample.cpu_temp_c)
+                .is_some()
+            {
+                sidecar_external
+            } else {
+                wmi_external.or(sidecar_external)
+            }
+        };
 
         #[cfg(windows)]
         let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
@@ -1517,6 +1713,22 @@ pub fn monitor_loop(
 
             #[cfg(windows)]
             {
+                if let Some(ref sidecar) = cached_sidecar_sample {
+                    c.radium_sidecar_available = sidecar.available;
+                    c.radium_sidecar_driver_available = sidecar.driver_available;
+                    c.radium_sidecar_status = sidecar.status.clone();
+                    c.radium_sidecar_path = sidecar.executable_path.clone().unwrap_or_default();
+                    c.radium_sidecar_cpu_temp_label = sidecar.cpu_temp_label.clone().unwrap_or_default();
+                    c.radium_sidecar_notes = sidecar.notes.clone();
+                    if c.cpu_fan_rpm.is_none() {
+                        c.cpu_fan_rpm = sidecar.cpu_fan_rpm;
+                    }
+                    if let Some(storage_temp) = sidecar.storage_temp_c {
+                        if let Some(first_drive) = c.storage.iter_mut().find(|drive| drive.temperature.is_none()) {
+                            first_drive.temperature = Some(storage_temp);
+                        }
+                    }
+                }
                 if let Some(ref external) = external_monitor_sample {
                     c.cpu_fan_rpm = external.cpu_fan_rpm;
                     if c.gpu_fan_rpm.is_none() {
@@ -1593,6 +1805,31 @@ fn discover_cpu_temperature(
                 "no CPU temperature sensor row matched in external namespace".to_string()
             },
         });
+    } else {
+        let monitor_namespaces = [
+            ("libre-hardware-monitor-bridge", "ROOT\\LibreHardwareMonitor"),
+            ("open-hardware-monitor-bridge", "ROOT\\OpenHardwareMonitor"),
+        ];
+        for (source, namespace) in monitor_namespaces {
+            let inventory = namespace_inventory
+                .iter()
+                .find(|entry| entry.namespace.eq_ignore_ascii_case(namespace));
+            attempts.push(SensorDiscoveryAttempt {
+                source: source.to_string(),
+                query: format!("{namespace}: SELECT Name, SensorType, Value FROM Sensor"),
+                label: "External monitor CPU package".to_string(),
+                raw_value: inventory
+                    .map(|entry| entry.status.clone())
+                    .unwrap_or_else(|| "namespace not inventoried".to_string()),
+                value_c: None,
+                accepted: false,
+                reason: if inventory.map(|entry| entry.available).unwrap_or(false) {
+                    "external hardware monitor namespace available, but no CPU temperature sensor row matched".to_string()
+                } else {
+                    "external hardware monitor WMI bridge namespace unavailable".to_string()
+                },
+            });
+        }
     }
 
     let (machine_vendor, machine_model, machine_family, is_dell) = if let Some(profile) = machine_profile {
@@ -1713,19 +1950,22 @@ fn discover_cpu_temperature(
         sysinfo_candidate_temp
     };
 
-    let requires_driver = cpu_temp.is_none() && is_dell;
+    let access_denied = attempts
+        .iter()
+        .any(|attempt| attempt.reason.contains("access denied"));
+    let requires_driver = cpu_temp.is_none() && !access_denied;
     let classification = if cpu_temp.is_some() {
         "available".to_string()
+    } else if access_denied {
+        "permissions_or_policy".to_string()
+    } else if requires_driver {
+        "driver_level_telemetry_required".to_string()
     } else if attempts.iter().any(|attempt| {
         attempt.reason.contains("invalid class") || attempt.reason.contains("unsupported class")
     }) {
         "missing_or_invalid_wmi_class".to_string()
-    } else if attempts.iter().any(|attempt| attempt.reason.contains("access denied")) {
-        "permissions_or_policy".to_string()
     } else if is_dell && attempts.iter().any(|attempt| attempt.source == "dell-dcim") {
         "unsupported_hardware_exposure_or_missing_oem_provider".to_string()
-    } else if requires_driver {
-        "driver_level_telemetry_required".to_string()
     } else {
         "user_mode_probe_unavailable".to_string()
     };
@@ -1746,6 +1986,8 @@ fn discover_cpu_temperature(
             }
         } else if is_dell {
             "No reliable package temperature channel found. This Dell system likely needs an OEM/driver-backed provider for package sensors.".to_string()
+        } else if requires_driver {
+            "No reliable CPU package temperature is exposed through Windows WMI/sysinfo on this system. Enable a Radium hardware provider or Libre/Open Hardware Monitor WMI bridge for package sensors.".to_string()
         } else {
             "No reliable package temperature channel found. Continue with WMI/sysinfo fallback and collect discovery report for model-specific tuning.".to_string()
         },

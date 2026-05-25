@@ -34,6 +34,9 @@
     "category": "Utility",
     "shortDescription": "Premium Windows companion utility for Radium PCs systems.",
     "longDescription": "Radium PCs Companion provides local hardware monitoring, safe system utilities, tray controls, and OSD features for Radium PCs gaming and workstation builds.",
+    "resources": [
+      "binaries/**/*"
+    ],
     "icon": [
       "../images/favicon.ico",
       "icons/icon.ico"
@@ -41,8 +44,9 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "installMode": "both",
-        "displayLanguageSelector": false
+        "installMode": "perMachine",
+        "displayLanguageSelector": false,
+        "installerHooks": "windows/hooks.nsh"
       }
     }
   }

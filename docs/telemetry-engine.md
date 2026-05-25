@@ -156,7 +156,17 @@ Discovery report includes:
 
 If no reliable package sensor is found, capability and provenance state now surface `driver_required` explicitly for CPU package telemetry.
 
-To avoid support-log noise, CPU package temperature warnings are throttled in the monitoring loop: unchanged signatures are emitted at most once per minute, with immediate re-log only when failure classification changes.
+To avoid support-log noise, CPU package temperature warnings are throttled in the monitoring loop: unchanged signatures are emitted at most once every 15 minutes, with immediate re-log only when failure classification changes.
+
+### Radium Sensor Sidecar
+
+The monitoring loop now has a staged headless sidecar path for future bundled PawnIO/LibreHardwareMonitorLib sensor reads:
+
+- `scripts/build-sensor-sidecar.ps1` publishes the sidecar into `src-tauri/binaries/`.
+- `tauri.conf.json` packages `src-tauri/binaries/*` as resources.
+- `src-tauri/src/sidecar_provider.rs` runs the sidecar hidden and parses its JSON output.
+- If the sidecar returns a CPU package temperature, it is used ahead of WMI/sysinfo CPU temperature fallbacks.
+- If `LibreHardwareMonitorLib.dll`/PawnIO are not bundled, diagnostics reports the Radium sidecar as staged/missing-library instead of fabricating a temperature.
 
 ### Real Hardware Validation Scope (Current Phase)
 

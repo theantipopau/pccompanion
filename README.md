@@ -14,6 +14,8 @@ Main project marketing image: `images/radiumcompanion-marketing.png`.
 
 Short release handoff: [docs/current-state.md](docs/current-state.md)
 
+Sensor provider plan: [docs/radium-sensor-provider.md](docs/radium-sensor-provider.md)
+
 | Area | Status |
 |---|---|
 | Live hardware monitoring | Live |
@@ -21,8 +23,10 @@ Short release handoff: [docs/current-state.md](docs/current-state.md)
 | Minimize to tray / start hidden | Live |
 | Telemetry diagnostics page | Live |
 | Sensor discovery report export | Live |
+| GPU / chipset driver version display | Live |
+| GPU driver update check (NVIDIA) | Live |
 | Dell laptop CPU package temp (user-mode only) | Limited |
-| Optional embedded driver/provider path | Planned (staged) |
+| Optional embedded driver/provider path | Bundled sidecar + PawnIO installer hook |
 
 ## Pre-Release Candidate
 
@@ -62,7 +66,7 @@ Current validated host in this phase:
   - CPU package temperature: degraded/limited with explicit `missing_or_invalid_wmi_class` classification.
   - CPU usage, RAM, network, storage: validated live.
   - GPU fallback diagnostics: validated with explicit engine-counter availability state.
-  - Warning spam hardening: validated (throttled to approximately once per minute when signature is unchanged).
+  - Warning spam hardening: validated (throttled to approximately once every 15 minutes when signature is unchanged).
 
 Pending in this phase:
 - Intel + NVIDIA desktop,
@@ -82,6 +86,7 @@ Pending in this phase:
 - Telemetry diagnostics with provider provenance and confidence states.
 - Sensor discovery report listing source attempts, accepted values, and rejected values.
 - Safety-gated cleanup tools and performance profile controls.
+- Bundled hidden sensor sidecar for PawnIO/LibreHardwareMonitorLib CPU package temperature reads.
 - Compact desktop-native shell tuned for 1366x768 up to ultrawide displays.
 - Premium dark Radium visual language with restrained orange accents and high telemetry density.
 
@@ -111,9 +116,20 @@ What this means:
 | CPU usage / clock | sysinfo |
 | CPU temperature | WMI ACPI + perf thermal classes + sysinfo component fallback |
 | GPU telemetry (temp/usage/clocks/VRAM/fan/power) | NVML (NVIDIA), ADL2 (AMD), WMI fallback |
+| GPU driver version | NVML `nvmlSystemGetDriverVersion` (clean "560.94" format); WMI fallback |
+| Chipset driver version | WMI `Win32_PnPSignedDriver` (AMD SMBus / Intel chipset) |
+| GPU driver update status | NVIDIA GeForce driver API (async, silently degrades on no network) |
 | RAM usage | sysinfo |
 | Storage usage | sysinfo |
 | Network throughput | sysinfo |
+
+## Driver Version and Update Check
+
+The dashboard identity panel surfaces GPU and chipset driver versions:
+
+- **GPU Driver**: shown as `v560.94` using NVML's clean version string.  On systems without NVML (non-NVIDIA), falls back to the WMI Windows-format string.
+- **Chipset Driver**: WMI `Win32_PnPSignedDriver` query targeting AMD SMBus or Intel chipset components.
+- **Update check (NVIDIA only)**: on component mount the app calls `check_driver_update` which queries the NVIDIA GeForce driver lookup API in a background thread. If a newer WHQL driver is available, an **Update Available** badge appears and opens the direct download URL. If no network is reachable or the API changes, the command returns `None` and the UI falls back to a **Check** link. AMD chipset update checking is not implemented (no stable public API).
 
 ## Sensor Discovery Report
 

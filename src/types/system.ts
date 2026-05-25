@@ -34,6 +34,15 @@ export type SystemInfo = {
   psu: string;
   windows: string;
   bios: string;
+  gpuDriverVersion?: string;
+  chipsetDriverVersion?: string;
+};
+
+export type DriverUpdateInfo = {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  downloadUrl: string;
 };
 
 export type HardwareSample = {
@@ -45,6 +54,8 @@ export type HardwareSample = {
     clockMhz: number;
   };
   gpu: {
+    name: string;
+    vendor: Vendor;
     provider: string;
     temperature: number | null;
     usage: number;
@@ -322,4 +333,3 @@ export type PerformanceProfileResult = {
   message: string;
   actions: string[];
 };
-

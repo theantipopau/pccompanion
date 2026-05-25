@@ -8,6 +8,7 @@ type MetricCardProps = {
   value: string;
   detail: ReactNode;
   icon: LucideIcon;
+  componentName?: ReactNode;
   tone?: 'cyan' | 'green' | 'amber' | 'red';
   progress?: number;
   className?: string;
@@ -20,6 +21,7 @@ export function MetricCard({
   value,
   detail,
   icon: Icon,
+  componentName,
   tone = 'cyan',
   progress = 0,
   className,
@@ -41,6 +43,7 @@ export function MetricCard({
           </div>
         </div>
       </div>
+      {componentName && <div className="metric-component-name">{componentName}</div>}
       <strong>{value}</strong>
       <small>{detail}</small>
       <div className="meter" aria-hidden="true">

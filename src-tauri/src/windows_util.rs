@@ -249,6 +249,8 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
                 let _ = RegCloseKey(hkey);
                 return if del_res == ERROR_SUCCESS {
                     format!("[ok] {name}: RunOnce entry removed")
+                } else if del_res == windows::Win32::Foundation::ERROR_FILE_NOT_FOUND {
+                    format!("[ok] {name}: RunOnce entry was already absent")
                 } else {
                     format!("[error] {id}: removal failed — admin may be required")
                 };
@@ -373,6 +375,8 @@ pub fn set_companion_startup_enabled(enabled: bool, start_minimized: bool) -> Re
 
             if result == ERROR_SUCCESS {
                 Ok(enabled)
+            } else if !enabled && result == windows::Win32::Foundation::ERROR_FILE_NOT_FOUND {
+                Ok(false)
             } else {
                 Err(format!(
                     "Startup registration {} failed with Win32 code {}.",
