@@ -519,7 +519,79 @@ impl MonitoringEngine {
     /// initialises).
     pub fn system_info_snapshot(&self, sys: &System) -> SystemInfo {
         let c = self.cache.read().expect("hardware cache read lock");
-        if let Some(info) = c.system_info.clone() {
+        if let Some(mut info) = c.system_info.clone() {
+            let current_gpu_vendor = c.gpu_vendor.trim().to_lowercase();
+            let current_gpu_name = c.gpu_name.trim().to_string();
+
+            let adapter_gpu_name = c
+                .sensor_discovery
+                .gpu_adapters
+                .iter()
+                .find(|adapter| !adapter.name.trim().is_empty() && !adapter.integrated)
+                .or_else(|| c.sensor_discovery.gpu_adapters.iter().find(|adapter| !adapter.name.trim().is_empty()))
+                .map(|adapter| adapter.name.trim().to_string());
+
+            // Keep static WMI identity, but repair unknown placeholders with
+            // live cache/provider data as vendors become available.
+            if (info.gpu_vendor == "unknown" || info.gpu_vendor.trim().is_empty())
+                && !current_gpu_vendor.is_empty()
+            {
+                info.gpu_vendor = current_gpu_vendor.clone();
+            }
+            if info.gpu_vendor == "unknown" {
+                let inferred = vendor_from_str(&info.gpu).to_string();
+                if inferred != "unknown" {
+                    info.gpu_vendor = inferred;
+                }
+            }
+            if info.gpu_vendor == "unknown" && !current_gpu_vendor.is_empty() {
+                info.gpu_vendor = current_gpu_vendor.clone();
+            }
+            if info.gpu_vendor == "unknown" {
+                info.gpu_vendor = match c.gpu_provider.as_str() {
+                    "nvml" => "nvidia".to_string(),
+                    "adl2" => "amd".to_string(),
+                    "igcl" => "intel".to_string(),
+                    _ => "unknown".to_string(),
+                };
+            }
+            if (info.gpu.contains("Unknown")
+                || info.gpu.contains("initialising")
+                || info.gpu.trim().is_empty())
+                && !current_gpu_name.is_empty()
+            {
+                info.gpu = current_gpu_name.clone();
+            } else if (info.gpu.contains("Unknown")
+                || info.gpu.contains("initialising")
+                || info.gpu.trim().is_empty())
+                && adapter_gpu_name.is_some()
+            {
+                info.gpu = adapter_gpu_name.clone().unwrap_or_default();
+            }
+
+            // Some servers/boards expose weak WMI CPU identity strings.
+            // Fall back to sysinfo brand if WMI identity is unknown.
+            if info.cpu_vendor == "unknown" || info.cpu.trim().is_empty() || info.cpu == "Unknown CPU" {
+                let cpu_fallback = sys
+                    .cpus()
+                    .first()
+                    .map(|cpu| cpu.brand().trim().to_string())
+                    .filter(|brand| !brand.is_empty());
+
+                if let Some(cpu_name) = cpu_fallback {
+                    info.cpu_vendor = vendor_from_str(&cpu_name).to_string();
+                    if info.cpu.trim().is_empty() || info.cpu == "Unknown CPU" {
+                        info.cpu = cpu_name;
+                    }
+                }
+            }
+            if info.cpu_vendor == "unknown" {
+                let inferred = vendor_from_str(&info.cpu).to_string();
+                if inferred != "unknown" {
+                    info.cpu_vendor = inferred;
+                }
+            }
+
             return info;
         }
         // Fast sysinfo fallback while WMI is still initialising.
