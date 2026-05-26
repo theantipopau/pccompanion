@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="error-boundary-fallback">
         <div className="error-boundary-card">
-          <span className="error-boundary-icon">⚠</span>
+          <span className="error-boundary-icon">!</span>
           <h3>Something went wrong</h3>
           <p className="error-boundary-message">{error.message}</p>
           <button className="primary-button" onClick={this.reset}>

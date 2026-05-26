@@ -12,7 +12,7 @@ As of May 2026 the following is live and shipped:
 - **Performance profiles**: full apply flow with planned-changes preview, per-profile summaries, confirmed-state updates, and gated low-level writes. ✅ Slice B
 - **Benchmark page**: capture engine, live sensor trust panel, result cards, and a latest-vs-previous comparison block with per-metric deltas. ✅ Slice F
 - **Thermal panel**: intake badge repositioned from a fixed `left: 70%` anchor to `right: 4%` so it stays inside the case frame at all panel widths.
-- **Bug fixes shipped**: PawnIO silent flag, recycle-bin Win32 path, registry-cleaner idempotent delete, RAM-cleaner output clarity, NVIDIA badge copy.
+- **Bug fixes shipped**: PawnIO `-install -silent` invocation, installed sidecar lookup from `$INSTDIR\binaries`, recycle-bin Win32 path, registry-cleaner idempotent delete, RAM-cleaner output clarity, NVIDIA badge copy.
 
 Staged items still pending:
 

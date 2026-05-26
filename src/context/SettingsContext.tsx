@@ -62,7 +62,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    try {
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      // Keep running with in-memory settings if local storage is blocked or full.
+    }
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.dataset.compact = String(settings.experience.compactMode);
   }, [settings]);

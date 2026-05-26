@@ -61,7 +61,8 @@ src-tauri/binaries/dotnet-runtime/
 The NSIS installer hook in `src-tauri/windows/hooks.nsh` installs the bundled driver support after the Radium files are laid down:
 
 - The Radium installer is per-machine so the driver setup runs from an elevated installer context.
-- Post-install runs `PawnIO_setup.exe /S` from `$INSTDIR\binaries\PawnIO_setup.exe`, with a legacy `$INSTDIR\resources\binaries\PawnIO_setup.exe` fallback.
+- Post-install runs `PawnIO_setup.exe -install -silent` from `$INSTDIR\binaries\PawnIO_setup.exe`, with a legacy `$INSTDIR\resources\binaries\PawnIO_setup.exe` fallback.
+- Runtime sidecar discovery checks `$INSTDIR\binaries` first-class, matching the path used by Tauri/NSIS resource staging.
 - The installer log records the PawnIO setup exit code and `sc.exe query PawnIO` result for support diagnostics.
 - Release builds fail before packaging if `vendor\PawnIO\PawnIO_setup.exe` is missing or unsigned, so customer installers are not produced without PawnIO staging.
 - Uninstall does not currently remove PawnIO because other hardware tools may also depend on the same driver.

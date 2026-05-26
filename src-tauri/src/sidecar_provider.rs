@@ -185,6 +185,7 @@ fn find_sidecar_command() -> Option<SidecarCommand> {
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
             push_candidate_roots(&mut candidates, parent, exe_name, tauri_name, dll_name);
+            push_candidate_roots(&mut candidates, &parent.join("binaries"), exe_name, tauri_name, dll_name);
             push_candidate_roots(&mut candidates, &parent.join("resources"), exe_name, tauri_name, dll_name);
             push_candidate_roots(&mut candidates, &parent.join("resources").join("binaries"), exe_name, tauri_name, dll_name);
         }

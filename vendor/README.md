@@ -18,7 +18,7 @@ vendor/
 If `PawnIO_setup.exe` is present, the NSIS post-install hook runs it silently with:
 
 ```text
-PawnIO_setup.exe /S
+PawnIO_setup.exe -install -silent
 ```
 
 The build script fails if `PawnIO_setup.exe` is missing or its Authenticode signature is invalid. Do not add unreviewed driver binaries to the repo. Verify source, license, signature, and Defender/EDR behavior on disposable test systems first.

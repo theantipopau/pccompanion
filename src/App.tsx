@@ -53,9 +53,11 @@ export function App() {
 
   return (
     <SettingsProvider>
-      <MonitorProvider>
-        {overlayWindow ? <OverlayOnlyApp /> : <CompanionApp />}
-      </MonitorProvider>
+      <ErrorBoundary>
+        <MonitorProvider>
+          {overlayWindow ? <OverlayOnlyApp /> : <CompanionApp />}
+        </MonitorProvider>
+      </ErrorBoundary>
     </SettingsProvider>
   );
 }

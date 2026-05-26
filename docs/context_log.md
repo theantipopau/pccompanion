@@ -15,7 +15,7 @@
 - `src-tauri/src/sidecar_provider.rs` now prefers the sidecar DLL before any legacy EXE and launches it with the bundled runtime when available.
 - `src-tauri/tauri.conf.json` now packages `binaries/**/*` so nested runtime files are included in the NSIS installer.
 - The NSIS installer is now forced to per-machine mode so the PawnIO driver setup runs from an elevated installer context.
-- The NSIS PawnIO hook now resolves `PawnIO_setup.exe` from `$INSTDIR\binaries\` first, falls back to `$INSTDIR\resources\binaries\`, runs it with `/S`, logs the setup exit code, and queries `sc.exe query PawnIO` for install verification.
+- The NSIS PawnIO hook now resolves `PawnIO_setup.exe` from `$INSTDIR\binaries\` first, falls back to `$INSTDIR\resources\binaries\`, runs it with `-install -silent`, logs the setup exit code, and queries `sc.exe query PawnIO` for install verification.
 - Dashboard layout now uses explicit CSS grid areas instead of auto-placement and row spans, removing the large blank region under the hero on wide screens.
 - Fixed a follow-up dashboard regression where reset rules overrode the named grid areas and collapsed panels into narrow columns.
 - OSD window creation now uses a transparent window/webview background, no shadow, hidden-until-loaded behavior, and overlay-root CSS so it should no longer flash/show as a blank white rectangle.
@@ -149,7 +149,7 @@
 - Added `vendor/README.md` to describe where reviewed third-party binaries must be placed:
   - `vendor/LibreHardwareMonitor/LibreHardwareMonitorLib.dll`,
   - `vendor/PawnIO/PawnIO_setup.exe`.
-- Added `src-tauri/windows/hooks.nsh` and wired it via `tauri.conf.json` so NSIS post-install silently runs `PawnIO_setup.exe /S` from per-machine install mode if the reviewed installer is bundled.
+- Added `src-tauri/windows/hooks.nsh` and wired it via `tauri.conf.json` so NSIS post-install silently runs `PawnIO_setup.exe -install -silent` from per-machine install mode if the reviewed installer is bundled.
 
 #### Current runtime behavior
 - The sidecar DLL, LibreHardwareMonitorLib dependencies, bundled .NET 8 runtime, and reviewed `vendor/PawnIO/PawnIO_setup.exe` are included in `src-tauri/binaries/` for the installer.
@@ -403,7 +403,7 @@
 #### PawnIO pipeline status
 - Superseded by the later sidecar-packaging phase above.
 - The build now removes stale sidecar EXEs, stages the DLL sidecar, bundles a private .NET runtime, and copies reviewed `vendor/PawnIO/*` artifacts into `src-tauri/binaries/`.
-- The NSIS hook now runs `PawnIO_setup.exe /S` when present and records the setup exit code in the installer log.
+- The NSIS hook now runs `PawnIO_setup.exe -install -silent` when present and records the setup exit code in the installer log.
 
 #### Validation
 - `cargo check --manifest-path src-tauri/Cargo.toml` ✅ passed (1 expected dead_code warning for `get_gpu_name` which is used by command).
