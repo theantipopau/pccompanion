@@ -43,7 +43,9 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
 
   useEffect(() => {
     let alive = true;
-    getAppMetadata().then((metadata) => { if (alive) setAppMetadata(metadata); });
+    getAppMetadata()
+      .then((metadata) => { if (alive) setAppMetadata(metadata); })
+      .catch(() => undefined);
     return () => { alive = false; };
   }, []);
   const quickActions = [

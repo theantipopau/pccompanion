@@ -188,7 +188,8 @@ function CompanionApp() {
 
   return (
     <>
-      <Shell navItems={navItems} activeView={activeView} onNavigate={setActiveView}>
+      <ErrorBoundary>
+        <Shell navItems={navItems} activeView={activeView} onNavigate={setActiveView}>
         <AnimatePresence mode="wait">
           <motion.main
             key={activeView}
@@ -210,6 +211,7 @@ function CompanionApp() {
           </motion.main>
         </AnimatePresence>
       </Shell>
+      </ErrorBoundary>
       <OsdOverlay />
       <AnimatePresence>
         {splashVisible && (
