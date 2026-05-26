@@ -181,6 +181,15 @@ pub struct ProviderDiagnostics {
 
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct SidecarLifecycleStep {
+    pub id: String,
+    pub label: String,
+    pub state: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SensorProvenance {
     pub id: String,
     pub sensor: String,
@@ -253,6 +262,7 @@ pub struct TelemetryDiagnosticsSnapshot {
     pub fallback_sequence: Vec<String>,
     pub provider_load_order: Vec<String>,
     pub providers: Vec<ProviderDiagnostics>,
+    pub sidecar_lifecycle: Vec<SidecarLifecycleStep>,
     pub capabilities: Vec<HardwareCapability>,
     pub sensors: Vec<SensorProvenance>,
     pub support_snapshot: Vec<String>,
@@ -757,6 +767,7 @@ impl MonitoringEngine {
         };
         let cache = self.cache.read().expect("hardware cache read lock");
         let providers = build_provider_diagnostics(&cache);
+        let sidecar_lifecycle = build_sidecar_lifecycle(&cache);
         let capabilities = self.capability_snapshot();
         let sensors = build_sensor_provenance(&cache, &sample, &capabilities);
         let support_snapshot = build_support_snapshot(&cache, &sample, &capabilities);
@@ -768,6 +779,7 @@ impl MonitoringEngine {
             fallback_sequence: cache.provider_load_order.clone(),
             provider_load_order: cache.provider_load_order.clone(),
             providers,
+            sidecar_lifecycle,
             capabilities,
             sensors,
             support_snapshot,
@@ -792,6 +804,73 @@ fn active_provider_label(cache: &HardwareCache) -> String {
         "none" | "" => "Unavailable".to_string(),
         other => other.to_uppercase(),
     }
+}
+
+fn build_sidecar_lifecycle(cache: &HardwareCache) -> Vec<SidecarLifecycleStep> {
+    let bundled = !cache.radium_sidecar_path.is_empty();
+    let runtime_ready = bundled && cache.radium_sidecar_status != "sidecar_not_found";
+    let sensor_rows_visible = cache.radium_sidecar_driver_available
+        || cache
+            .radium_sidecar_notes
+            .iter()
+            .any(|note| note.to_lowercase().contains("temperature sensors seen"));
+
+    vec![
+        SidecarLifecycleStep {
+            id: "bundled".to_string(),
+            label: "Sidecar bundled".to_string(),
+            state: if bundled { "live" } else { "blocked" }.to_string(),
+            detail: if bundled {
+                "Sidecar assembly found in app resources.".to_string()
+            } else {
+                "Sidecar assembly was not found.".to_string()
+            },
+        },
+        SidecarLifecycleStep {
+            id: "runtime".to_string(),
+            label: "Runtime launch".to_string(),
+            state: if runtime_ready { "live" } else { "staged" }.to_string(),
+            detail: if cache.radium_sidecar_status.is_empty() {
+                "Waiting for first sidecar probe.".to_string()
+            } else {
+                format!("Last status: {}", cache.radium_sidecar_status)
+            },
+        },
+        SidecarLifecycleStep {
+            id: "driver".to_string(),
+            label: "Low-level driver signal".to_string(),
+            state: if cache.radium_sidecar_driver_available { "live" } else { "driver_required" }.to_string(),
+            detail: if cache.radium_sidecar_driver_available {
+                "LibreHardwareMonitor exposed at least one low-level sensor row.".to_string()
+            } else {
+                "PawnIO or equivalent low-level access has not exposed sensor rows yet.".to_string()
+            },
+        },
+        SidecarLifecycleStep {
+            id: "sensor_rows".to_string(),
+            label: "Sensor rows visible".to_string(),
+            state: if sensor_rows_visible { "partial" } else { "blocked" }.to_string(),
+            detail: if sensor_rows_visible {
+                "The sidecar saw hardware sensor rows, but they may not include CPU package temperature.".to_string()
+            } else {
+                "No temperature/fan/storage rows have been reported by the sidecar.".to_string()
+            },
+        },
+        SidecarLifecycleStep {
+            id: "cpu_package".to_string(),
+            label: "CPU package accepted".to_string(),
+            state: if cache.radium_sidecar_available { "live" } else if sensor_rows_visible { "partial" } else { "driver_required" }.to_string(),
+            detail: if cache.radium_sidecar_available {
+                if cache.radium_sidecar_cpu_temp_label.is_empty() {
+                    "CPU package temperature accepted from sidecar.".to_string()
+                } else {
+                    format!("Accepted {}", cache.radium_sidecar_cpu_temp_label)
+                }
+            } else {
+                "CPU package temperature has not matched the Radium sensor policy yet.".to_string()
+            },
+        },
+    ]
 }
 
 fn provider_state_from_enabled(enabled: bool, staged: bool) -> String {

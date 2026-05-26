@@ -31,10 +31,11 @@ export async function callNative<T>(
 
 /**
  * Opens a URL in the system default browser.
- * In native mode uses the `open_url` Rust command (cmd /c start).
+ * In native mode uses the `open_url` Rust command with HTTPS host allow-listing.
  * In browser preview falls back to window.open.
  */
 export function openExternalUrl(url: string): void {
+  if (!isAllowedExternalUrl(url)) return;
   if (!isNative()) {
     window.open(url, '_blank', 'noreferrer');
     return;
@@ -42,4 +43,16 @@ export function openExternalUrl(url: string): void {
   invoke('open_url', { url }).catch(() => {
     window.open(url, '_blank', 'noreferrer');
   });
+}
+
+function isAllowedExternalUrl(url: string): boolean {
+  try {
+    if (url.length > 2048 || /[\s"'<>|^`\\@]/.test(url)) return false;
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const allowedHosts = ['radiumpcs.com.au', 'github.com', 'nvidia.com', 'intel.com', 'amd.com'];
+    return allowedHosts.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
 }

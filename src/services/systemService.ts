@@ -14,6 +14,7 @@ import {
 } from './mockData';
 import type {
   BloatwareItem,
+  AppMetadata,
   HardwareCapability,
   DiagnosticsExport,
   HardwareSample,
@@ -34,6 +35,17 @@ import type {
   SystemInfo,
   TrayStatus,
 } from '../types/system';
+
+export async function getAppMetadata(): Promise<AppMetadata> {
+  return callNative<AppMetadata>('get_app_metadata', undefined, async () => ({
+    name: 'Radium PCs Companion',
+    version: '0.1.0-pre',
+    releaseChannel: 'pre-release',
+    buildProfile: 'browser',
+    updateStatus: 'manual',
+    releaseNotesUrl: 'https://github.com/theantipopau/pccompanion/releases',
+  }));
+}
 
 export async function getSystemInfo(): Promise<SystemInfo> {
   return callNative<SystemInfo>('get_system_info', undefined, mockSystemInfo);
@@ -212,6 +224,13 @@ export async function getTelemetryDiagnostics(): Promise<TelemetryDiagnosticsSna
       {
         id: 'igcl', label: 'IGCL', vendor: 'intel', loadOrder: 4, state: 'staged', active: false, dll: 'igcl64.dll / ControlLib.dll', dllAvailable: false, symbolsResolved: false, symbols: ['ctlInit', 'ctlEnumerateDevices'], notes: 'Intel Arc loader scaffold is staged for native hardware', warnings: ['Sensor bindings pending'], errors: [],
       },
+    ],
+    sidecarLifecycle: [
+      { id: 'bundled', label: 'Sidecar bundled', state: 'staged', detail: 'Desktop package only.' },
+      { id: 'runtime', label: 'Runtime launch', state: 'staged', detail: 'Browser preview cannot launch the sidecar.' },
+      { id: 'driver', label: 'Low-level driver signal', state: 'driver_required', detail: 'PawnIO validation runs in desktop mode.' },
+      { id: 'sensor_rows', label: 'Sensor rows visible', state: 'blocked', detail: 'No hardware sensor rows are visible in browser preview.' },
+      { id: 'cpu_package', label: 'CPU package accepted', state: 'driver_required', detail: 'Run desktop mode to validate CPU package matching.' },
     ],
     capabilities: [
       { id: 'cpu-temp', label: 'CPU package telemetry', state: 'partial', detail: 'Browser preview mode', writeSafe: false },

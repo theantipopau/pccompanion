@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer } from 'lucide-react';
+import { Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer, Zap } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
 import { pct, temp } from '../lib/format';
@@ -8,6 +8,8 @@ import { extractTrayValue } from '../lib/trayIcon';
 import type { NavItem } from '../types/navigation';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
+import { getAppMetadata } from '../services/systemService';
+import type { AppMetadata } from '../types/system';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CpuIcon, GpuIcon, RamIcon, ThermalIcon } from './HardwareIcon';
 
@@ -36,7 +38,14 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+  const [appMetadata, setAppMetadata] = useState<AppMetadata | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getAppMetadata().then((metadata) => { if (alive) setAppMetadata(metadata); });
+    return () => { alive = false; };
+  }, []);
   const quickActions = [
     {
       id: 'action-open-system-passport',
@@ -106,7 +115,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
 
   const navGroups: Array<{ label: string; ids: string[] }> = [
     { label: 'Monitor', ids: ['dashboard', 'thermals', 'processes'] },
-    { label: 'Tuning', ids: ['profiles', 'optimizer', 'utilities'] },
+    { label: 'Tuning', ids: ['profiles', 'benchmark', 'optimizer', 'utilities'] },
     { label: 'Maintenance', ids: ['cleanup', 'registry', 'startup', 'storage', 'settings'] },
   ];
 
@@ -270,6 +279,15 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               {sample ? pct(sample.memory.usage) : '—'}
             </strong>
           </div>
+        </div>
+        <div className="sidebar-version-strip">
+          <span>v{appMetadata?.version ?? '—'}</span>
+          {appMetadata?.updateStatus === 'available' && (
+            <button className="sidebar-update-pill" type="button" onClick={() => onNavigate('settings')} title="App update available — open Settings">
+              <Zap size={11} />
+              Update available
+            </button>
+          )}
         </div>
         <div className="sidebar-brand-promo" aria-label="Radium Companion premium support panel">
           <img src={assets.radiumHeaderNew} alt="Radium Companion" />

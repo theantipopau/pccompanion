@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, Sparkles, TimerReset, Wrench, FileWarning, Cpu } from 'lucide-react';
+import { Activity, BarChart3, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, Sparkles, TimerReset, Wrench, FileWarning, Cpu } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { Shell } from './components/Shell';
 import { SplashScreen } from './components/SplashScreen';
@@ -17,6 +17,7 @@ import { StorageCleanerPage } from './pages/StorageCleanerPage';
 import { RegistryCleanerPage } from './pages/RegistryCleanerPage';
 import { PerformanceProfilesPage } from './pages/PerformanceProfilesPage';
 import { ProcessMonitorPage } from './pages/ProcessMonitorPage';
+import { BenchmarkPage } from './pages/BenchmarkPage';
 import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { id: 'startup', label: 'Startup', icon: TimerReset },
   { id: 'storage', label: 'System Clean', icon: HardDrive },
   { id: 'profiles', label: 'Profiles', icon: Gauge },
+  { id: 'benchmark', label: 'Benchmark', icon: BarChart3 },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -102,8 +104,10 @@ function CompanionApp() {
         return <StorageCleanerPage />;
       case 'profiles':
         return <PerformanceProfilesPage />;
+      case 'benchmark':
+        return <BenchmarkPage />;
       case 'utilities':
-        return <UtilitiesPage mode={activeView} />;
+        return <UtilitiesPage mode={activeView} onNavigate={setActiveView} />;
       case 'diagnostics':
         return <SettingsPage initialTab="diagnostics" />;
       case 'passport':
@@ -142,10 +146,10 @@ function CompanionApp() {
       void optimizeRam();
     });
     listenSafely('tray://performance-mode', () => {
-      updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceMode: 'performance' } }));
+      updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceProfile: 'gaming', performanceMode: 'performance' } }));
     });
     listenSafely('tray://quiet-mode', () => {
-      updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceMode: 'quiet' } }));
+      updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceProfile: 'quiet', performanceMode: 'quiet' } }));
     });
     listenSafely('tray://export-diagnostics', () => {
       void exportDiagnostics();

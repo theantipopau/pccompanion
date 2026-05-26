@@ -1,7 +1,10 @@
-import { Fan, HardDrive, MemoryStick, MonitorUp, Power, Thermometer } from 'lucide-react';
+import { Cpu, Fan, HardDrive, MemoryStick, MonitorUp, Power, Thermometer } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
-import { temp } from '../lib/format';
+import { assets, oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
+import { pct, temp } from '../lib/format';
+import type { Vendor } from '../types/system';
 import { Panel } from './Panel';
 
 type Zone = {
@@ -9,72 +12,68 @@ type Zone = {
   label: string;
   value: number | null;
   detail: string;
-  icon: typeof Thermometer;
-  x: number;
-  y: number;
-  componentClass: string;
+  icon: LucideIcon;
 };
 
 export function ThermalCaseView() {
-  const { sample } = useMonitor();
+  const { sample, systemInfo } = useMonitor();
   const { settings } = useSettings();
   const storageTemp = sample?.storage.find((drive) => drive.temperature != null)?.temperature ?? null;
   const primaryStorage = sample?.storage[0];
   const cpuTemp = sample?.cpu.temperature ?? null;
   const gpuTemp = sample?.gpu.temperature ?? null;
+  const cpuName = cleanIdentity(systemInfo?.cpu) ?? 'CPU package';
+  const gpuName = cleanIdentity(sample?.gpu.name) ?? cleanIdentity(systemInfo?.gpu) ?? 'Graphics card';
+  const cpuVendor = firstKnownVendor([systemInfo?.cpuVendor ?? 'unknown', vendorFromText(cpuName)]);
+  const gpuVendor = firstKnownVendor([
+    sample?.gpu.vendor ?? 'unknown',
+    vendorFromProvider(sample?.gpu.provider),
+    systemInfo?.gpuVendor ?? 'unknown',
+    vendorFromText(gpuName),
+  ]);
+  const cpuVendorAsset = oemLogoForText(cpuName) ?? vendorLogo(cpuVendor);
+  const gpuVendorAsset = oemLogoForText(gpuName) ?? vendorLogo(gpuVendor);
+  const cpuFan = sample?.fans.find((fan) => fan.label.toLowerCase().includes('cpu'));
+  const gpuFan = sample?.fans.find((fan) => fan.label.toLowerCase().includes('gpu'));
+  const firstFan = sample?.fans.find((fan) => fan.rpm != null || fan.pct != null);
 
   const zones: Zone[] = [
     {
       id: 'cpu',
       label: 'CPU socket',
       value: cpuTemp,
-      detail: sample ? `${Math.round(sample.cpu.usage)}% CPU load${cpuTemp == null ? ' · package sensor unavailable' : ''}` : 'Awaiting CPU sample',
+      detail: sample ? `${Math.round(sample.cpu.usage)}% CPU load${cpuTemp == null ? ' - package sensor unavailable' : ''}` : 'Awaiting CPU sample',
       icon: Thermometer,
-      x: 42,
-      y: 30,
-      componentClass: 'case-cpu',
     },
     {
       id: 'ram',
       label: 'Memory bank',
       value: null,
-      detail: sample ? `${Math.round(sample.memory.usage)}% memory load · no DIMM temperature sensor` : 'Awaiting memory sample',
+      detail: sample ? `${Math.round(sample.memory.usage)}% memory load - no DIMM temperature sensor` : 'Awaiting memory sample',
       icon: MemoryStick,
-      x: 68,
-      y: 30,
-      componentClass: 'case-ram',
     },
     {
       id: 'gpu',
       label: 'Graphics card',
       value: gpuTemp,
-      detail: sample ? `${Math.round(sample.gpu.usage)}% GPU load${gpuTemp == null ? ' · temperature pending' : ''}` : 'Awaiting GPU sample',
+      detail: sample ? `${Math.round(sample.gpu.usage)}% GPU load${gpuTemp == null ? ' - temperature pending' : ''}` : 'Awaiting GPU sample',
       icon: MonitorUp,
-      x: 50,
-      y: 61,
-      componentClass: 'case-gpu',
     },
     {
       id: 'storage',
       label: 'NVMe / SSD',
       value: storageTemp,
       detail: primaryStorage
-        ? `${Math.round(primaryStorage.usedPercent)}% used${storageTemp == null ? ' · SMART temp unavailable' : ''}`
+        ? `${Math.round(primaryStorage.usedPercent)}% used${storageTemp == null ? ' - SMART temp unavailable' : ''}`
         : 'Drive scan pending',
       icon: HardDrive,
-      x: 25,
-      y: 45,
-      componentClass: 'case-storage',
     },
     {
       id: 'psu',
       label: 'PSU bay',
       value: null,
-      detail: sample?.gpu.powerWatts ? `${sample.gpu.powerWatts.toFixed(0)} W GPU power · no PSU sensor` : 'No PSU or ambient sensor exposed',
+      detail: sample?.gpu.powerWatts ? `${sample.gpu.powerWatts.toFixed(0)} W GPU power - no PSU sensor` : 'No PSU or ambient sensor exposed',
       icon: Power,
-      x: 26,
-      y: 82,
-      componentClass: 'case-psu',
     },
   ];
 
@@ -89,48 +88,116 @@ export function ThermalCaseView() {
         </div>
         <Fan size={19} />
       </div>
+
       <div className="case-visual">
         <div className="case-frame">
-          <div className="case-glass" />
-          <div className="case-motherboard" />
-          {zones.map((zone) => (
-            <div className={`case-component ${zone.componentClass} heat-${heatBand(zone.value)}`} key={`${zone.id}-component`} />
-          ))}
+          <img className="case-backdrop" src={assets.thermalChamber} alt="" aria-hidden="true" />
+          <div className="case-backdrop-scrim" />
           <span className="case-glow cpu-glow" style={{ opacity: intensity(cpuTemp, maxTemp) }} />
           <span className="case-glow gpu-glow" style={{ opacity: intensity(gpuTemp, maxTemp) }} />
-          <div className="case-fan fan-top"><Fan size={22} /></div>
-          <div className="case-fan fan-front"><Fan size={22} /></div>
-          <div className="case-fan fan-rear"><Fan size={22} /></div>
-          {zones.map((zone, index) => (
-            <button
-              type="button"
-              className={`case-pin heat-${heatBand(zone.value)}`}
-              key={zone.id}
-              style={{ left: `${zone.x}%`, top: `${zone.y}%` }}
-              title={`${zone.label}: ${temp(zone.value, settings.monitoring.temperatureUnit)}`}
-              aria-label={`${index + 1}. ${zone.label}: ${temp(zone.value, settings.monitoring.temperatureUnit)}`}
-            />
-          ))}
           <div className="airflow-line intake" />
           <div className="airflow-line exhaust" />
+
+          <SensorBadge
+            className="sensor-badge-cpu"
+            icon={Cpu}
+            label="CPU"
+            value={cpuTemp == null ? pct(sample?.cpu.usage ?? 0) : temp(cpuTemp, settings.monitoring.temperatureUnit)}
+            detail={cpuTemp == null ? 'Load proxy' : pct(sample?.cpu.usage ?? 0)}
+            logo={cpuVendorAsset}
+            logoAlt={`${cpuName} vendor`}
+          />
+          <SensorBadge
+            className="sensor-badge-gpu"
+            icon={MonitorUp}
+            label="GPU"
+            value={temp(gpuTemp, settings.monitoring.temperatureUnit)}
+            detail={sample?.gpu.fanPct != null ? `${sample.gpu.fanPct}% fan` : gpuFan?.rpm != null ? `${gpuFan.rpm} RPM` : pct(sample?.gpu.usage ?? 0)}
+            logo={gpuVendorAsset}
+            logoAlt={`${gpuName} vendor`}
+          />
+          <SensorBadge
+            className="sensor-badge-top-fans"
+            icon={Fan}
+            label="Top fans"
+            value={fanValue(cpuFan ?? firstFan)}
+            detail="Exhaust"
+          />
+          <SensorBadge
+            className="sensor-badge-front-fans"
+            icon={Fan}
+            label="Intake"
+            value={fanValue(firstFan)}
+            detail={sample?.gpu.powerWatts != null ? `${sample.gpu.powerWatts.toFixed(0)} W GPU` : 'Airflow'}
+          />
         </div>
+
         <div className="thermal-legend">
           {zones.map((zone, index) => {
             const Icon = zone.icon;
             return (
-            <div className="thermal-row" key={zone.id}>
-              <span className={`thermal-index heat-${heatBand(zone.value)}`}>{index + 1}</span>
-              <div>
-                <strong><Icon size={14} /> {zone.label}</strong>
-                <small>{zone.detail}</small>
+              <div className="thermal-row" key={zone.id}>
+                <span className={`thermal-index heat-${heatBand(zone.value)}`}>{index + 1}</span>
+                <div>
+                  <strong><Icon size={14} /> {zone.label}</strong>
+                  <small>{zone.detail}</small>
+                </div>
+                <b>{temp(zone.value, settings.monitoring.temperatureUnit)}</b>
               </div>
-              <b>{temp(zone.value, settings.monitoring.temperatureUnit)}</b>
-            </div>
-          )})}
+            );
+          })}
         </div>
       </div>
     </Panel>
   );
+}
+
+function SensorBadge({
+  className,
+  icon: Icon,
+  label,
+  value,
+  detail,
+  logo,
+  logoAlt,
+}: {
+  className: string;
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  detail: string;
+  logo?: string | null;
+  logoAlt?: string;
+}) {
+  return (
+    <div className={`thermal-sensor-badge ${className}`}>
+      <span className="thermal-sensor-icon"><Icon size={14} /></span>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+      </div>
+      {logo && <img src={logo} alt={logoAlt ?? `${label} vendor`} />}
+    </div>
+  );
+}
+
+function fanValue(fan?: { rpm: number | null; pct: number | null }) {
+  if (!fan) return 'N/A';
+  if (fan.rpm != null) return `${fan.rpm} RPM`;
+  if (fan.pct != null) return `${fan.pct}%`;
+  return 'N/A';
+}
+
+function cleanIdentity(value?: string | null) {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return null;
+  if (/query|detect|pending|initialising|initializing|unknown/i.test(trimmed)) return null;
+  return trimmed;
+}
+
+function firstKnownVendor(candidates: Vendor[]) {
+  return candidates.find((candidate) => candidate !== 'unknown') ?? 'unknown';
 }
 
 function heatBand(value: number | null) {
@@ -141,6 +208,6 @@ function heatBand(value: number | null) {
 }
 
 function intensity(value: number | null, maxTemp: number) {
-  if (value == null) return 0.16;
-  return Math.min(Math.max(value / maxTemp, 0.2), 0.92);
+  if (value == null) return 0.08;
+  return Math.min(Math.max(value / maxTemp, 0.18), 0.7);
 }

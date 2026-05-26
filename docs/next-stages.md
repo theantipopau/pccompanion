@@ -6,19 +6,20 @@ This document captures the next phase after the current pre-release baseline. It
 
 ## Current State Snapshot
 
-The Utilities tab already mixes live features with staged ones:
+As of May 2026 the following is live and shipped:
 
-- Live: Performance profiles, startup manager, storage cleaner.
-- Staged: fan control groundwork, radium sensor provider, network optimisation, RGB integration, benchmark page, game mode.
-- Directional signal: the tab is moving from generic maintenance utilities toward capability-driven hardware control and game-aware profiles.
+- **Utilities tab**: refactored into three groups (`Live now`, `Capability staged`, `Planned next`) with per-module status labels and action links. ✅ Slice A
+- **Performance profiles**: full apply flow with planned-changes preview, per-profile summaries, confirmed-state updates, and gated low-level writes. ✅ Slice B
+- **Benchmark page**: capture engine, live sensor trust panel, result cards, and a latest-vs-previous comparison block with per-metric deltas. ✅ Slice F
+- **Thermal panel**: intake badge repositioned from a fixed `left: 70%` anchor to `right: 4%` so it stays inside the case frame at all panel widths.
+- **Bug fixes shipped**: PawnIO silent flag, recycle-bin Win32 path, registry-cleaner idempotent delete, RAM-cleaner output clarity, NVIDIA badge copy.
 
-The current product already has:
+Staged items still pending:
 
-- real hardware telemetry,
-- vendor-aware GPU and chipset detection,
-- staged low-level sensor provider work,
-- safe cleanup and registry tools,
-- profile plumbing that is intentionally conservative.
+- App version display and update surfacing (Slice C — active next)
+- Manual game profile mappings (Slice D)
+- Sensor provider validation loop (Slice E)
+- RGB and vendor extras (Stage 6)
 
 ## Recommended Next Stages
 
@@ -57,6 +58,25 @@ How:
 - treat profile application as a service operation with explicit status,
 - keep the UI optimistic only after the apply result is confirmed,
 - preserve the current dry-run / capability-gated approach for anything low-level.
+
+### Stage 2.5: Add app version and update surfacing
+
+Goal: make software updates visible without turning the shell into a marketing banner.
+
+Work:
+
+- show the current Radium PCs Companion version in Settings,
+- add a quiet "update available" indicator in the sidebar or top status strip,
+- keep the indicator subtle by default, with a direct action only when an update exists,
+- link the update state to the existing release channel / version metadata,
+- avoid interruptive modal prompts unless the update is security-critical.
+
+How:
+
+- reuse the app version already defined in the Tauri metadata,
+- fetch update availability through a small startup check or background poll,
+- show a compact pill or badge rather than a dialog,
+- let the user open release notes or the download page from Settings.
 
 ### Stage 3: Add game-aware profiles
 
@@ -139,12 +159,126 @@ The main lesson from those projects is not the UI styling; it is the control mod
 
 ## Recommended Implementation Order
 
-1. Clean up the Utilities tab grouping and status labels.
-2. Promote performance profiles so they read as a supported workflow.
-3. Add manual per-game profile mappings.
-4. Expand sensor-provider staging and diagnostics.
-5. Add benchmark validation and tuning feedback.
-6. Revisit RGB and vendor-specific extras last.
+1. ~~Clean up the Utilities tab grouping and status labels.~~ ✅ Done
+2. ~~Promote performance profiles so they read as a supported workflow.~~ ✅ Done
+3. **Add app version and non-intrusive update surfacing.** ← active next (Slice C)
+4. Add manual per-game profile mappings.
+5. Expand sensor-provider staging and diagnostics.
+6. ~~Add benchmark validation and tuning feedback.~~ ✅ Done
+7. Revisit RGB and vendor-specific extras last.
+
+## Implementation Kickoff Plan
+
+### Slice A: Utilities roadmap surface ✅ DONE
+
+Shipped. `UtilitiesPage.tsx` has three groups (`live`, `staged`, `planned`), a `UtilityStatus` vocabulary, per-card one-line summaries, and action links for live modules. No further work needed here unless new modules are added.
+
+### Slice B: Performance profile workflow ✅ DONE
+
+Shipped. `PerformanceProfilesPage.tsx` has full apply flow, planned-changes preview panel, confirmed-state updates, error handling, and gated write visibility. Utilities page links directly to profiles.
+
+### Slice C: Version and app update surfacing 🔜 ACTIVE NEXT
+
+Scope:
+
+- Add a `get_app_version` Tauri command that returns the Cargo package version string (already in `tauri.conf.json` / `Cargo.toml`).
+- Show the current version in Settings near the native integration panel — small muted label, always visible offline.
+- Add a quiet update-available pill in the sidebar status strip or topbar. Only shown when a check finds a newer tag; fails closed to nothing visible.
+- Update check hits a small JSON endpoint (GitHub releases or a static file); no modal, no blocking UI.
+- Wire `app_version` and optional `update_available: bool` into `AppMetadata` on the TS side.
+
+Acceptance checks:
+
+- Version string visible in Settings with no network access.
+- Update check failure shows nothing (not an error banner).
+- Update available → compact pill with "What's new" / download link, no startup dialog.
+- Browser preview shows a hardcoded version label clearly marked `[preview]`.
+
+Likely files:
+
+- `src-tauri/src/lib.rs` — add `get_app_version` command
+- `src/services/native.ts` — add `getAppVersion` invoke
+- `src/services/systemService.ts` — add `getAppMetadata` + optional update poll
+- `src/types/system.ts` — add `AppMetadata` type
+- `src/pages/SettingsPage.tsx` — version display block
+- `src/components/Shell.tsx` — sidebar update pill
+
+### Slice D: Manual game profile mappings
+
+Scope:
+
+- Add a local-only game mapping model: process name, optional executable path, selected performance profile, restore profile.
+- Start in Settings or a compact Game Mode page with manual add/edit/remove.
+- Use current `listTopProcesses` as the first discovery aid.
+- Keep automatic switching disabled by default; expose a reviewed "detect running game" step before background automation.
+
+Acceptance checks:
+
+- Users can create a mapping without auto-switching being enabled.
+- Restore behavior is explicit: previous profile or chosen default profile.
+- No cloud sync, hidden background rules, or unreviewed process mutation.
+
+Likely files:
+
+- `src/types/system.ts`
+- `src/context/SettingsContext.tsx`
+- `src/pages/SettingsPage.tsx` or a new `GameModePage.tsx`
+- `src/pages/ProcessMonitorPage.tsx`
+
+### Slice E: Sensor provider validation loop
+
+Scope:
+
+- Keep the PawnIO/LHM sidecar as the current validation path.
+- Add clearer provider lifecycle states to Diagnostics: bundled, installed, service visible, sensor rows visible, CPU package accepted.
+- Keep release packaging fail-closed when `PawnIO_setup.exe` is missing or unsigned.
+- Capture the exact sidecar status in support export so tester-machine results are actionable.
+
+Acceptance checks:
+
+- On a machine with no matching sensors, the app explains "provider present but no CPU package row" rather than showing a blank.
+- On Ryzen tester hardware, support can distinguish installer failure, driver/service failure, sidecar launch failure, and sensor matching failure.
+- Diagnostics language stays short enough to avoid clipping in Settings.
+
+Likely files:
+
+- `tools/radium-sensor-sidecar/Program.cs`
+- `src-tauri/src/sidecar_provider.rs`
+- `src-tauri/src/hardware.rs`
+- `src/pages/TelemetryDiagnosticsPage.tsx`
+- `scripts/build-sensor-sidecar.ps1`
+
+### Slice F: Benchmark proof of value ✅ DONE
+
+Shipped. `BenchmarkPage.tsx` has a 30-second capture engine, live sensor trust panel with explicit trusted/missing chips, result cards (CPU/GPU avg+max, load, fan, power, RAM), and a latest-vs-previous comparison block with per-metric deltas and `lowerIsBetter` colouring. Results stay local; no cloud upload.
+- `src/services/systemService.ts`
+- `src/types/system.ts`
+- `src-tauri/src/lib.rs`
+
+## First PR Shape
+
+Keep the first implementation PR small and UI-led:
+
+1. Utilities grouping and status labels.
+2. Compact profile preview on Utilities.
+3. Settings app version display using local metadata only.
+
+Defer network update checks, game mappings, benchmark execution, RGB, and any new hardware writes until the first PR proves the information architecture.
+
+Current implementation progress:
+
+- Utilities grouping/status labels: implemented.
+- Compact profile preview on Utilities: implemented.
+- Settings app version display from local metadata: implemented.
+- Release notes/update status surfacing: implemented as a manual, non-intrusive link.
+- Profile preview-before-apply flow: implemented.
+- Exact active profile persistence: implemented through settings.
+- Manual game profile mappings: implemented as local settings; background automation is still off.
+- Sensor sidecar lifecycle strip: implemented in Diagnostics for bundled/runtime/driver/sensor-row/CPU-package states.
+- Thermal page premium backdrop asset: implemented with live telemetry overlays, fan callouts, and CPU/GPU vendor marks.
+- Benchmark capture page: implemented as a local telemetry window with trusted/missing sensor reporting and latest-vs-previous comparison.
+- Security hardening pass: URL opening now uses HTTPS allow-listing, cleanup skips unsafe targets/symlink traversal, and release sidecar loading no longer trusts arbitrary environment/current-directory paths.
+- Network update checks, RGB, background game automation, and new hardware writes: deferred.
 
 ## Guardrails
 

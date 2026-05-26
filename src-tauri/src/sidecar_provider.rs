@@ -168,10 +168,12 @@ struct SidecarCommand {
 }
 
 fn find_sidecar_command() -> Option<SidecarCommand> {
-    if let Ok(explicit) = std::env::var("RADIUM_SENSOR_SIDECAR") {
-        let path = PathBuf::from(explicit);
-        if path.is_file() {
-            return Some(command_for_path(path));
+    if cfg!(debug_assertions) {
+        if let Ok(explicit) = std::env::var("RADIUM_SENSOR_SIDECAR") {
+            let path = PathBuf::from(explicit);
+            if path.is_file() {
+                return command_for_path(path);
+            }
         }
     }
 
@@ -189,18 +191,20 @@ fn find_sidecar_command() -> Option<SidecarCommand> {
     }
 
     if let Ok(current_dir) = std::env::current_dir() {
-        push_candidate_roots(&mut candidates, &current_dir.join("target").join("sensor-sidecar"), exe_name, tauri_name, dll_name);
-        push_candidate_roots(&mut candidates, &current_dir.join("src-tauri").join("binaries"), exe_name, tauri_name, dll_name);
-        push_candidate_roots(&mut candidates, &current_dir.join("binaries"), exe_name, tauri_name, dll_name);
+        if cfg!(debug_assertions) {
+            push_candidate_roots(&mut candidates, &current_dir.join("target").join("sensor-sidecar"), exe_name, tauri_name, dll_name);
+            push_candidate_roots(&mut candidates, &current_dir.join("src-tauri").join("binaries"), exe_name, tauri_name, dll_name);
+            push_candidate_roots(&mut candidates, &current_dir.join("binaries"), exe_name, tauri_name, dll_name);
+        }
     }
 
     candidates
         .into_iter()
         .find(|candidate| candidate.is_file())
-        .map(command_for_path)
+        .and_then(command_for_path)
 }
 
-fn command_for_path(path: PathBuf) -> SidecarCommand {
+fn command_for_path(path: PathBuf) -> Option<SidecarCommand> {
     let is_dll = path
         .extension()
         .and_then(|ext| ext.to_str())
@@ -208,18 +212,24 @@ fn command_for_path(path: PathBuf) -> SidecarCommand {
         .unwrap_or(false);
 
     if is_dll {
-        let bundled_dotnet = bundled_dotnet_for(&path).unwrap_or_else(|| PathBuf::from("dotnet"));
-        SidecarCommand {
+        let bundled_dotnet = bundled_dotnet_for(&path).or_else(|| {
+            if cfg!(debug_assertions) {
+                Some(PathBuf::from("dotnet"))
+            } else {
+                None
+            }
+        })?;
+        Some(SidecarCommand {
             program: bundled_dotnet,
             args: vec![path.to_string_lossy().to_string()],
             display_path: path,
-        }
+        })
     } else {
-        SidecarCommand {
+        Some(SidecarCommand {
             program: path.clone(),
             args: Vec::new(),
             display_path: path,
-        }
+        })
     }
 }
 

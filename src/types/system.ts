@@ -45,6 +45,15 @@ export type DriverUpdateInfo = {
   downloadUrl: string;
 };
 
+export type AppMetadata = {
+  name: string;
+  version: string;
+  releaseChannel: string;
+  buildProfile: string;
+  updateStatus: 'manual' | 'checking' | 'available' | 'up_to_date' | 'unavailable';
+  releaseNotesUrl: string;
+};
+
 export type HardwareSample = {
   timestamp: number;
   state: MetricState;
@@ -108,6 +117,17 @@ export type OverlayPreset = 'compact-bar' | 'corner-widget' | 'vertical-list' | 
 
 export type PerformanceMode = 'balanced' | 'performance' | 'quiet';
 
+export type GameProfileMapping = {
+  id: string;
+  label: string;
+  processName: string;
+  executablePath: string;
+  launchProfile: PerformanceProfileId;
+  restoreProfile: PerformanceProfileId;
+  enabled: boolean;
+  automationEnabled: boolean;
+};
+
 export type CompanionSettings = {
   theme: 'radium-dark' | 'midnight' | 'graphite';
   tray: {
@@ -139,7 +159,12 @@ export type CompanionSettings = {
   experience: {
     compactMode: boolean;
     animations: boolean;
+    performanceProfile: PerformanceProfileId;
     performanceMode: PerformanceMode;
+  };
+  gameMode: {
+    automationEnabled: boolean;
+    mappings: GameProfileMapping[];
   };
 };
 
@@ -235,6 +260,13 @@ export type ProviderDiagnostics = {
   errors: string[];
 };
 
+export type SidecarLifecycleStep = {
+  id: string;
+  label: string;
+  state: CapabilityState;
+  detail: string;
+};
+
 export type SensorProvenance = {
   id: string;
   sensor: string;
@@ -293,6 +325,7 @@ export type TelemetryDiagnosticsSnapshot = {
   fallbackSequence: string[];
   providerLoadOrder: string[];
   providers: ProviderDiagnostics[];
+  sidecarLifecycle: SidecarLifecycleStep[];
   capabilities: HardwareCapability[];
   sensors: SensorProvenance[];
   supportSnapshot: string[];

@@ -7,7 +7,7 @@
   pawnio_install:
     DetailPrint "Installing Radium hardware sensor driver support..."
     DetailPrint "PawnIO installer path: $R0"
-    nsExec::ExecToLog '"$R0" -install -silent'
+    nsExec::ExecToLog '"$R0" /S'
     Pop $0
     DetailPrint "PawnIO installer exit code: $0"
     nsExec::ExecToLog 'sc.exe query PawnIO'

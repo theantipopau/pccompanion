@@ -109,7 +109,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
         <PageHeader
           eyebrow="Diagnostics"
           title="Telemetry Diagnostics"
-          description="Provider provenance, capability state, and sensor trust signals for support and troubleshooting."
+          description="Provider, capability, and sensor state for support."
           action={actions}
         />
       )}
@@ -130,9 +130,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
             <div>
               <span className="eyebrow">Support readiness</span>
               <h2>Telemetry readiness</h2>
-              <p>
-                Active providers, degraded channels, and support-ready sensor state.
-              </p>
+              <p>Active providers, degraded channels, and support-ready sensor state.</p>
             </div>
             <div className="diagnostics-state-stack">
               <span className={snapshot?.overallState === 'valid' ? 'diagnostics-badge live' : 'diagnostics-badge partial'}>{snapshot ? snapshot.overallState : 'loading'}</span>
@@ -146,6 +144,27 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
             <StatCard label="Sensors" value={`${sensorCounts.live}`} detail={`${sensorCounts.partial} partial / ${sensorCounts.staged} staged`} icon={Waves} />
             <StatCard label="Capabilities" value={`${snapshot?.capabilities.length ?? 0}`} detail={`${snapshot?.supportSnapshot.length ?? 0} support notes`} icon={ClipboardList} />
             <StatCard label="Confidence" value={confidenceBandSummary(snapshot)} detail="High / medium / low" icon={Sparkles} />
+          </div>
+        </Panel>
+
+        <Panel className="diagnostics-panel wide">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Radium sensor provider</span>
+              <h2>Sidecar validation path</h2>
+            </div>
+            <ShieldCheck size={18} />
+          </div>
+          <div className="sidecar-lifecycle">
+            {(snapshot?.sidecarLifecycle ?? []).map((step, index) => (
+              <div className="sidecar-step" key={step.id}>
+                <span className={stateClass(step.state)}>{index + 1}</span>
+                <div>
+                  <strong>{step.label}</strong>
+                  <small title={step.detail}>{shortText(step.detail, 92)}</small>
+                </div>
+              </div>
+            ))}
           </div>
         </Panel>
 
@@ -187,7 +206,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                 </div>
                 <div>
                   <span>Issue class</span>
-                  <strong>{snapshot.sensorDiscovery.issueClassification}</strong>
+                  <strong>{formatDiagnosticToken(snapshot.sensorDiscovery.issueClassification)}</strong>
                 </div>
                 <div>
                   <span>GPU engine counters</span>
@@ -196,18 +215,18 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
               </div>
               {!snapshot.sensorDiscovery.packageTempAvailable && (
                 <div className={snapshot.sensorDiscovery.requiresDriver ? 'validation-card degraded' : 'validation-card partial'}>
-                  <strong>CPU package temperature unavailable.</strong>
-                  <p>{snapshot.sensorDiscovery.recommendedAction}</p>
+                  <strong>CPU package temp missing.</strong>
+                  <p title={snapshot.sensorDiscovery.recommendedAction}>{shortText(snapshot.sensorDiscovery.recommendedAction, 120)}</p>
                 </div>
               )}
               <div className="discovery-hints">
                 <span>GPU counter probe state</span>
-                <strong>{snapshot.sensorDiscovery.gpuEngineCounterState}</strong>
+                <strong>{formatDiagnosticToken(snapshot.sensorDiscovery.gpuEngineCounterState)}</strong>
               </div>
               {snapshot.sensorDiscovery.dellClassHints.length > 0 && (
                 <div className="discovery-hints">
                   <span>Dell WMI class hints</span>
-                  <strong>{snapshot.sensorDiscovery.dellClassHints.join(' / ')}</strong>
+                  <strong title={snapshot.sensorDiscovery.dellClassHints.join(' / ')}>{summarizeList(snapshot.sensorDiscovery.dellClassHints, 4)}</strong>
                 </div>
               )}
 
@@ -224,8 +243,8 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                     <span className={entry.available ? 'state-chip live' : 'state-chip blocked'}>
                       {entry.available ? 'Yes' : 'No'}
                     </span>
-                    <span>{entry.status}</span>
-                    <span>{entry.matchingClasses.length > 0 ? entry.matchingClasses.slice(0, 6).join(' / ') : 'None'}</span>
+                    <span title={entry.status}>{shortText(entry.status, 72)}</span>
+                    <span title={entry.matchingClasses.join(' / ')}>{entry.matchingClasses.length > 0 ? summarizeList(entry.matchingClasses, 4) : 'None'}</span>
                   </div>
                 ))}
               </div>
@@ -247,7 +266,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                 )}
                 {snapshot.sensorDiscovery.gpuAdapters.map((adapter, index) => (
                   <div key={`${adapter.name}-${index}`} className="diagnostics-matrix-row">
-                    <span>{adapter.name}</span>
+                    <span title={adapter.name}>{shortText(adapter.name, 56)}</span>
                     <span>{adapter.vendor}</span>
                     <span>{adapter.integrated ? 'integrated' : 'discrete'}</span>
                     <span>{adapter.adapterRamGb > 0 ? `${adapter.adapterRamGb.toFixed(1)} GB` : 'Unknown'}</span>
@@ -273,11 +292,11 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                     transition={{ duration: 0.14, delay: index * 0.01 }}
                   >
                     <span>{attempt.source}</span>
-                    <span>{attempt.label}</span>
-                    <span>{attempt.rawValue}</span>
+                    <span title={attempt.label}>{shortText(attempt.label, 48)}</span>
+                    <span title={attempt.rawValue}>{shortText(attempt.rawValue, 32)}</span>
                     <span className={attempt.accepted ? 'state-chip live' : 'state-chip blocked'}>{attempt.accepted ? 'Yes' : 'No'}</span>
                     <span>{attempt.valueC == null ? 'N/A' : `${attempt.valueC.toFixed(1)} C`}</span>
-                    <span>{attempt.reason}</span>
+                    <span title={attempt.reason}>{shortText(attempt.reason, 80)}</span>
                   </motion.div>
                 ))}
               </div>
@@ -315,18 +334,19 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                 </div>
                 <div className="provider-card-body">
                   <span>Binary</span>
-                  <strong>{provider.dll}</strong>
+                  <strong title={provider.dll}>{shortProviderBinary(provider.dll)}</strong>
                   <span>Binding</span>
                   <strong>{provider.symbolsResolved ? 'Symbols resolved' : 'Pending'}</strong>
                   <span>Notes</span>
-                  <strong>{provider.notes}</strong>
+                  <strong title={provider.notes}>{shortText(provider.notes, 96)}</strong>
                 </div>
                 <div className="provider-tags">
-                  {provider.symbols.map((symbol) => <span key={symbol} className="badge badge-dim">{symbol}</span>)}
+                  {provider.symbols.slice(0, 4).map((symbol) => <span key={symbol} className="badge badge-dim">{symbol}</span>)}
+                  {provider.symbols.length > 4 && <span className="badge badge-dim">+{provider.symbols.length - 4}</span>}
                 </div>
                 <div className="provider-notes">
-                  {provider.warnings.map((warning) => <small key={warning} className="warning">{warning}</small>)}
-                  {provider.errors.map((error) => <small key={error} className="error">{error}</small>)}
+                  {provider.warnings.map((warning) => <small key={warning} className="warning" title={warning}>{shortText(warning, 96)}</small>)}
+                  {provider.errors.map((error) => <small key={error} className="error" title={error}>{shortText(error, 96)}</small>)}
                 </div>
               </motion.article>
             ))}
@@ -361,7 +381,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
               >
                 <div>
                   <strong>{sensor.sensor}</strong>
-                  <small>{sensor.notes}</small>
+                  <small title={sensor.notes}>{shortText(sensor.notes, 96)}</small>
                 </div>
                 <span>{sensor.provider}</span>
                 <span className={stateClass(sensor.state)}>{sensor.state}</span>
@@ -392,9 +412,9 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
               <div key={capability.id} className="capability-row">
                 <div>
                   <strong>{capability.label}</strong>
-                  <small>{capability.detail}</small>
+                  <small title={capability.detail}>{shortText(capability.detail, 96)}</small>
                 </div>
-                <span className={stateClass(capability.state)}>{capability.state}</span>
+                <span className={stateClass(capability.state)}>{formatDiagnosticToken(capability.state)}</span>
               </div>
             ))}
           </div>
@@ -433,7 +453,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
             {(snapshot?.supportSnapshot ?? []).map((line) => (
               <div key={line} className="support-snapshot-row">
                 <span />
-                <p>{line}</p>
+                <p title={line}>{shortText(line, 110)}</p>
               </div>
             ))}
           </div>
@@ -463,15 +483,15 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
           <div className="export-summary-grid">
             <div>
               <span>Path</span>
-              <strong>{exportResult?.path ?? snapshot?.createdAt ?? 'Ready to export'}</strong>
+              <strong title={exportResult?.path ?? snapshot?.createdAt ?? 'Ready to export'}>{exportResult?.path ? shortPath(exportResult.path) : snapshot?.createdAt ?? 'Ready to export'}</strong>
             </div>
             <div>
               <span>Status</span>
-              <strong className={exportResult ? 'export-status-ok' : ''}>{exportResult?.message ?? 'Export a support bundle when needed.'}</strong>
+              <strong className={exportResult ? 'export-status-ok' : ''} title={exportResult?.message}>{exportResult?.message ? shortText(exportResult.message, 88) : 'Export a support bundle when needed.'}</strong>
             </div>
             <div>
               <span>Sections</span>
-              <strong>{exportResult ? exportResult.sections.join(' / ') : 'Providers / Capabilities / Sensors / Support'}</strong>
+              <strong title={exportResult?.sections.join(' / ')}>{exportResult ? summarizeList(exportResult.sections, 4) : 'Providers / Capabilities / Sensors / Support'}</strong>
             </div>
             <div>
               <span>Coverage</span>
@@ -500,6 +520,33 @@ function stateClass(state: string): string {
   if (state === 'partial' || state === 'staged') return 'state-chip partial';
   if (state === 'blocked' || state === 'driver_required' || state === 'unsupported') return 'state-chip blocked';
   return 'state-chip muted';
+}
+
+function shortText(value: string, max = 80): string {
+  const clean = value.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
+}
+
+function summarizeList(values: string[], maxItems = 4): string {
+  const shown = values.slice(0, maxItems).map((value) => shortText(value, 34));
+  if (values.length > maxItems) shown.push(`+${values.length - maxItems}`);
+  return shown.join(' / ');
+}
+
+function formatDiagnosticToken(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function shortProviderBinary(value: string): string {
+  return shortText(value.replace(' + bundled .NET runtime + LibreHardwareMonitorLib + PawnIO', ' + runtime + LHM + PawnIO'), 72);
+}
+
+function shortPath(value: string): string {
+  const normalized = value.replace(/\//g, '\\');
+  const parts = normalized.split('\\').filter(Boolean);
+  if (parts.length <= 3) return shortText(value, 92);
+  return shortText(`...\\${parts.slice(-3).join('\\')}`, 92);
 }
 
 function confidenceClass(confidence: string): string {

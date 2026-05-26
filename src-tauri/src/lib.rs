@@ -104,6 +104,17 @@ impl Default for StorageScanStatus {
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AppMetadata {
+    name: String,
+    version: String,
+    release_channel: String,
+    build_profile: String,
+    update_status: String,
+    release_notes_url: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DiagnosticsExport {
     path: String,
     created_at: String,
@@ -113,6 +124,26 @@ struct DiagnosticsExport {
     capability_count: usize,
     sensor_count: usize,
     discovery_attempt_count: usize,
+}
+
+#[tauri::command]
+fn get_app_metadata() -> AppMetadata {
+    AppMetadata {
+        name: "Radium PCs Companion".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        release_channel: if env!("CARGO_PKG_VERSION").contains("pre") {
+            "pre-release".to_string()
+        } else {
+            "stable".to_string()
+        },
+        build_profile: if cfg!(debug_assertions) {
+            "debug".to_string()
+        } else {
+            "release".to_string()
+        },
+        update_status: "manual".to_string(),
+        release_notes_url: "https://github.com/theantipopau/pccompanion/releases".to_string(),
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -384,15 +415,91 @@ async fn check_driver_update(
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err("Only http/https URLs are permitted".to_string());
-    }
+    validate_external_url(&url)?;
     #[cfg(windows)]
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", url.as_str()])
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    open_external_url_windows(&url)?;
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        return Err("External URL opening is only implemented for Windows builds".to_string());
+    }
     Ok(())
+}
+
+fn validate_external_url(url: &str) -> Result<(), String> {
+    const MAX_URL_LEN: usize = 2048;
+    const ALLOWED_HOSTS: &[&str] = &[
+        "radiumpcs.com.au",
+        "github.com",
+        "nvidia.com",
+        "intel.com",
+        "amd.com",
+    ];
+
+    if url.len() > MAX_URL_LEN {
+        return Err("URL is too long".to_string());
+    }
+    if url.chars().any(|ch| ch.is_control() || ch.is_whitespace()) {
+        return Err("URL contains unsafe characters".to_string());
+    }
+    if url.chars().any(|ch| matches!(ch, '"' | '\'' | '<' | '>' | '|' | '^' | '`' | '\\' | '@')) {
+        return Err("URL contains blocked shell metacharacters".to_string());
+    }
+    let Some(rest) = url.strip_prefix("https://") else {
+        return Err("Only HTTPS URLs are permitted".to_string());
+    };
+    let host = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .split('@')
+        .last()
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    if host.is_empty() {
+        return Err("URL host is missing".to_string());
+    }
+    let allowed = ALLOWED_HOSTS
+        .iter()
+        .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")));
+    if !allowed {
+        return Err("URL host is not on the allow-list".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn open_external_url_windows(url: &str) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let operation = wide_null("open");
+    let target = wide_null(url);
+    let result = unsafe {
+        ShellExecuteW(
+            HWND::default(),
+            PCWSTR(operation.as_ptr()),
+            PCWSTR(target.as_ptr()),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if result.0 as isize <= 32 {
+        Err(format!("ShellExecute failed with code {}", result.0 as isize))
+    } else {
+        Ok(())
+    }
+}
+
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[tauri::command]
@@ -828,6 +935,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_app_metadata,
             get_system_info,
             get_hardware_sample,
             get_hardware_capabilities,
@@ -1048,4 +1156,25 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
 
     builder.build(app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_external_url;
+
+    #[test]
+    fn external_url_validator_allows_known_https_hosts() {
+        assert!(validate_external_url("https://radiumpcs.com.au").is_ok());
+        assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases").is_ok());
+        assert!(validate_external_url("https://www.nvidia.com/Download/index.aspx").is_ok());
+    }
+
+    #[test]
+    fn external_url_validator_rejects_shell_metacharacters_and_unknown_hosts() {
+        assert!(validate_external_url("http://radiumpcs.com.au").is_err());
+        assert!(validate_external_url("https://evil.example").is_err());
+        assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases^calc.exe").is_err());
+        assert!(validate_external_url("https://evil.example@github.com/theantipopau/pccompanion").is_err());
+        assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases calc.exe").is_err());
+    }
 }

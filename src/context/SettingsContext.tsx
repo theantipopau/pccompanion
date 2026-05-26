@@ -36,7 +36,12 @@ const defaultSettings: CompanionSettings = {
   experience: {
     compactMode: false,
     animations: true,
+    performanceProfile: 'balanced',
     performanceMode: 'balanced',
+  },
+  gameMode: {
+    automationEnabled: false,
+    mappings: [],
   },
 };
 
@@ -82,5 +87,6 @@ function mergeSettings(base: CompanionSettings, partial: Partial<CompanionSettin
     overlay: { ...base.overlay, ...partial.overlay, position: { ...base.overlay.position, ...partial.overlay?.position } },
     monitoring: { ...base.monitoring, ...partial.monitoring },
     experience: { ...base.experience, ...partial.experience },
+    gameMode: { ...base.gameMode, ...partial.gameMode, mappings: partial.gameMode?.mappings ?? base.gameMode.mappings },
   };
 }

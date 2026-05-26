@@ -70,7 +70,11 @@ pub fn optimize_ram() -> RamCleanupResult {
 fn trim_all_working_sets() -> (u32, u32) {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::ProcessStatus::K32EmptyWorkingSet;
-    use windows::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA};
+    // K32EmptyWorkingSet requires PROCESS_QUERY_INFORMATION (or LIMITED) + PROCESS_SET_QUOTA.
+    // Opening with only PROCESS_SET_QUOTA causes every call to silently fail (trimmed = 0).
+    use windows::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA,
+    };
 
     // Also trim our own process first (no OpenProcess needed).
     unsafe {
@@ -87,7 +91,11 @@ fn trim_all_working_sets() -> (u32, u32) {
         total += 1;
         let raw_pid = pid.as_u32();
         unsafe {
-            if let Ok(handle) = OpenProcess(PROCESS_SET_QUOTA, false, raw_pid) {
+            if let Ok(handle) = OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA,
+                false,
+                raw_pid,
+            ) {
                 if K32EmptyWorkingSet(handle).as_bool() {
                     trimmed += 1;
                 }
@@ -455,6 +463,9 @@ pub fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Vec<String> {
             match map.get(id.as_str()) {
                 None => format!("[error] {id}: item not found in scan results"),
                 Some(item) => {
+                    if !item.safe {
+                        return format!("[blocked] {}: cleanup target requires manual review", item.name);
+                    }
                     if dry_run {
                         format!(
                             "[dry-run] {}: would reclaim {:.2} GB from {}",
@@ -584,21 +595,34 @@ fn delete_dir_contents(path: &std::path::Path) -> std::io::Result<u64> {
     let mut freed = 0u64;
     for entry in std::fs::read_dir(path)?.flatten() {
         let p = entry.path();
-        let size = if p.is_dir() {
+        let metadata = match std::fs::symlink_metadata(&p) {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+        let size = if metadata.file_type().is_symlink() {
+            0
+        } else if metadata.is_dir() {
             dir_size(&p)
         } else {
-            p.metadata().map(|m| m.len()).unwrap_or(0)
+            metadata.len()
         };
-        let result = if p.is_dir() {
-            std::fs::remove_dir_all(&p)
-        } else {
-            std::fs::remove_file(&p)
-        };
+        let result = delete_child_path(&p, &metadata);
         if result.is_ok() {
             freed += size;
         }
     }
     Ok(freed)
+}
+
+fn delete_child_path(path: &std::path::Path, metadata: &std::fs::Metadata) -> std::io::Result<()> {
+    if metadata.file_type().is_symlink() {
+        return std::fs::remove_file(path).or_else(|_| std::fs::remove_dir(path));
+    }
+    if metadata.is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    }
 }
 
 fn bytes_to_gb_u64(bytes: u64) -> f32 {
@@ -647,10 +671,9 @@ fn clear_recycle_bin() -> String {
                 Ok(entries) => {
                     for entry in entries.flatten() {
                         let child = entry.path();
-                        let result = if child.is_dir() {
-                            std::fs::remove_dir_all(&child)
-                        } else {
-                            std::fs::remove_file(&child)
+                        let result = match std::fs::symlink_metadata(&child) {
+                            Ok(metadata) => delete_child_path(&child, &metadata),
+                            Err(err) => Err(err),
                         };
                         if let Err(err) = result {
                             failures.push(format!("{}: {}", child.display(), err));
