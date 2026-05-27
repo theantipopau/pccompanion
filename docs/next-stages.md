@@ -328,8 +328,12 @@ Acceptance checks:
 
 Status:
 
-- Not implemented yet.
-- Proposed as the next major stage after current pre-release hardening and telemetry depth updates.
+- Partially implemented (preview).
+- CoPilot page is wired in the shell and Utilities surface with local-first recommendations.
+- Runtime connectivity and installed-model discovery are active via local `GET /api/tags`.
+- Chat calls use local `POST /api/chat` with optional safe context-pack injection.
+- Localhost-only lock mode and non-invasive advisory defaults are active.
+- Remaining work: persist CoPilot settings, add confidence-typed insight cards, and harden local runtime error taxonomy.
 
 Likely files:
 
@@ -366,7 +370,7 @@ Current implementation progress:
 - Benchmark capture page: implemented as a local telemetry window with trusted/missing sensor reporting and latest-vs-previous comparison.
 - Security hardening pass: URL opening now uses HTTPS allow-listing, cleanup skips unsafe targets/symlink traversal, and release sidecar loading no longer trusts arbitrary environment/current-directory paths.
 - Network update checks, RGB, background game automation, and new hardware writes: deferred.
-- Local AI insights engine and optional local LLM copilot tab: deferred (planned as next-stage slice).
+- Local AI insights engine and optional local LLM copilot tab: in progress (local preview implemented; deeper insight model and persistence pending).
 - Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.
 - Radium Care checklist: implemented in System Passport as support-friendly ownership readiness, not a firmware/OEM control layer.
 - Restore Centre: implemented for Registry Cleaner backups. It reads existing backup manifests and restores through the same guarded backend command used by Registry Cleaner.

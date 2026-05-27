@@ -62,6 +62,27 @@ Useful project documents:
 | Maintenance tools | Bloatware review, registry checks, startup manager, storage cleaner, memory cleaner, and staged utilities. |
 | Performance profiles | Quiet, Balanced, Creator, and Gaming flows with planned-change preview and safety-gated native writes. |
 | Benchmark capture | Live sensor trust, benchmark result cards, and latest-vs-previous comparison deltas. |
+| Radium CoPilot (preview) | Offline-first local LLM recommendations, local runtime model discovery, and optional local chat. |
+
+## Radium CoPilot (Local Preview)
+
+Radium CoPilot is intentionally local-first in the current preview implementation.
+
+Current behaviour:
+
+- Hardware-aware recommendations are generated locally from current system identity and telemetry.
+- CoPilot suggests separate model targets for general use and coding use.
+- Runtime connectivity is local by default (`http://127.0.0.1:11434`).
+- Installed model discovery reads the local runtime tags endpoint (`GET /api/tags`).
+- Chat requests are sent to the same local runtime endpoint (`POST /api/chat`).
+- A localhost lock mode is enabled by default to prevent accidental remote runtime usage.
+- Optional safe context-pack injection provides curated local diagnostics context for better responses.
+
+Important scope notes:
+
+- The app does not ship or host model binaries itself.
+- Model downloads are user-controlled through local runtime commands (for example `ollama pull ...`).
+- CoPilot responses are advisory; native write actions remain capability-gated and user-confirmed.
 
 ## Product Principles
 

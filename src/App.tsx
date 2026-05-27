@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, Sparkles, TimerReset, Wrench, FileWarning, Cpu } from 'lucide-react';
+import { Activity, BarChart3, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, Sparkles, TimerReset, Wrench, FileWarning, Cpu, Bot } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { Shell } from './components/Shell';
 import { SplashScreen } from './components/SplashScreen';
@@ -18,6 +18,7 @@ import { RegistryCleanerPage } from './pages/RegistryCleanerPage';
 import { PerformanceProfilesPage } from './pages/PerformanceProfilesPage';
 import { ProcessMonitorPage } from './pages/ProcessMonitorPage';
 import { BenchmarkPage } from './pages/BenchmarkPage';
+import { AiCopilotPage } from './pages/AiCopilotPage';
 import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { id: 'storage', label: 'System Clean', icon: HardDrive },
   { id: 'profiles', label: 'Profiles', icon: Gauge },
   { id: 'benchmark', label: 'Benchmark', icon: BarChart3 },
+  { id: 'copilot', label: 'CoPilot', icon: Bot },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -129,6 +131,8 @@ function CompanionApp() {
         return <BenchmarkPage />;
       case 'utilities':
         return <UtilitiesPage mode={activeView} onNavigate={setActiveView} />;
+      case 'copilot':
+        return <AiCopilotPage />;
       case 'diagnostics':
         return <SettingsPage initialTab="diagnostics" />;
       case 'passport':

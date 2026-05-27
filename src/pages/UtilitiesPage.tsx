@@ -1,4 +1,4 @@
-import { Activity, Cpu, Fan, FileWarning, Gamepad2, HardDrive, Network, PackageMinus, Palette, Rocket, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
+import { Activity, Bot, Cpu, Fan, FileWarning, Gamepad2, HardDrive, Network, PackageMinus, Palette, Rocket, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -109,6 +109,15 @@ const modules: UtilityModule[] = [
     group: 'planned',
     oem: assets.nvidia,
     text: 'Manual per-game profile mappings come before automatic background switching.',
+  },
+  {
+    title: 'Radium CoPilot',
+    icon: Bot,
+    status: 'planned',
+    group: 'planned',
+    oem: assets.radiumLogo,
+    text: 'Offline-first assistant with hardware-based local model recommendations and optional local chat runtime.',
+    action: { label: 'Open CoPilot', view: 'copilot' },
   },
 ];
 

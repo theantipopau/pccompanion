@@ -118,7 +118,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
 
   const navGroups: Array<{ label: string; ids: string[] }> = [
     { label: 'Monitor', ids: ['dashboard', 'thermals', 'processes'] },
-    { label: 'Tuning', ids: ['profiles', 'benchmark', 'optimizer', 'utilities'] },
+    { label: 'Tuning', ids: ['profiles', 'benchmark', 'copilot', 'optimizer', 'utilities'] },
     { label: 'Maintenance', ids: ['cleanup', 'registry', 'startup', 'storage', 'settings'] },
   ];
 
