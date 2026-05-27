@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Cpu, Fan, Gauge, Gamepad2, Loader2, Lock, Moon, R
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useSettings } from '../hooks/useSettings';
+import { recordCompanionAction } from '../lib/actionHistory';
 import { applyPerformanceProfile, getPerformanceProfiles } from '../services/systemService';
 import type { PerformanceProfile, PerformanceProfileId, PerformanceProfileResult } from '../types/system';
 
@@ -39,6 +40,7 @@ export function PerformanceProfilesPage() {
   const activeProfile = useMemo(() => profiles.find((profile) => profile.id === activeId), [activeId, profiles]);
   const selectedProfile = useMemo(() => profiles.find((profile) => profile.id === selectedId) ?? activeProfile, [activeId, activeProfile, profiles, selectedId]);
   const plannedChanges = useMemo(() => selectedProfile ? profileChangePlan(selectedProfile) : [], [selectedProfile]);
+  const expectations = useMemo(() => selectedProfile ? profileExpectations(selectedProfile.id) : [], [selectedProfile]);
 
   async function handleApply(id: PerformanceProfileId) {
     setBusyId(id);
@@ -56,6 +58,11 @@ export function PerformanceProfilesPage() {
         },
       }));
       setResult(response);
+      recordCompanionAction(
+        'profile',
+        `${id} profile applied`,
+        response.validation?.status ? `Validation ${response.validation.status}` : response.message,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Profile apply failed.');
     } finally {
@@ -68,7 +75,7 @@ export function PerformanceProfilesPage() {
       <PageHeader
         eyebrow="Performance control"
         title="Profiles"
-        description="Built-in profile orchestration for power intent, cooling behaviour, tray state, and future firmware-safe adapters."
+        description="Applies supported Windows power controls, processor policy, tray intent, and low-latency timer behaviour. Your selected mode is saved in Companion settings."
         action={
           <div className="profile-status">
             <RadioTower size={16} />
@@ -134,6 +141,23 @@ export function PerformanceProfilesPage() {
                 <ProfileMetric icon={Gauge} label="Noise" value={selectedProfile.estimatedNoise} />
               </div>
 
+              <div className="profile-expectation-panel">
+                <div className="panel-heading compact">
+                  <div>
+                    <span className="eyebrow">What users can expect</span>
+                    <h2>Native controls used by this mode</h2>
+                  </div>
+                </div>
+                <div className="profile-expectation-grid">
+                  {expectations.map((item) => (
+                    <div className="profile-expectation" key={item.label}>
+                      <strong>{item.label}</strong>
+                      <span>{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="profile-change-panel">
                 <div className="panel-heading compact">
                   <div>
@@ -157,7 +181,7 @@ export function PerformanceProfilesPage() {
               <div className="profile-safety">
                 <strong>Safe implementation boundary</strong>
                 <p>
-                  Native writes are limited to supported Windows controls. Firmware, fan table, voltage, and power-limit writes stay locked until a model-safe adapter is available.
+                  Native writes are limited to supported Windows controls. Firmware, fan table, voltage, GPU power-limit, and EC writes stay locked until a model-safe adapter is available.
                 </p>
               </div>
 
@@ -187,12 +211,79 @@ export function PerformanceProfilesPage() {
                   ))}
                 </div>
               )}
+
+              {result?.validation && (
+                <div className="profile-validation-panel">
+                  <div className="panel-heading compact">
+                    <div>
+                      <span className="eyebrow">After apply</span>
+                      <h2>Validation result</h2>
+                    </div>
+                    <span className={`profile-validation-status ${result.validation.status}`}>
+                      {formatProfileStatus(result.validation.status)}
+                    </span>
+                  </div>
+                  <div className="profile-validation-grid">
+                    <ValidationItem
+                      label="Windows plan"
+                      expected={result.validation.expectedPlan}
+                      detected={result.validation.detectedPlan}
+                      verified={result.validation.planVerified}
+                    />
+                    <ValidationItem
+                      label="Processor policy"
+                      expected={result.validation.expectedProcessor}
+                      detected={result.validation.detectedProcessor}
+                      verified={result.validation.processorVerified}
+                    />
+                    <div className="profile-validation-item timer">
+                      <Check size={16} />
+                      <div>
+                        <strong>Timer policy</strong>
+                        <span>{result.validation.timerPolicy}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {result.validation.notes.length > 0 && (
+                    <div className="profile-validation-notes">
+                      {result.validation.notes.map((note) => <span key={note}>{note}</span>)}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </Panel>
       </div>
     </div>
   );
+}
+
+function ValidationItem({
+  label,
+  expected,
+  detected,
+  verified,
+}: {
+  label: string;
+  expected: string;
+  detected: string;
+  verified: boolean;
+}) {
+  return (
+    <div className={verified ? 'profile-validation-item verified' : 'profile-validation-item attention'}>
+      {verified ? <Check size={16} /> : <AlertTriangle size={16} />}
+      <div>
+        <strong>{label}</strong>
+        <span>Expected: {expected}</span>
+        <span>Detected: {detected}</span>
+      </div>
+    </div>
+  );
+}
+
+function formatProfileStatus(status: string) {
+  return status.replace(/_/g, ' ');
 }
 
 function profileChangePlan(profile: PerformanceProfile): Array<{ label: string; detail: string; blocked?: boolean }> {
@@ -206,11 +297,31 @@ function profileChangePlan(profile: PerformanceProfile): Array<{ label: string; 
     : profile.id === 'quiet'
       ? 'Quiet'
       : 'Balanced';
+  const processorPolicy = profile.id === 'quiet'
+    ? 'Processor 5-70%, boost disabled'
+    : profile.id === 'creator'
+      ? 'Processor 10-100%, boost enabled'
+      : profile.id === 'gaming'
+        ? 'Processor 10-100%, aggressive boost'
+        : 'Processor 5-100%, boost enabled';
+  const timerPolicy = profile.id === 'quiet'
+    ? 'Timer override released to Windows default'
+    : profile.id === 'balanced'
+      ? 'Timer resolution target 1.0 ms'
+      : 'Timer resolution target 0.5 ms';
 
   return [
     {
       label: 'Windows power plan',
       detail: powerPlan,
+    },
+    {
+      label: 'Processor policy',
+      detail: processorPolicy,
+    },
+    {
+      label: 'Timer resolution',
+      detail: timerPolicy,
     },
     {
       label: 'Companion mode',
@@ -226,6 +337,33 @@ function profileChangePlan(profile: PerformanceProfile): Array<{ label: string; 
       blocked: true,
     },
   ];
+}
+
+function profileExpectations(id: PerformanceProfileId): Array<{ label: string; detail: string }> {
+  const byMode: Record<PerformanceProfileId, Array<{ label: string; detail: string }>> = {
+    quiet: [
+      { label: 'Best for', detail: 'Light work, downloads, media playback, and overnight use.' },
+      { label: 'Trade-off', detail: 'CPU boost is disabled and processor ceiling is reduced, so heavy jobs may finish slower.' },
+      { label: 'Persists', detail: 'Companion stores Quiet locally and reuses that intent after restart.' },
+    ],
+    balanced: [
+      { label: 'Best for', detail: 'Daily use, normal gaming, browsing, and mixed desktop workloads.' },
+      { label: 'Trade-off', detail: 'Uses standard Windows Balanced behaviour with moderate responsiveness.' },
+      { label: 'Persists', detail: 'Companion stores Balanced locally and reuses that intent after restart.' },
+    ],
+    gaming: [
+      { label: 'Best for', detail: 'Foreground games, high refresh displays, and latency-sensitive sessions.' },
+      { label: 'Trade-off', detail: 'Higher power draw and fan noise are expected while the mode is active.' },
+      { label: 'Persists', detail: 'Companion stores Gaming locally and reuses that intent after restart.' },
+    ],
+    creator: [
+      { label: 'Best for', detail: 'Rendering, encoding, compiling, streaming, and sustained production loads.' },
+      { label: 'Trade-off', detail: 'Keeps performance plan behaviour without the full Gaming fan/noise intent.' },
+      { label: 'Persists', detail: 'Companion stores Creator locally and reuses that intent after restart.' },
+    ],
+  };
+
+  return byMode[id];
 }
 
 type ProfileMetricProps = {

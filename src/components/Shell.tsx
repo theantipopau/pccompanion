@@ -24,6 +24,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const companyWebsite = 'https://radiumpcs.com.au';
   const phone = '1300 935 884';
   const salesEmail = 'sales@radiumpcs.com.au';
+  const companionEmail = 'companion@radiumpcs.com.au';
   const supportEmail = 'support@radiumpcs.com.au';
   const operationsEmail = 'operations@radiumpcs.com.au';
   const businessHours = 'Mon-Fri, 9:30am-5:30pm';
@@ -72,10 +73,10 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     },
     {
       id: 'action-email-support',
-      label: 'Email support',
+      label: 'Email Companion support',
       icon: Mail,
       keywords: 'support help issue',
-      run: () => window.open(`mailto:${supportEmail}`, '_self'),
+      run: () => window.open(`mailto:${companionEmail}?subject=${encodeURIComponent(supportSubject)}`, '_self'),
     },
     {
       id: 'action-open-settings',
@@ -314,6 +315,10 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             <Mail size={14} />
             <span>{supportEmail}</span>
           </a>
+          <a className="sidebar-contact-link" href={`mailto:${companionEmail}?subject=${encodeURIComponent(supportSubject)}`}>
+            <Mail size={14} />
+            <span>{companionEmail}</span>
+          </a>
           <a className="sidebar-contact-link" href={`mailto:${operationsEmail}`}>
             <Mail size={14} />
             <span>{operationsEmail}</span>
@@ -394,8 +399,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
           <div className="window-actions">
             <a
               className="topbar-support-link"
-              href={`mailto:${supportEmail}?subject=${encodeURIComponent(supportSubject)}`}
-              title="Contact support"
+              href={`mailto:${companionEmail}?subject=${encodeURIComponent(supportSubject)}`}
+              title="Contact Companion support"
             >
               <Mail size={14} />
               <span>Get Support</span>

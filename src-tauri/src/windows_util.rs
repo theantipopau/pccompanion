@@ -414,10 +414,13 @@ pub fn scan_registry_issues() -> Vec<RegistryIssue> {
         }
 
         if looks_missing_file_reference(&item.command) {
+            let Some((hive, key_path)) = startup_registry_target(&item) else {
+                continue;
+            };
             issues.push(RegistryIssue {
                 id: format!("startup-missing-{}", sanitize_id(&item.name)),
-                hive: if item.id.starts_with("HKLM") { "HKLM" } else { "HKCU" }.to_string(),
-                key_path: r"Software\Microsoft\Windows\CurrentVersion\Run".to_string(),
+                hive,
+                key_path,
                 value_name: item.name,
                 category: "Invalid startup reference".to_string(),
                 severity: "low".to_string(),
@@ -432,6 +435,14 @@ pub fn scan_registry_issues() -> Vec<RegistryIssue> {
     {
         issues.extend(scan_uninstall_leftovers());
         issues.extend(scan_app_path_leftovers());
+        issues.extend(scan_shared_dll_leftovers());
+        issues.extend(scan_help_file_leftovers());
+        issues.extend(scan_font_leftovers());
+        issues.extend(scan_mui_cache_leftovers());
+        issues.extend(scan_sound_event_leftovers());
+        issues.extend(scan_com_leftovers());
+        issues.extend(scan_typelib_leftovers());
+        issues.extend(scan_file_association_leftovers());
     }
 
     issues
@@ -441,7 +452,8 @@ pub fn backup_registry_issues(ids: Vec<String>) -> RegistryBackup {
     let stamp = registry_stamp();
     let backup_root = registry_backup_dir().join(&stamp);
     let _ = std::fs::create_dir_all(&backup_root);
-    let path_buf = backup_root.join("manifest.json");
+    let manifest_path = backup_root.join("manifest.json");
+    let combined_reg_path = backup_root.join("backup.reg");
     let issues: Vec<RegistryIssue> = scan_registry_issues()
         .into_iter()
         .filter(|issue| ids.iter().any(|id| id == &issue.id))
@@ -478,17 +490,61 @@ pub fn backup_registry_issues(ids: Vec<String>) -> RegistryBackup {
         issue_count: issues.len(),
         entries,
     };
+    #[cfg(windows)]
+    let _ = write_combined_registry_backup(&snapshot, &combined_reg_path);
     let _ = std::fs::write(
-        &path_buf,
+        &manifest_path,
         serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| "{}".to_string()),
     );
-    let path = path_buf.to_string_lossy().to_string();
+    let path = if combined_reg_path.exists() {
+        combined_reg_path.to_string_lossy().to_string()
+    } else {
+        manifest_path.to_string_lossy().to_string()
+    };
     RegistryBackup {
         id: stamp.clone(),
         created_at: stamp,
         path,
         issue_count: issues.len(),
     }
+}
+
+pub fn list_registry_backups() -> Vec<RegistryBackup> {
+    let base = registry_backup_dir();
+    let Ok(entries) = std::fs::read_dir(&base) else {
+        return Vec::new();
+    };
+
+    let mut backups = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let manifest_path = if path.is_dir() {
+                path.join("manifest.json")
+            } else if path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("json")) {
+                path
+            } else {
+                return None;
+            };
+            let text = std::fs::read_to_string(&manifest_path).ok()?;
+            let manifest = serde_json::from_str::<RegistryBackupManifest>(&text).ok()?;
+            let backup_reg = manifest_path
+                .parent()
+                .map(|parent| parent.join("backup.reg"))
+                .filter(|candidate| candidate.exists())
+                .unwrap_or_else(|| manifest_path.clone());
+            Some(RegistryBackup {
+                id: manifest.id,
+                created_at: manifest.created_at,
+                path: backup_reg.to_string_lossy().to_string(),
+                issue_count: manifest.issue_count,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    backups.truncate(20);
+    backups
 }
 
 pub fn restore_registry_backup(backup_id: String) -> Vec<String> {
@@ -594,6 +650,7 @@ fn remove_registry_issue(issue: &RegistryIssue) -> String {
         let hive = match issue.hive.as_str() {
             "HKCU" => windows::Win32::System::Registry::HKEY_CURRENT_USER,
             "HKLM" => windows::Win32::System::Registry::HKEY_LOCAL_MACHINE,
+            "HKCR" => windows::Win32::System::Registry::HKEY_CLASSES_ROOT,
             _ => {
                 return format!(
                     "[blocked] {}: unsupported hive '{}' for automatic cleanup",
@@ -602,20 +659,26 @@ fn remove_registry_issue(issue: &RegistryIssue) -> String {
             }
         };
 
-        // Startup issue: remove specific Run value.
-        if issue.category == "Invalid startup reference" {
+        // Value-backed issues remove only the stale value from an otherwise valid key.
+        if removes_registry_value(issue) {
             if issue.value_name.is_empty() {
                 return format!("[skip] {}: missing value name", issue.id);
             }
             return match delete_registry_value(hive, &issue.key_path, &issue.value_name) {
-                Ok(_) => format!("[ok] {}: removed startup value '{}'.", issue.id, issue.value_name),
+                Ok(RegistryDeleteStatus::Removed) => {
+                    format!("[ok] {}: removed stale registry value '{}'.", issue.id, issue.value_name)
+                }
+                Ok(RegistryDeleteStatus::AlreadyAbsent) => {
+                    format!("[ok] {}: registry value was already absent.", issue.id)
+                }
                 Err(err) => format!("[error] {}: {}", issue.id, err),
             };
         }
 
         // Uninstall leftovers and app paths are represented as subkeys and can be removed.
         match delete_registry_tree(hive, &issue.key_path) {
-            Ok(_) => format!("[ok] {}: removed stale registry key.", issue.id),
+            Ok(RegistryDeleteStatus::Removed) => format!("[ok] {}: removed stale registry key.", issue.id),
+            Ok(RegistryDeleteStatus::AlreadyAbsent) => format!("[ok] {}: registry key was already absent.", issue.id),
             Err(err) => format!("[error] {}: {}", issue.id, err),
         }
     }
@@ -624,6 +687,40 @@ fn remove_registry_issue(issue: &RegistryIssue) -> String {
     {
         format!("[unavailable] {}: registry cleanup requires Windows", issue.id)
     }
+}
+
+fn startup_registry_target(item: &StartupItem) -> Option<(String, String)> {
+    if !item.location.starts_with("Registry (") {
+        return None;
+    }
+
+    let hive = if item.location.contains("HKLM\\") || item.id.starts_with("HKLM") {
+        "HKLM"
+    } else if item.location.contains("HKCU\\") || item.id.starts_with("HKCU") {
+        "HKCU"
+    } else {
+        return None;
+    };
+
+    let key_path = if item.location.contains("\\RunOnce") || item.id.starts_with("HKLM-ONCE") || item.id.starts_with("HKCU-ONCE") {
+        r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
+    } else {
+        r"Software\Microsoft\Windows\CurrentVersion\Run"
+    };
+
+    Some((hive.to_string(), key_path.to_string()))
+}
+
+fn removes_registry_value(issue: &RegistryIssue) -> bool {
+    matches!(
+        issue.category.as_str(),
+        "Invalid startup reference"
+            | "Missing shared DLL"
+            | "Help file"
+            | "Font reference"
+            | "Sound event"
+            | "MUI cache"
+    )
 }
 
 // ─── Bloatware Scanner ───────────────────────────────────────────────────────
@@ -952,6 +1049,253 @@ fn scan_app_path_leftovers() -> Vec<RegistryIssue> {
 }
 
 #[cfg(windows)]
+fn scan_shared_dll_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
+
+    const SHARED_DLLS: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs";
+    enum_string_values(HKEY_LOCAL_MACHINE, SHARED_DLLS)
+        .into_iter()
+        .filter_map(|(value_name, _)| {
+            if !looks_missing_file_reference(&value_name) {
+                return None;
+            }
+            Some(RegistryIssue {
+                id: format!("shared-dll-missing-{}", sanitize_id(&value_name)),
+                hive: "HKLM".to_string(),
+                key_path: SHARED_DLLS.to_string(),
+                value_name,
+                category: "Missing shared DLL".to_string(),
+                severity: "low".to_string(),
+                selected: true,
+                safe: true,
+                description: "Shared DLL reference points to a file that no longer exists.".to_string(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn scan_help_file_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
+
+    const HELP_KEY: &str = r"SOFTWARE\Microsoft\Windows\Help";
+    enum_string_values(HKEY_LOCAL_MACHINE, HELP_KEY)
+        .into_iter()
+        .filter_map(|(value_name, data)| {
+            let candidate = if data.trim().is_empty() {
+                value_name.clone()
+            } else {
+                data
+            };
+            if !looks_missing_file_reference(&candidate) {
+                return None;
+            }
+            Some(RegistryIssue {
+                id: format!("help-file-missing-{}", sanitize_id(&value_name)),
+                hive: "HKLM".to_string(),
+                key_path: HELP_KEY.to_string(),
+                value_name,
+                category: "Help file".to_string(),
+                severity: "low".to_string(),
+                selected: true,
+                safe: true,
+                description: "Help file registry reference points to a missing .hlp/.chm target.".to_string(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn scan_font_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
+
+    const FONTS_KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts";
+    let font_root = std::env::var("WINDIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from(r"C:\Windows"))
+        .join("Fonts");
+
+    enum_string_values(HKEY_LOCAL_MACHINE, FONTS_KEY)
+        .into_iter()
+        .filter_map(|(value_name, data)| {
+            if data.trim().is_empty() {
+                return None;
+            }
+            let expanded = expand_simple_env(&data);
+            let path = std::path::PathBuf::from(&expanded);
+            let candidate = if path.is_absolute() { path } else { font_root.join(&data) };
+            if candidate.exists() {
+                return None;
+            }
+            Some(RegistryIssue {
+                id: format!("font-missing-{}", sanitize_id(&value_name)),
+                hive: "HKLM".to_string(),
+                key_path: FONTS_KEY.to_string(),
+                value_name,
+                category: "Font reference".to_string(),
+                severity: "medium".to_string(),
+                selected: false,
+                safe: false,
+                description: "Font registry entry points to a missing font file. Review before removal because fonts can be shared by applications.".to_string(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn scan_mui_cache_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_CURRENT_USER;
+
+    const MUI_CACHE: &str = r"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+    enum_string_values(HKEY_CURRENT_USER, MUI_CACHE)
+        .into_iter()
+        .filter_map(|(value_name, _)| {
+            if !looks_missing_file_reference(&value_name) {
+                return None;
+            }
+            Some(RegistryIssue {
+                id: format!("mui-cache-missing-{}", sanitize_id(&value_name)),
+                hive: "HKCU".to_string(),
+                key_path: MUI_CACHE.to_string(),
+                value_name,
+                category: "MUI cache".to_string(),
+                severity: "low".to_string(),
+                selected: true,
+                safe: true,
+                description: "MUI cache entry references an application path that is no longer present.".to_string(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn scan_sound_event_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_CURRENT_USER;
+
+    const APP_EVENTS: &str = r"AppEvents\Schemes\Apps";
+    let mut issues = Vec::new();
+    for app in enum_subkeys(HKEY_CURRENT_USER, APP_EVENTS) {
+        let app_key = format!(r"{APP_EVENTS}\{app}");
+        for event in enum_subkeys(HKEY_CURRENT_USER, &app_key) {
+            let event_key = format!(r"{app_key}\{event}\.Current");
+            let value = read_string_value(HKEY_CURRENT_USER, &event_key, "").unwrap_or_default();
+            if value.trim().is_empty() || !looks_missing_file_reference(&value) {
+                continue;
+            }
+            issues.push(RegistryIssue {
+                id: format!("sound-event-missing-{}-{}", sanitize_id(&app), sanitize_id(&event)),
+                hive: "HKCU".to_string(),
+                key_path: event_key,
+                value_name: String::new(),
+                category: "Sound event".to_string(),
+                severity: "low".to_string(),
+                selected: false,
+                safe: false,
+                description: "Windows sound event points to a missing .wav file. Review-only to avoid changing user sound schemes.".to_string(),
+            });
+        }
+    }
+    issues
+}
+
+#[cfg(windows)]
+fn scan_com_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_CLASSES_ROOT;
+
+    const CLSID_KEY: &str = "CLSID";
+    let mut issues = Vec::new();
+    for clsid in enum_subkeys(HKEY_CLASSES_ROOT, CLSID_KEY).into_iter().take(8_000) {
+        if !clsid.starts_with('{') {
+            continue;
+        }
+        let clsid_key = format!(r"{CLSID_KEY}\{clsid}");
+        let server_key = ["InprocServer32", "LocalServer32"]
+            .into_iter()
+            .map(|server| format!(r"{clsid_key}\{server}"))
+            .find(|key| read_string_value(HKEY_CLASSES_ROOT, key, "").map_or(false, |v| looks_missing_file_reference(&v)));
+
+        let Some(server_key) = server_key else { continue };
+        issues.push(RegistryIssue {
+            id: format!("com-missing-{}", sanitize_id(&clsid)),
+            hive: "HKCR".to_string(),
+            key_path: server_key,
+            value_name: String::new(),
+            category: "ActiveX/COM issue".to_string(),
+            severity: "medium".to_string(),
+            selected: false,
+            safe: false,
+            description: "COM server registration points to a missing DLL or executable. Review-only because COM registrations can be shared.".to_string(),
+        });
+    }
+    issues
+}
+
+#[cfg(windows)]
+fn scan_typelib_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_CLASSES_ROOT;
+
+    const TYPELIB_KEY: &str = "TypeLib";
+    let mut issues = Vec::new();
+    for libid in enum_subkeys(HKEY_CLASSES_ROOT, TYPELIB_KEY).into_iter().take(4_000) {
+        let lib_key = format!(r"{TYPELIB_KEY}\{libid}");
+        for version in enum_subkeys(HKEY_CLASSES_ROOT, &lib_key) {
+            let version_key = format!(r"{lib_key}\{version}");
+            for platform in ["win32", "win64"] {
+                let platform_key = format!(r"{version_key}\0\{platform}");
+                let value = read_string_value(HKEY_CLASSES_ROOT, &platform_key, "").unwrap_or_default();
+                if value.trim().is_empty() || !looks_missing_file_reference(&value) {
+                    continue;
+                }
+                issues.push(RegistryIssue {
+                    id: format!("typelib-missing-{}-{}-{}", sanitize_id(&libid), sanitize_id(&version), platform),
+                    hive: "HKCR".to_string(),
+                    key_path: platform_key,
+                    value_name: String::new(),
+                    category: "Type library".to_string(),
+                    severity: "medium".to_string(),
+                    selected: false,
+                    safe: false,
+                    description: "Type library registration points to a missing file. Review-only because registrations may be shared.".to_string(),
+                });
+            }
+        }
+    }
+    issues
+}
+
+#[cfg(windows)]
+fn scan_file_association_leftovers() -> Vec<RegistryIssue> {
+    use windows::Win32::System::Registry::HKEY_CLASSES_ROOT;
+
+    enum_subkeys(HKEY_CLASSES_ROOT, "")
+        .into_iter()
+        .filter(|subkey| subkey.starts_with('.') && subkey.len() > 1)
+        .filter_map(|extension| {
+            let prog_id = read_string_value(HKEY_CLASSES_ROOT, &extension, "")?;
+            if prog_id.trim().is_empty() {
+                return None;
+            }
+            let command_key = format!(r"{prog_id}\shell\open\command");
+            let command = read_string_value(HKEY_CLASSES_ROOT, &command_key, "").unwrap_or_default();
+            if command.trim().is_empty() || !looks_missing_file_reference(&command) {
+                return None;
+            }
+            Some(RegistryIssue {
+                id: format!("file-association-missing-{}", sanitize_id(&extension)),
+                hive: "HKCR".to_string(),
+                key_path: extension,
+                value_name: String::new(),
+                category: "Obsolete file association".to_string(),
+                severity: "medium".to_string(),
+                selected: false,
+                safe: false,
+                description: "File extension points to a ProgID whose open command is missing. Review-only to avoid breaking file associations.".to_string(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(windows)]
 fn enum_subkeys(
     hive: windows::Win32::System::Registry::HKEY,
     subkey: &str,
@@ -1071,13 +1415,89 @@ fn read_string_value(
 }
 
 #[cfg(windows)]
+fn enum_string_values(
+    hive: windows::Win32::System::Registry::HKEY,
+    subkey: &str,
+) -> Vec<(String, String)> {
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegEnumValueW, RegOpenKeyExW, KEY_READ, KEY_WOW64_64KEY, REG_EXPAND_SZ, REG_SZ,
+    };
+
+    let mut results = Vec::new();
+    let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
+
+    unsafe {
+        let mut hkey = windows::Win32::System::Registry::HKEY::default();
+        let open_res = RegOpenKeyExW(
+            hive,
+            PCWSTR(subkey_wide.as_ptr()),
+            0,
+            KEY_READ | KEY_WOW64_64KEY,
+            &mut hkey,
+        );
+        if open_res != ERROR_SUCCESS {
+            return results;
+        }
+
+        let mut index = 0u32;
+        loop {
+            let mut name_buf = [0u16; 1024];
+            let mut name_len = name_buf.len() as u32;
+            let mut data_type = 0u32;
+            let mut data_buf = [0u8; 4096];
+            let mut data_len = data_buf.len() as u32;
+
+            let res = RegEnumValueW(
+                hkey,
+                index,
+                PWSTR(name_buf.as_mut_ptr()),
+                &mut name_len,
+                None,
+                Some(&mut data_type),
+                Some(data_buf.as_mut_ptr()),
+                Some(&mut data_len),
+            );
+
+            if res == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+            if res == ERROR_SUCCESS {
+                let name = String::from_utf16_lossy(&name_buf[..name_len as usize]).to_string();
+                let value = if data_type == REG_SZ.0 || data_type == REG_EXPAND_SZ.0 {
+                    let word_count = (data_len as usize / 2).saturating_sub(1);
+                    let words = std::slice::from_raw_parts(data_buf.as_ptr() as *const u16, word_count);
+                    String::from_utf16_lossy(words).trim().to_string()
+                } else {
+                    String::new()
+                };
+                results.push((name, value));
+            }
+
+            index += 1;
+        }
+
+        let _ = RegCloseKey(hkey);
+    }
+
+    results
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegistryDeleteStatus {
+    Removed,
+    AlreadyAbsent,
+}
+
+#[cfg(windows)]
 fn delete_registry_value(
     hive: windows::Win32::System::Registry::HKEY,
     subkey: &str,
     value_name: &str,
-) -> Result<(), String> {
+) -> Result<RegistryDeleteStatus, String> {
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
     use windows::Win32::System::Registry::{
         RegCloseKey, RegDeleteValueW, RegOpenKeyExW, KEY_SET_VALUE, KEY_WOW64_64KEY,
     };
@@ -1094,6 +1514,9 @@ fn delete_registry_value(
             KEY_SET_VALUE | KEY_WOW64_64KEY,
             &mut hkey,
         );
+        if open == ERROR_FILE_NOT_FOUND {
+            return Ok(RegistryDeleteStatus::AlreadyAbsent);
+        }
         if open != ERROR_SUCCESS {
             return Err("cannot open target key (admin may be required)".to_string());
         }
@@ -1101,7 +1524,9 @@ fn delete_registry_value(
         let del = RegDeleteValueW(hkey, PCWSTR(value_wide.as_ptr()));
         let _ = RegCloseKey(hkey);
         if del == ERROR_SUCCESS {
-            Ok(())
+            Ok(RegistryDeleteStatus::Removed)
+        } else if del == ERROR_FILE_NOT_FOUND {
+            Ok(RegistryDeleteStatus::AlreadyAbsent)
         } else {
             Err(format!("registry delete failed with Win32 code {}", del.0))
         }
@@ -1112,16 +1537,18 @@ fn delete_registry_value(
 fn delete_registry_tree(
     hive: windows::Win32::System::Registry::HKEY,
     subkey: &str,
-) -> Result<(), String> {
+) -> Result<RegistryDeleteStatus, String> {
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
     use windows::Win32::System::Registry::RegDeleteTreeW;
 
     let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
         let res = RegDeleteTreeW(hive, PCWSTR(subkey_wide.as_ptr()));
         if res == ERROR_SUCCESS {
-            Ok(())
+            Ok(RegistryDeleteStatus::Removed)
+        } else if res == ERROR_FILE_NOT_FOUND {
+            Ok(RegistryDeleteStatus::AlreadyAbsent)
         } else {
             Err(format!("registry key delete failed with Win32 code {}", res.0))
         }
@@ -1531,6 +1958,65 @@ fn export_registry_key(full_key: &str, output_path: &std::path::Path) -> Result<
 }
 
 #[cfg(windows)]
+fn write_combined_registry_backup(
+    manifest: &RegistryBackupManifest,
+    output_path: &std::path::Path,
+) -> Result<(), String> {
+    let mut body = String::from("Windows Registry Editor Version 5.00\r\n\r\n");
+    body.push_str("; Radium PCs Companion registry backup bundle\r\n");
+    body.push_str(&format!("; Backup: {}\r\n", manifest.id));
+    body.push_str("; Individual per-key exports are stored beside this file.\r\n\r\n");
+
+    for entry in &manifest.entries {
+        let Some(file) = &entry.reg_file else { continue };
+        let path = std::path::Path::new(file);
+        let text = read_reg_export_text(path)?;
+        let mut in_header = true;
+        for line in text.lines() {
+            let trimmed = line.trim_start_matches('\u{feff}').trim();
+            if in_header && (trimmed.is_empty() || trimmed.eq_ignore_ascii_case("Windows Registry Editor Version 5.00")) {
+                continue;
+            }
+            in_header = false;
+            body.push_str(line.trim_start_matches('\u{feff}'));
+            body.push_str("\r\n");
+        }
+        body.push_str("\r\n");
+    }
+
+    write_utf16le(output_path, &body)
+}
+
+#[cfg(windows)]
+fn read_reg_export_text(path: &std::path::Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|err| err.to_string())?;
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        let words: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        return Ok(String::from_utf16_lossy(&words));
+    }
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        let words: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+            .collect();
+        return Ok(String::from_utf16_lossy(&words));
+    }
+    Ok(String::from_utf8_lossy(&bytes).to_string())
+}
+
+#[cfg(windows)]
+fn write_utf16le(path: &std::path::Path, text: &str) -> Result<(), String> {
+    let mut bytes = vec![0xFF, 0xFE];
+    for word in text.encode_utf16() {
+        bytes.extend_from_slice(&word.to_le_bytes());
+    }
+    std::fs::write(path, bytes).map_err(|err| err.to_string())
+}
+
+#[cfg(windows)]
 fn import_registry_file(path: &std::path::Path) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("backup file missing: {}", path.to_string_lossy()));
@@ -1931,7 +2417,7 @@ pub fn apply_power_mode_tweaks(profile_id: &str) -> String {
         const BOOST_MODE: &str = "PERFBOOSTMODE";
 
         let (min_pct, max_pct, boost): (&str, &str, &str) = match profile_id {
-            "gaming" => ("100", "100", "2"),  // aggressive boost
+            "gaming" => ("10", "100", "2"),   // aggressive boost without pinning idle clocks
             "creator" => ("10", "100", "1"),  // enabled boost, less idle burn
             "balanced" => ("5", "100", "1"),
             "quiet" => ("5", "70", "0"),      // disable boost
@@ -1960,7 +2446,7 @@ pub fn apply_power_mode_tweaks(profile_id: &str) -> String {
 
         if failures.is_empty() {
             return format!(
-                "Power tuning → min {min_pct}%, max {max_pct}%, boost mode {boost} (AC/DC)"
+                "Power tuning -> processor min {min_pct}%, max {max_pct}%, boost mode {boost} (AC/DC)"
             );
         }
 

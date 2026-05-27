@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, FileText, PackageMinus, ShieldCheck } from
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { recordCompanionAction } from '../lib/actionHistory';
 import { removeBloatware, restoreBloatware, scanBloatware } from '../services/systemService';
 import type { BloatwareItem } from '../types/system';
 
@@ -9,6 +10,8 @@ export function BloatwarePage() {
   const [items, setItems] = useState<BloatwareItem[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(true);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [detectedOnly, setDetectedOnly] = useState(true);
 
   async function refreshScan() {
     const result = await scanBloatware();
@@ -23,6 +26,15 @@ export function BloatwarePage() {
   const detectedCount = useMemo(() => items.filter((item) => item.detected).length, [items]);
   const lowRiskCount = useMemo(() => items.filter((item) => item.detected && item.risk === 'low').length, [items]);
   const reviewCount = useMemo(() => items.filter((item) => item.detected && item.risk !== 'low').length, [items]);
+  const categories = useMemo(() => ['All', ...Array.from(new Set(items.map((item) => item.category)))], [items]);
+  const visibleItems = useMemo(
+    () => items.filter((item) => {
+      if (detectedOnly && !item.detected) return false;
+      if (activeCategory !== 'All' && item.category !== activeCategory) return false;
+      return true;
+    }),
+    [activeCategory, detectedOnly, items],
+  );
 
   function toggle(id: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)));
@@ -44,6 +56,7 @@ export function BloatwarePage() {
     try {
       const actionLog = await removeBloatware(selected);
       setLog(actionLog);
+      recordCompanionAction('maintenance', 'Bloatware removal requested', `${selected.length} selected item(s)`);
       await refreshScan();
     } finally {
       setBusy(false);
@@ -55,6 +68,7 @@ export function BloatwarePage() {
     try {
       const actionLog = await restoreBloatware(selected);
       setLog(actionLog);
+      recordCompanionAction('maintenance', 'Bloatware restore requested', `${selected.length} selected item(s)`);
       await refreshScan();
     } finally {
       setBusy(false);
@@ -99,6 +113,20 @@ export function BloatwarePage() {
         <SummaryTile label="Review" value={busy ? '...' : reviewCount.toString()} tone={reviewCount > 0 ? 'amber' : 'green'} />
         <SummaryTile label="Selected" value={selected.length.toString()} />
       </div>
+      <div className="maintenance-filter-row">
+        <div className="filter-chip-row" role="list" aria-label="Bloatware categories">
+          {categories.map((category) => (
+            <button key={category} className={activeCategory === category ? 'filter-chip active' : 'filter-chip'} type="button" onClick={() => setActiveCategory(category)}>
+              <span>{category}</span>
+              <strong>{category === 'All' ? items.length : items.filter((item) => item.category === category).length}</strong>
+            </button>
+          ))}
+        </div>
+        <label className="inline-toggle">
+          <input type="checkbox" checked={detectedOnly} onChange={(event) => setDetectedOnly(event.target.checked)} />
+          <span>Detected only</span>
+        </label>
+      </div>
 
       <div className="cleanup-layout">
         <Panel className="cleanup-list">
@@ -110,7 +138,7 @@ export function BloatwarePage() {
             <ShieldCheck size={19} />
           </div>
           <div className="cleanup-items">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <label className={item.detected ? 'cleanup-item' : 'cleanup-item muted'} key={item.id}>
                 <input type="checkbox" checked={item.selected} disabled={!item.detected} onChange={() => toggle(item.id)} />
                 <div>
@@ -123,11 +151,11 @@ export function BloatwarePage() {
                 </div>
               </label>
             ))}
-            {!busy && items.length === 0 && (
+            {!busy && visibleItems.length === 0 && (
               <div className="empty-state">
                 <ShieldCheck size={18} />
-                <strong>No known bloatware packages found</strong>
-                <span>This Windows install does not currently expose any matching cleanup targets.</span>
+                <strong>No matching packages found</strong>
+                <span>Adjust the category filter or show undetected entries to review the full catalogue.</span>
               </div>
             )}
           </div>

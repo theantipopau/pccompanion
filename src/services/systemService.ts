@@ -31,6 +31,7 @@ import type {
   StorageScanStatus,
   StorageScanStatusPayload,
   SensorDiscoveryReport,
+  SensorSidecarProbe,
   TelemetryDiagnosticsSnapshot,
   SystemInfo,
   TrayStatus,
@@ -127,7 +128,7 @@ export async function startStorageCleanupScan(): Promise<StorageScanStatus> {
       cancelled: false,
       progressPct: 0,
       currentStep: 0,
-      totalSteps: 9,
+      totalSteps: 11,
       message: 'Starting storage scan',
     }),
   );
@@ -143,8 +144,8 @@ export async function getStorageCleanupScanStatus(): Promise<StorageScanStatusPa
         completed: true,
         cancelled: false,
         progressPct: 100,
-        currentStep: 9,
-        totalSteps: 9,
+        currentStep: 11,
+        totalSteps: 11,
         message: 'Storage scan complete',
       },
       items: mockStorageCleanupItems(),
@@ -192,6 +193,10 @@ export async function restoreRegistryBackup(backupId: string): Promise<string[]>
   return callNative<string[]>('restore_registry_backup', { backupId }, async () => [
     `[browser] restore requested for backup ${backupId}.`,
   ]);
+}
+
+export async function listRegistryBackups(): Promise<RegistryBackup[]> {
+  return callNative<RegistryBackup[]>('list_registry_backups', undefined, async () => []);
 }
 
 export async function exportDiagnostics(): Promise<DiagnosticsExport> {
@@ -295,6 +300,21 @@ export async function getPlatformTelemetryDiscovery(): Promise<SensorDiscoveryRe
     const snapshot = await getTelemetryDiagnostics();
     return snapshot.sensorDiscovery;
   });
+}
+
+export async function probeSensorSidecar(): Promise<SensorSidecarProbe> {
+  return callNative<SensorSidecarProbe>('probe_sensor_sidecar', undefined, async () => ({
+    provider: 'radium-lhm-pawnio',
+    available: false,
+    driverAvailable: false,
+    status: 'browser_preview',
+    executablePath: null,
+    cpuTempC: null,
+    cpuTempLabel: null,
+    cpuFanRpm: null,
+    storageTempC: null,
+    notes: ['Browser preview cannot launch the bundled sensor sidecar.'],
+  }));
 }
 
 export async function getPerformanceProfiles(): Promise<PerformanceProfile[]> {

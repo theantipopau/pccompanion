@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RadiumSidecarSample {
     pub provider: String,
     pub available: bool,
@@ -33,12 +34,21 @@ struct SidecarJson {
 
 pub fn query_sensor_sidecar() -> RadiumSidecarSample {
     let Some(command_spec) = find_sidecar_command() else {
+        let checked = sidecar_candidate_paths()
+            .into_iter()
+            .take(12)
+            .map(|path| format!("checked {}", path.display()))
+            .collect::<Vec<_>>();
+        let mut notes = vec![
+            "radium-sensor-sidecar assembly/executable was not found in bundled or development paths".to_string(),
+        ];
+        notes.extend(checked);
         return RadiumSidecarSample {
             provider: "radium-lhm-pawnio".to_string(),
             available: false,
             driver_available: false,
             status: "sidecar_not_found".to_string(),
-            notes: vec!["radium-sensor-sidecar assembly/executable was not found in bundled or development paths".to_string()],
+            notes,
             ..Default::default()
         };
     };
@@ -177,6 +187,13 @@ fn find_sidecar_command() -> Option<SidecarCommand> {
         }
     }
 
+    sidecar_candidate_paths()
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .and_then(command_for_path)
+}
+
+fn sidecar_candidate_paths() -> Vec<PathBuf> {
     let dll_name = "radium-sensor-sidecar-x86_64-pc-windows-msvc.dll";
     let exe_name = "radium-sensor-sidecar.exe";
     let tauri_name = "radium-sensor-sidecar-x86_64-pc-windows-msvc.exe";
@@ -188,6 +205,7 @@ fn find_sidecar_command() -> Option<SidecarCommand> {
             push_candidate_roots(&mut candidates, &parent.join("binaries"), exe_name, tauri_name, dll_name);
             push_candidate_roots(&mut candidates, &parent.join("resources"), exe_name, tauri_name, dll_name);
             push_candidate_roots(&mut candidates, &parent.join("resources").join("binaries"), exe_name, tauri_name, dll_name);
+            push_candidate_roots(&mut candidates, &parent.join("_up_").join("binaries"), exe_name, tauri_name, dll_name);
         }
     }
 
@@ -200,9 +218,6 @@ fn find_sidecar_command() -> Option<SidecarCommand> {
     }
 
     candidates
-        .into_iter()
-        .find(|candidate| candidate.is_file())
-        .and_then(command_for_path)
 }
 
 fn command_for_path(path: PathBuf) -> Option<SidecarCommand> {

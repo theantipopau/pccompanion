@@ -1,4 +1,4 @@
-import { Cpu, ExternalLink, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Thermometer, Zap } from 'lucide-react';
+import { AlertTriangle, Cpu, ExternalLink, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Sparkles, Thermometer, Zap, type LucideIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -102,6 +102,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     { id: 'ram', label: 'RAM', value: sample ? pct(sample.memory.usage) : 'Scan', detail: sample ? `${gb(sample.memory.usedGb)} used` : 'Pending' },
     { id: 'net', label: 'NET', value: sample ? mbps(sample.network.downMbps) : 'Scan', detail: sample ? `${mbps(sample.network.upMbps)} up` : 'Pending' },
   ];
+  const storageMaxUsed = sample?.storage.reduce((max, drive) => Math.max(max, drive.usedPercent), 0) ?? 0;
+  const careActions = buildCareActions({
+    cpuTempMissing: sample ? sample.cpu.temperature == null : false,
+    storageMaxUsed,
+    scoreValue: performanceScore.value,
+    updateAvailable: driverUpdateInfo?.updateAvailable === true,
+    latestDriver: driverUpdateInfo?.latestVersion,
+    driverUrl: driverUpdateInfo?.downloadUrl,
+    telemetryReady: nominal,
+  });
 
   return (
     <div className="page">
@@ -271,6 +281,31 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <span>Telemetry {activeChannels}/4</span>
               <span>{nominal ? 'Runtime nominal' : 'Degraded runtime'}</span>
             </div>
+            <div className="dashboard-care-actions">
+              {careActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.label}
+                    className={`dashboard-care-action tone-${action.tone}`}
+                    type="button"
+                    onClick={() => {
+                      if (action.url) {
+                        openExternalUrl(action.url);
+                        return;
+                      }
+                      onNavigate?.(action.view);
+                    }}
+                  >
+                    <Icon size={15} />
+                    <span>
+                      <strong>{action.label}</strong>
+                      <small>{action.detail}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </Panel>
 
@@ -435,6 +470,89 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       </div>
     </div>
   );
+}
+
+type CareAction = {
+  label: string;
+  detail: string;
+  icon: LucideIcon;
+  view: string;
+  url?: string;
+  tone: 'green' | 'amber' | 'cyan';
+};
+
+function buildCareActions({
+  cpuTempMissing,
+  storageMaxUsed,
+  scoreValue,
+  updateAvailable,
+  latestDriver,
+  driverUrl,
+  telemetryReady,
+}: {
+  cpuTempMissing: boolean;
+  storageMaxUsed: number;
+  scoreValue: number;
+  updateAvailable: boolean;
+  latestDriver?: string;
+  driverUrl?: string;
+  telemetryReady: boolean;
+}): CareAction[] {
+  const actions: CareAction[] = [];
+  if (cpuTempMissing) {
+    actions.push({
+      label: 'Check sensor provider',
+      detail: 'CPU package temp unavailable',
+      icon: Thermometer,
+      view: 'diagnostics',
+      tone: 'amber',
+    });
+  }
+  if (updateAvailable && driverUrl) {
+    actions.push({
+      label: 'Update GPU driver',
+      detail: latestDriver ? `Latest ${latestDriver}` : 'New driver available',
+      icon: MonitorUp,
+      view: 'dashboard',
+      url: driverUrl,
+      tone: 'amber',
+    });
+  }
+  if (storageMaxUsed >= 85) {
+    actions.push({
+      label: 'Free storage',
+      detail: `Highest drive ${Math.round(storageMaxUsed)}% used`,
+      icon: HardDrive,
+      view: 'storage',
+      tone: storageMaxUsed >= 92 ? 'amber' : 'cyan',
+    });
+  }
+  if (scoreValue < 75) {
+    actions.push({
+      label: 'Review profiles',
+      detail: 'Tune power intent safely',
+      icon: Zap,
+      view: 'profiles',
+      tone: 'cyan',
+    });
+  }
+  if (!telemetryReady && actions.length < 4) {
+    actions.push({
+      label: 'Run health check',
+      detail: 'Open diagnostics workflow',
+      icon: AlertTriangle,
+      view: 'diagnostics',
+      tone: 'amber',
+    });
+  }
+  actions.push({
+    label: 'Open passport',
+    detail: 'Build identity and care status',
+    icon: Sparkles,
+    view: 'passport',
+    tone: 'green',
+  });
+  return actions.slice(0, 4);
 }
 
 function DashboardTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string }) {

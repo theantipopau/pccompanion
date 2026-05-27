@@ -1,4 +1,4 @@
-import { Activity, Cpu, Fan, Gamepad2, HardDrive, Network, Palette, Rocket, TimerReset, type LucideIcon } from 'lucide-react';
+import { Activity, Cpu, Fan, FileWarning, Gamepad2, HardDrive, Network, PackageMinus, Palette, Rocket, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -112,6 +112,36 @@ const modules: UtilityModule[] = [
   },
 ];
 
+const maintenanceTools: UtilityModule[] = [
+  {
+    title: 'System Cleaner',
+    icon: HardDrive,
+    status: 'live',
+    group: 'live',
+    oem: assets.radiumLogo,
+    text: 'Analyse temp files, browser caches, shader caches, update payloads, logs, downloads review areas, and the Recycle Bin with safe-target cleanup.',
+    action: { label: 'Open system cleaner', view: 'storage' },
+  },
+  {
+    title: 'Registry Cleaner',
+    icon: FileWarning,
+    status: 'live',
+    group: 'live',
+    oem: assets.radiumLogo,
+    text: 'CCleaner-style scope with Radium guardrails: .reg backups, idempotent deletes, safe defaults, and review-only risky registry areas.',
+    action: { label: 'Open registry', view: 'registry' },
+  },
+  {
+    title: 'Bloatware Remover',
+    icon: PackageMinus,
+    status: 'live',
+    group: 'live',
+    oem: assets.radiumLogo,
+    text: 'Review Microsoft inbox apps and third-party preload packages by risk, category, publisher, detected state, and restore path.',
+    action: { label: 'Open remover', view: 'cleanup' },
+  },
+];
+
 export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?: (view: string) => void }) {
   const [profiles, setProfiles] = useState<PerformanceProfile[]>([]);
   const { settings } = useSettings();
@@ -145,6 +175,21 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
         title={title}
         description="Capability-led PC ownership workflows. Live tools are reversible; staged hardware controls stay gated until native adapters are proven."
       />
+
+      <section className="maintenance-focus">
+        <div className="utility-section-heading">
+          <div>
+            <span className="eyebrow">Maintenance command centre</span>
+            <h2>Cleanup, repair, and ownership tools built around review-first actions.</h2>
+          </div>
+          <ShieldCheck size={20} />
+        </div>
+        <div className="maintenance-focus-grid">
+          {maintenanceTools.map((module) => (
+            <UtilityCard key={module.title} module={module} onNavigate={onNavigate} />
+          ))}
+        </div>
+      </section>
 
       <div className="utility-overview-grid">
         <Panel className="utility-profile-panel">

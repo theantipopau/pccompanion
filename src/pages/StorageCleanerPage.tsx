@@ -2,6 +2,7 @@ import { CheckCircle2, HardDrive, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { recordCompanionAction } from '../lib/actionHistory';
 import { gb } from '../lib/format';
 import {
   cancelStorageCleanupScan,
@@ -23,13 +24,19 @@ export function StorageCleanerPage() {
     cancelled: false,
     progressPct: 0,
     currentStep: 0,
-    totalSteps: 9,
+    totalSteps: 11,
     message: 'Starting storage scan',
   });
+  const [activeCategory, setActiveCategory] = useState('All');
   const busy = scanning || cleaning;
   const selected = useMemo(() => items.filter((item) => item.selected), [items]);
   const reviewSelected = useMemo(() => selected.filter((item) => !item.safe), [selected]);
   const reclaimable = selected.reduce((sum, item) => sum + item.sizeGb, 0);
+  const categories = useMemo(() => ['All', ...Array.from(new Set(items.map((item) => item.category)))], [items]);
+  const visibleItems = useMemo(
+    () => activeCategory === 'All' ? items : items.filter((item) => item.category === activeCategory),
+    [activeCategory, items],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -131,7 +138,9 @@ export function StorageCleanerPage() {
 
     setCleaning(true);
     try {
-      setLog(await runStorageCleanup(selected));
+      const result = await runStorageCleanup(selected);
+      setLog(result);
+      recordCompanionAction('maintenance', 'System cleanup completed', `${gb(reclaimable)} selected across ${selected.length} item(s)`);
     } finally {
       setCleaning(false);
     }
@@ -164,6 +173,16 @@ export function StorageCleanerPage() {
         <CommandSignal icon={HardDrive} label="Analyse" value={scanStatus.running ? 'Scanning now' : 'Scan complete'} />
         <CommandSignal icon={ShieldCheck} label="Guardrail" value="Safe targets only" tone="green" />
         <CommandSignal icon={Trash2} label="Selected" value={gb(reclaimable)} tone={reclaimable > 0 ? 'amber' : 'cyan'} />
+      </div>
+      <div className="maintenance-filter-row">
+        <div className="filter-chip-row" role="list" aria-label="Storage cleanup categories">
+          {categories.map((category) => (
+            <button key={category} className={activeCategory === category ? 'filter-chip active' : 'filter-chip'} type="button" onClick={() => setActiveCategory(category)}>
+              <span>{category}</span>
+              <strong>{category === 'All' ? items.length : items.filter((item) => item.category === category).length}</strong>
+            </button>
+          ))}
+        </div>
       </div>
       <div className="cleaner-shell">
         <Panel className="cleaner-summary">
@@ -207,7 +226,7 @@ export function StorageCleanerPage() {
             <HardDrive size={19} />
           </div>
           <div className="cleanup-items">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <label className="cleanup-item storage-item" key={item.id}>
                 <input type="checkbox" checked={item.selected} onChange={() => toggle(item.id)} />
                 <div>
@@ -221,6 +240,13 @@ export function StorageCleanerPage() {
                 <b>{gb(item.sizeGb)}</b>
               </label>
             ))}
+            {!scanning && visibleItems.length === 0 && (
+              <div className="empty-state">
+                <ShieldCheck size={18} />
+                <strong>No cleanup targets in this category</strong>
+                <span>Try another category or rescan after running games, browsers, or Windows Update.</span>
+              </div>
+            )}
           </div>
         </Panel>
         <Panel className="manager-inspector">

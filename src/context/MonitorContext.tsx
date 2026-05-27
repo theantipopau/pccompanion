@@ -121,8 +121,9 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
               ? `GPU ${pct(next.gpu.usage)}`
               : `RAM ${pct(next.memory.usage)}`;
 
+            const modeLabel = settings.experience.performanceMode.toUpperCase();
             void setTrayStatus({
-              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} · ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} · NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} · Telemetry ${next.state}\nTray ${trayLabel}\nDouble-click: Open · Menu: OSD, RAM clean, modes`,
+              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} - NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} - Telemetry ${next.state}\nMode ${modeLabel} - Tray ${trayLabel}\nDouble-click: Open - Menu: OSD, RAM clean, modes`,
               mode: settings.experience.performanceMode,
               overlayEnabled: settings.overlay.enabled,
             });
@@ -175,4 +176,3 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
 
   return <MonitorContext.Provider value={value}>{children}</MonitorContext.Provider>;
 }
-

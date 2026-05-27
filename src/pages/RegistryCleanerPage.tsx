@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { recordCompanionAction } from '../lib/actionHistory';
 import { backupRegistryIssues, cleanRegistryIssues, restoreRegistryBackup, scanRegistryIssues } from '../services/systemService';
 import type { RegistryBackup, RegistryIssue } from '../types/system';
 export function RegistryCleanerPage() {
@@ -48,6 +49,7 @@ export function RegistryCleanerPage() {
       const result = await backupRegistryIssues(selected);
       setBackup(result);
       setLog([`Backup created: ${result.path}`, `${result.issueCount} selected issue snapshots recorded.`]);
+      recordCompanionAction('maintenance', 'Registry backup created', result.path);
     } finally {
       setBusy(false);
     }
@@ -60,6 +62,7 @@ export function RegistryCleanerPage() {
       setBackup(freshBackup);
       const cleanLog = await cleanRegistryIssues(safeSelected, freshBackup.id);
       setLog([`Backup created: ${freshBackup.path}`, ...cleanLog]);
+      recordCompanionAction('maintenance', 'Registry safe clean', `${safeSelected.length} item(s), backup ${freshBackup.id}`);
       await refreshIssues();
     } finally {
       setBusy(false);
@@ -74,6 +77,7 @@ export function RegistryCleanerPage() {
     try {
       const restoreLog = await restoreRegistryBackup(backup.id);
       setLog(restoreLog);
+      recordCompanionAction('maintenance', 'Registry backup restored', backup.id);
       await refreshIssues();
     } finally {
       setBusy(false);

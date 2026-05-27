@@ -13,13 +13,28 @@ As of May 2026 the following is live and shipped:
 - **Benchmark page**: capture engine, live sensor trust panel, result cards, and a latest-vs-previous comparison block with per-metric deltas. ✅ Slice F
 - **Thermal panel**: intake badge repositioned from a fixed `left: 70%` anchor to `right: 4%` so it stays inside the case frame at all panel widths.
 - **Bug fixes shipped**: PawnIO `-install -silent` invocation, installed sidecar lookup from `$INSTDIR\binaries`, recycle-bin Win32 path, registry-cleaner idempotent delete, RAM-cleaner output clarity, NVIDIA badge copy.
+- **Registry cleaner scope**: expanded toward a CCleaner-style scan set while keeping risky areas review-only. Covered categories now include startup references, uninstall leftovers, application paths, missing shared DLL values, help file references, fonts, MUI cache, sound events, ActiveX/COM, type libraries, and file associations.
+- **Branding and tray polish**: splash and first-run onboarding now include the Radium mark, the tray live icon has higher contrast typography, and tooltips expose the active performance mode.
+- **Power profile clarity**: profile previews now explain expected behaviour, persistence, Windows power-plan writes, processor policy, timer resolution, and blocked firmware/EC controls.
+- **Profile validation**: profile apply results now validate the active Windows power plan and processor min/max/boost policy after native writes complete.
+- **Sidecar diagnostics**: Diagnostics now has a manual Radium sidecar probe that reports launch status, driver-row visibility, CPU package match, fan/storage rows, and checked sidecar paths.
+- **Tray mode switching**: tray menu power modes now route through the native apply path for Quiet, Balanced, Gaming, and Creator instead of only changing local UI intent.
+- **Owner support workflow**: About now prepares a local diagnostics bundle, drafts a Companion assistance email with system context, and shows local-only recent Companion action history.
+- **Radium Care checklist**: System Passport now includes an owner-readiness checklist for telemetry, CPU package sensor state, GPU provider depth, storage headroom, and support bundle readiness.
+- **Restore Centre**: About now lists local Registry Cleaner backups from Documents and can invoke the existing restore path without requiring the current Registry Cleaner session.
+- **Action coverage**: Registry Cleaner, System Cleaner, Bloatware Remover, tray utilities, diagnostics export, and profile changes now write high-level local action records for support context.
+- **Dashboard next actions**: the Radium Performance Score panel now suggests owner-friendly next steps such as checking sensor provider health, freeing storage, updating GPU drivers, reviewing profiles, or opening the System Passport.
+- **Companion support routing**: app-level support CTAs now target `companion@radiumpcs.com.au`, while general Radium support remains listed for hardware/service requests.
+- **First-run setup**: onboarding now lets owners choose tray metric, default profile, and Windows startup preference before entering the dashboard.
 
 Staged items still pending:
 
-- App version display and update surfacing (Slice C — active next)
-- Manual game profile mappings (Slice D)
-- Sensor provider validation loop (Slice E)
-- RGB and vendor extras (Stage 6)
+- Network update checks / auto-updater. Local version display and manual release-note surfacing are live.
+- Background game profile automation. Manual per-game mappings are live and automation stays opt-in.
+- Deeper sensor provider telemetry for CPU package, fan, and SMART rows. Diagnostics and manual sidecar probing are live.
+- Local AI insights and an optional local LLM copilot tab. No cloud dependency by default.
+- Session summaries, build certificate export, richer notification policy, and OEM report/PDF export.
+- RGB and vendor extras. These remain intentionally blocked until reversible adapters are proven.
 
 ## Recommended Next Stages
 
@@ -131,7 +146,28 @@ How:
 - use the same telemetry provider state that the rest of the app trusts,
 - avoid turning the benchmark into a synthetic marketing screen.
 
-### Stage 6: RGB and vendor extras
+### Stage 6: Local AI insights and optional local copilot
+
+Goal: add meaningful "AI" value with zero cloud cost by default, then layer in an optional local LLM assistant.
+
+Work:
+
+- Ship a deterministic local insights engine first (no model required).
+- Convert diagnostics, telemetry confidence, and recent actions into owner-friendly findings.
+- Add confidence labels per insight (`High confidence`, `Medium confidence`, `Needs more data`).
+- Keep all insight generation local and offline-capable.
+- Add a preview Local AI tab that can summarize system state and explain recommendations.
+- Keep all write actions behind existing capability gates and explicit user confirmation.
+
+How:
+
+- Start with a rule-based analyzer service that emits typed `InsightCard` records.
+- Reuse existing context sources: diagnostics state, profile state, benchmark deltas, and action history.
+- Add a local model recommender that maps hardware tiers to supported model profiles.
+- Host any future LLM runtime in a separate local sidecar process with localhost-only IPC.
+- Treat LLM output as advisory text; execution continues through existing guarded native commands.
+
+### Stage 7: RGB and vendor extras
 
 Goal: support vendor extras only after the core power and thermal flows are stable.
 
@@ -161,11 +197,12 @@ The main lesson from those projects is not the UI styling; it is the control mod
 
 1. ~~Clean up the Utilities tab grouping and status labels.~~ ✅ Done
 2. ~~Promote performance profiles so they read as a supported workflow.~~ ✅ Done
-3. **Add app version and non-intrusive update surfacing.** ← active next (Slice C)
-4. Add manual per-game profile mappings.
-5. Expand sensor-provider staging and diagnostics.
+3. ~~Add app version and non-intrusive local update surfacing.~~ ✅ Done; network update checks deferred.
+4. ~~Add manual per-game profile mappings.~~ ✅ Done; background automation deferred.
+5. ~~Expand sensor-provider staging and diagnostics.~~ ✅ Done; deeper CPU/fan/storage telemetry pending.
 6. ~~Add benchmark validation and tuning feedback.~~ ✅ Done
-7. Revisit RGB and vendor-specific extras last.
+7. Add local AI insights and optional local copilot preview (read-only first).
+8. Revisit RGB and vendor-specific extras last.
 
 ## Implementation Kickoff Plan
 
@@ -177,7 +214,7 @@ Shipped. `UtilitiesPage.tsx` has three groups (`live`, `staged`, `planned`), a `
 
 Shipped. `PerformanceProfilesPage.tsx` has full apply flow, planned-changes preview panel, confirmed-state updates, error handling, and gated write visibility. Utilities page links directly to profiles.
 
-### Slice C: Version and app update surfacing 🔜 ACTIVE NEXT
+### Slice C: Version and app update surfacing ✅ LOCAL SURFACE DONE
 
 Scope:
 
@@ -190,9 +227,15 @@ Scope:
 Acceptance checks:
 
 - Version string visible in Settings with no network access.
-- Update check failure shows nothing (not an error banner).
-- Update available → compact pill with "What's new" / download link, no startup dialog.
+- Manual release-note surfacing stays non-intrusive and does not block startup.
+- Future update check failure shows nothing (not an error banner).
+- Future update available → compact pill with "What's new" / download link, no startup dialog.
 - Browser preview shows a hardcoded version label clearly marked `[preview]`.
+
+Status:
+
+- Local version display and manual release-note/update link are implemented.
+- Network update polling remains deferred so the current build has no startup network dependency.
 
 Likely files:
 
@@ -203,7 +246,7 @@ Likely files:
 - `src/pages/SettingsPage.tsx` — version display block
 - `src/components/Shell.tsx` — sidebar update pill
 
-### Slice D: Manual game profile mappings
+### Slice D: Manual game profile mappings ✅ DONE
 
 Scope:
 
@@ -218,6 +261,11 @@ Acceptance checks:
 - Restore behavior is explicit: previous profile or chosen default profile.
 - No cloud sync, hidden background rules, or unreviewed process mutation.
 
+Status:
+
+- Manual mappings are implemented in local settings.
+- Background foreground-game detection and automatic switching are deferred.
+
 Likely files:
 
 - `src/types/system.ts`
@@ -225,7 +273,7 @@ Likely files:
 - `src/pages/SettingsPage.tsx` or a new `GameModePage.tsx`
 - `src/pages/ProcessMonitorPage.tsx`
 
-### Slice E: Sensor provider validation loop
+### Slice E: Sensor provider validation loop ✅ DIAGNOSTICS DONE
 
 Scope:
 
@@ -239,6 +287,11 @@ Acceptance checks:
 - On a machine with no matching sensors, the app explains "provider present but no CPU package row" rather than showing a blank.
 - On Ryzen tester hardware, support can distinguish installer failure, driver/service failure, sidecar launch failure, and sensor matching failure.
 - Diagnostics language stays short enough to avoid clipping in Settings.
+
+Status:
+
+- Lifecycle diagnostics, checked-path reporting, manual probe, support export context, and sidecar/PawnIO installer fixes are implemented.
+- Deeper CPU package matching, fan rows, and SMART rows remain the next native-provider work.
 
 Likely files:
 
@@ -255,6 +308,40 @@ Shipped. `BenchmarkPage.tsx` has a 30-second capture engine, live sensor trust p
 - `src/types/system.ts`
 - `src-tauri/src/lib.rs`
 
+### Slice G: Local AI insights and copilot tab 🚧 PLANNED
+
+Scope:
+
+- Add a deterministic local insights service that generates next actions from local telemetry and diagnostics.
+- Add an `Insights` panel in Dashboard and a compact Utilities surface for "why" and "what next".
+- Add an optional Local AI tab in preview mode with read-only context and no direct mutation path.
+- Include hardware-aware model recommendations (for example, lightweight, balanced, high-capability tiers).
+- Keep cloud providers out of scope for the first pass; this slice is local-only.
+
+Acceptance checks:
+
+- Insights render with no network access and no model runtime installed.
+- Each insight shows source signals, confidence, and a safe suggested action.
+- Local AI tab can summarize current system health from curated local context.
+- AI-generated suggestions cannot directly execute native writes without user confirmation.
+- If no local model is configured, the UI fails closed to deterministic insights only.
+
+Status:
+
+- Not implemented yet.
+- Proposed as the next major stage after current pre-release hardening and telemetry depth updates.
+
+Likely files:
+
+- `src/types/system.ts` or `src/types/insights.ts`
+- `src/services/systemService.ts`
+- `src/lib/actionHistory.ts`
+- `src/pages/DashboardPage.tsx`
+- `src/pages/UtilitiesPage.tsx`
+- `src/pages/SettingsPage.tsx`
+- `src/pages/AiCopilotPage.tsx` (new)
+- `src/context/MonitorContext.tsx`
+
 ## First PR Shape
 
 Keep the first implementation PR small and UI-led:
@@ -263,7 +350,7 @@ Keep the first implementation PR small and UI-led:
 2. Compact profile preview on Utilities.
 3. Settings app version display using local metadata only.
 
-Defer network update checks, game mappings, benchmark execution, RGB, and any new hardware writes until the first PR proves the information architecture.
+The original UI-led PR scope is complete. Keep network update checks, background game automation, RGB, session summaries, OEM report export, and any new hardware writes deferred until the current support and diagnostics flows have had tester feedback.
 
 Current implementation progress:
 
@@ -279,6 +366,14 @@ Current implementation progress:
 - Benchmark capture page: implemented as a local telemetry window with trusted/missing sensor reporting and latest-vs-previous comparison.
 - Security hardening pass: URL opening now uses HTTPS allow-listing, cleanup skips unsafe targets/symlink traversal, and release sidecar loading no longer trusts arbitrary environment/current-directory paths.
 - Network update checks, RGB, background game automation, and new hardware writes: deferred.
+- Local AI insights engine and optional local LLM copilot tab: deferred (planned as next-stage slice).
+- Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.
+- Radium Care checklist: implemented in System Passport as support-friendly ownership readiness, not a firmware/OEM control layer.
+- Restore Centre: implemented for Registry Cleaner backups. It reads existing backup manifests and restores through the same guarded backend command used by Registry Cleaner.
+- Local action history: expanded across maintenance/support/profile flows. It stores only high-level local events in browser storage and can be cleared by the user.
+- Dashboard next-best-action panel: implemented in the score card so users have clear follow-up actions without reading diagnostics first.
+- Companion assistance routing: topbar/search support actions target the Companion mailbox; general Radium support remains visible in company contact details.
+- First-run setup: implemented as lightweight local settings inside onboarding. It does not add hidden automation or firmware writes.
 
 ## Guardrails
 

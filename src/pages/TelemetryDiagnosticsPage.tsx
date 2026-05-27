@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Skeleton } from '../components/Skeleton';
-import { exportDiagnostics, getTelemetryDiagnostics } from '../services/systemService';
-import type { DiagnosticsExport, TelemetryDiagnosticsSnapshot } from '../types/system';
+import { recordCompanionAction } from '../lib/actionHistory';
+import { exportDiagnostics, getTelemetryDiagnostics, probeSensorSidecar } from '../services/systemService';
+import type { DiagnosticsExport, SensorSidecarProbe, TelemetryDiagnosticsSnapshot } from '../types/system';
 
 type ValidationResult = {
   title: string;
@@ -30,6 +31,8 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
   const [snapshot, setSnapshot] = useState<TelemetryDiagnosticsSnapshot | null>(null);
   const [exportResult, setExportResult] = useState<DiagnosticsExport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [probeBusy, setProbeBusy] = useState(false);
+  const [sidecarProbe, setSidecarProbe] = useState<SensorSidecarProbe | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
 
   async function refreshDiagnostics() {
@@ -48,8 +51,21 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
     try {
       const result = await exportDiagnostics();
       setExportResult(result);
+      recordCompanionAction('support', 'Diagnostics bundle exported', result.path);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleSidecarProbe() {
+    setProbeBusy(true);
+    try {
+      const result = await probeSensorSidecar();
+      setSidecarProbe(result);
+      recordCompanionAction('diagnostics', 'Sensor sidecar probe', result.status);
+      await refreshDiagnostics();
+    } finally {
+      setProbeBusy(false);
     }
   }
 
@@ -153,7 +169,10 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
               <span className="eyebrow">Radium sensor provider</span>
               <h2>Sidecar validation path</h2>
             </div>
-            <ShieldCheck size={18} />
+            <button className="secondary-button compact-button" type="button" onClick={() => void handleSidecarProbe()} disabled={probeBusy || busy}>
+              <RefreshCw size={15} className={probeBusy ? 'spin' : undefined} />
+              <span>{probeBusy ? 'Probing' : 'Probe now'}</span>
+            </button>
           </div>
           <div className="sidecar-lifecycle">
             {(snapshot?.sidecarLifecycle ?? []).map((step, index) => (
@@ -166,6 +185,22 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
               </div>
             ))}
           </div>
+          {sidecarProbe && (
+            <div className={sidecarProbe.available ? 'sidecar-probe-result live' : sidecarProbe.driverAvailable ? 'sidecar-probe-result partial' : 'sidecar-probe-result degraded'}>
+              <div>
+                <strong>{formatDiagnosticToken(sidecarProbe.status)}</strong>
+                <span>{sidecarProbe.executablePath || 'No sidecar path reported'}</span>
+              </div>
+              <div className="sidecar-probe-grid">
+                <span>CPU temp <strong>{sidecarProbe.cpuTempC != null ? `${Math.round(sidecarProbe.cpuTempC)}C` : 'N/A'}</strong></span>
+                <span>CPU fan <strong>{sidecarProbe.cpuFanRpm != null ? `${sidecarProbe.cpuFanRpm} RPM` : 'N/A'}</strong></span>
+                <span>Driver rows <strong>{sidecarProbe.driverAvailable ? 'Visible' : 'Missing'}</strong></span>
+              </div>
+              {sidecarProbe.notes.length > 0 && (
+                <p title={sidecarProbe.notes.join(' / ')}>{shortText(sidecarProbe.notes.join(' / '), 150)}</p>
+              )}
+            </div>
+          )}
         </Panel>
 
         <Panel className="diagnostics-panel wide">

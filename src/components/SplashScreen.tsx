@@ -40,7 +40,12 @@ export function SplashScreen({ steps, onComplete }: SplashScreenProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.42, ease: [0.2, 0.7, 0.2, 1] }}
       >
-        <img className="splash-logo" src={assets.radiumHeader} alt="Radium PCs" />
+        <div className="splash-brand">
+          <span className="splash-brand-icon">
+            <img src={assets.radiumLogo} alt="" />
+          </span>
+          <img className="splash-logo" src={assets.radiumHeader} alt="Radium PCs" />
+        </div>
         <div className="splash-ring" aria-hidden="true">
           <motion.span
             animate={{ rotate: 360 }}

@@ -276,6 +276,26 @@ export function mockStorageCleanupItems(): StorageCleanupItem[] {
       description: 'Browser cache files. Cookies, history, and saved sessions are intentionally excluded.',
     },
     {
+      id: 'discord-cache',
+      name: 'Discord cache',
+      location: 'AppData\\discord\\Cache',
+      sizeGb: 0.9,
+      category: 'App cache',
+      selected: true,
+      safe: true,
+      description: 'Application cache only. Account data and settings are intentionally excluded.',
+    },
+    {
+      id: 'thumbnail-cache',
+      name: 'Windows thumbnail cache',
+      location: 'LocalAppData\\Microsoft\\Windows\\Explorer',
+      sizeGb: 0.4,
+      category: 'Explorer',
+      selected: true,
+      safe: true,
+      description: 'Explorer thumbnail databases. Windows rebuilds these automatically.',
+    },
+    {
       id: 'recycle-bin',
       name: 'Recycle Bin',
       location: '$Recycle.Bin',
@@ -382,7 +402,7 @@ export function mockPerformanceProfiles(): PerformanceProfile[] {
     {
       id: 'gaming',
       name: 'Gaming',
-      summary: 'Prioritises sustained clocks, faster fan ramp targets, and foreground responsiveness.',
+      summary: 'Prioritises foreground responsiveness, performance plans, and low-latency scheduling.',
       selected: false,
       recommendedFor: 'Competitive gaming, high refresh displays, and GPU-heavy sessions.',
       fanIntent: 'aggressive',
@@ -419,12 +439,30 @@ export function mockApplyPerformanceProfile(id: PerformanceProfileId): Performan
   return {
     appliedProfile: id,
     appliedAt: new Date().toLocaleString(),
-    message: 'Profile intent saved locally. Native power and firmware writes remain capability-gated until the adapter is validated.',
+    message: 'Profile intent saved locally. Native power writes run in the desktop app and firmware writes remain capability-gated.',
     actions: [
-      'Saved selected profile in Companion state.',
-      'Prepared tray mode and OSD refresh intent.',
-      'Skipped unsafe firmware writes in preview mode.',
+      'Saved selected profile in Companion settings.',
+      'Prepared tray mode and overlay refresh intent.',
+      'Desktop build applies Windows power plan, processor policy, and timer resolution.',
+      'Firmware, voltage, fan-table, and EC writes remain locked.',
     ],
+    validation: {
+      status: 'verified',
+      expectedPlan: id === 'quiet' ? 'Power Saver' : id === 'balanced' ? 'Balanced' : 'Ultimate/High Performance',
+      detectedPlan: id === 'quiet' ? 'Power Saver (preview)' : id === 'balanced' ? 'Balanced (preview)' : 'High Performance (preview)',
+      planVerified: true,
+      expectedProcessor: id === 'quiet'
+        ? 'Processor 5-70%, boost mode 0'
+        : id === 'gaming'
+          ? 'Processor 10-100%, boost mode 2'
+          : id === 'creator'
+            ? 'Processor 10-100%, boost mode 1'
+            : 'Processor 5-100%, boost mode 1',
+      detectedProcessor: 'Preview policy matches selected profile',
+      processorVerified: true,
+      timerPolicy: id === 'quiet' ? 'Windows default' : id === 'balanced' ? '1.0 ms target' : '0.5 ms target',
+      notes: [],
+    },
   };
 }
 

@@ -143,7 +143,7 @@ where
     F: FnMut(usize, usize, &str),
 {
     let mut items = Vec::new();
-    let total_steps = 9usize;
+    let total_steps = 11usize;
     let mut done_steps = 0usize;
 
     let mut bump = |label: &str| {
@@ -343,6 +343,71 @@ where
     }
     bump("Scanned browser caches");
 
+    // ----- Communication / launcher caches: cache-only paths, no credentials/session stores -----
+    if cancelled() {
+        return items;
+    }
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let comm_paths = [
+            ("discord-cache", "Discord cache", std::path::Path::new(&appdata).join("discord").join("Cache")),
+            ("discord-code-cache", "Discord code cache", std::path::Path::new(&appdata).join("discord").join("Code Cache")),
+            ("teams-cache", "Microsoft Teams cache", std::path::Path::new(&appdata).join("Microsoft").join("Teams").join("Cache")),
+        ];
+
+        for (id, name, path) in comm_paths {
+            if path.exists() {
+                let (size, _, was_cancelled) = dir_size_estimate_cancel(&path, HEAVY_SCAN_MAX_ENTRIES / 2, cancel);
+                if was_cancelled {
+                    return items;
+                }
+                items.push(StorageCleanupItem {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    location: path.to_string_lossy().to_string(),
+                    size_gb: bytes_to_gb_u64(size),
+                    category: "App cache".to_string(),
+                    selected: true,
+                    safe: true,
+                    description: "Application cache files only. Account data, settings, and sessions are intentionally excluded.".to_string(),
+                });
+            }
+            if cancelled() {
+                return items;
+            }
+        }
+    }
+    bump("Scanned communication app caches");
+
+    // ----- Explorer thumbnail cache -----
+    if cancelled() {
+        return items;
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let explorer = std::path::Path::new(&local)
+            .join("Microsoft")
+            .join("Windows")
+            .join("Explorer");
+        if explorer.exists() {
+            let (size, _, was_cancelled) = matching_files_size(&explorer, "thumbcache_", cancel);
+            if was_cancelled {
+                return items;
+            }
+            if size > 0 {
+                items.push(StorageCleanupItem {
+                    id: "thumbnail-cache".to_string(),
+                    name: "Windows thumbnail cache".to_string(),
+                    location: explorer.to_string_lossy().to_string(),
+                    size_gb: bytes_to_gb_u64(size),
+                    category: "Explorer".to_string(),
+                    selected: true,
+                    safe: true,
+                    description: "Explorer thumbnail databases. Windows rebuilds them automatically as folders are browsed.".to_string(),
+                });
+            }
+        }
+    }
+    bump("Scanned Explorer thumbnail cache");
+
     // ----- Windows Update / Delivery Optimization caches -----
     if cancelled() {
         return items;
@@ -475,6 +540,16 @@ pub fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Vec<String> {
                         if item.id == "recycle-bin" {
                             return clear_recycle_bin();
                         }
+                        if item.id == "thumbnail-cache" {
+                            return match delete_matching_files(std::path::Path::new(&item.location), "thumbcache_") {
+                                Ok(freed) => format!(
+                                    "[ok] {}: reclaimed {:.2} GB",
+                                    item.name,
+                                    bytes_to_gb_u64(freed)
+                                ),
+                                Err(e) => format!("[error] {}: {e}", item.name),
+                            };
+                        }
 
                         match delete_dir_contents(std::path::Path::new(&item.location)) {
                             Ok(freed) => format!(
@@ -589,6 +664,39 @@ fn dir_size_limited_cancel(path: &std::path::Path, budget: &mut usize, cancel: &
     size
 }
 
+fn matching_files_size(path: &std::path::Path, prefix: &str, cancel: &AtomicBool) -> (u64, bool, bool) {
+    let mut size = 0u64;
+    let mut visited = 0usize;
+    let mut estimated = false;
+
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            visited = visited.saturating_add(1);
+            if visited > HEAVY_SCAN_MAX_ENTRIES {
+                estimated = true;
+                break;
+            }
+            let p = entry.path();
+            if !p.is_file() {
+                continue;
+            }
+            let Some(name) = p.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if name.to_ascii_lowercase().starts_with(&prefix.to_ascii_lowercase()) {
+                if let Ok(meta) = p.metadata() {
+                    size += meta.len();
+                }
+            }
+        }
+    }
+
+    (size, estimated, cancel.load(Ordering::Relaxed))
+}
+
 /// Delete all direct children of `path` (not the directory itself).
 /// Returns total bytes freed.
 fn delete_dir_contents(path: &std::path::Path) -> std::io::Result<u64> {
@@ -623,6 +731,27 @@ fn delete_child_path(path: &std::path::Path, metadata: &std::fs::Metadata) -> st
     } else {
         std::fs::remove_file(path)
     }
+}
+
+fn delete_matching_files(path: &std::path::Path, prefix: &str) -> std::io::Result<u64> {
+    let mut freed = 0u64;
+    for entry in std::fs::read_dir(path)?.flatten() {
+        let p = entry.path();
+        if !p.is_file() {
+            continue;
+        }
+        let Some(name) = p.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if !name.to_ascii_lowercase().starts_with(&prefix.to_ascii_lowercase()) {
+            continue;
+        }
+        let size = p.metadata().map(|meta| meta.len()).unwrap_or(0);
+        if std::fs::remove_file(&p).is_ok() {
+            freed += size;
+        }
+    }
+    Ok(freed)
 }
 
 fn bytes_to_gb_u64(bytes: u64) -> f32 {

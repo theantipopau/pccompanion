@@ -40,6 +40,35 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
     .toUpperCase()
     .slice(0, 8)}`;
   const validationState = sample?.state === 'valid' ? 'Validated runtime profile' : sample?.state === 'degraded' ? 'Partial telemetry profile' : 'Telemetry baseline pending';
+  const storageMaxUsed = sample?.storage.reduce((max, drive) => Math.max(max, drive.usedPercent), 0) ?? 0;
+  const gpuProvider = sample?.gpu.provider?.toUpperCase() ?? 'Pending';
+  const careItems: Array<{ label: string; status: 'live' | 'partial' | 'unsupported'; detail: string }> = [
+    {
+      label: 'Runtime telemetry',
+      status: sample?.state === 'valid' ? 'live' : sample ? 'partial' : 'unsupported',
+      detail: sample ? `${sample.state.toUpperCase()} provider path with ${sample.history.length} recent samples` : 'Waiting for first hardware sample',
+    },
+    {
+      label: 'CPU package sensor',
+      status: sample?.cpu.temperature != null ? 'live' : 'partial',
+      detail: sample?.cpu.temperature != null ? `${Math.round(sample.cpu.temperature)}C package telemetry available` : 'Low-level provider or OEM sensor row still required',
+    },
+    {
+      label: 'GPU telemetry',
+      status: sample?.gpu.temperature != null || (sample?.gpu.usage ?? 0) > 0 ? 'live' : 'partial',
+      detail: `${gpuProvider} path${sample?.gpu.temperature != null ? ` with ${Math.round(sample.gpu.temperature)}C temperature` : ' with reduced sensor depth'}`,
+    },
+    {
+      label: 'Storage headroom',
+      status: storageMaxUsed >= 92 ? 'unsupported' : storageMaxUsed >= 82 ? 'partial' : 'live',
+      detail: sample?.storage.length ? `Highest used drive ${Math.round(storageMaxUsed)}%` : 'Storage inventory pending',
+    },
+    {
+      label: 'Support bundle readiness',
+      status: native ? 'live' : 'partial',
+      detail: native ? 'Diagnostics export is available locally' : 'Desktop app required for native diagnostics export',
+    },
+  ];
   const scoreChip = (
     <div className="passport-score-chip" title="Radium Performance Score">
       <span>Radium Score</span>
@@ -175,6 +204,21 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             )) : (
               <MatrixRow label="Capability registry" status="partial" detail="Awaiting backend capability snapshot" />
             )}
+          </div>
+        </Panel>
+
+        <Panel className="passport-panel wide">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Radium Care</span>
+              <h2>Owner readiness checklist</h2>
+            </div>
+            <ShieldCheck size={18} />
+          </div>
+          <div className="passport-care-list">
+            {careItems.map((item) => (
+              <MatrixRow key={item.label} label={item.label} status={item.status} detail={item.detail} />
+            ))}
           </div>
         </Panel>
       </div>

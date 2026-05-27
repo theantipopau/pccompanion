@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Bell, Gamepad2, Gauge, MonitorDot, Palette, Plus, Power, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Archive, Bell, ClipboardList, Download, ExternalLink, Gamepad2, Gauge, Info, Mail, MapPin, MonitorDot, Palette, PhoneCall, Plus, Power, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
+import { clearCompanionActions, readCompanionActions, recordCompanionAction, subscribeCompanionActions, summarizeCompanionActions, type CompanionActionRecord } from '../lib/actionHistory';
 import { openExternalUrl } from '../services/native';
-import { getAppMetadata, listTopProcesses, setStartupMode } from '../services/systemService';
+import { exportDiagnostics, getAppMetadata, listRegistryBackups, listTopProcesses, restoreRegistryBackup, setStartupMode } from '../services/systemService';
 import { SystemPassportPage } from './SystemPassportPage';
 import { TelemetryDiagnosticsPage } from './TelemetryDiagnosticsPage';
-import type { AppMetadata, GameProfileMapping, OverlayPreset, PerformanceMode, PerformanceProfileId, ProcessInfo, TrayMetric } from '../types/system';
+import type { AppMetadata, GameProfileMapping, OverlayPreset, PerformanceMode, PerformanceProfileId, ProcessInfo, RegistryBackup, TrayMetric } from '../types/system';
 
 const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
   { id: 'compact-bar',    label: 'Compact bar' },
@@ -20,7 +21,13 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
   { id: 'benchmark',      label: 'Benchmark - dense grid' },
 ];
 
-type SettingsTab = 'general' | 'games' | 'passport' | 'diagnostics';
+type SettingsTab = 'general' | 'games' | 'passport' | 'diagnostics' | 'about';
+
+const radiumWebsite = 'https://radiumpcs.com.au';
+const companionEmail = 'companion@radiumpcs.com.au';
+const supportEmail = 'support@radiumpcs.com.au';
+const radiumPhone = '1300 935 884';
+const radiumAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
 
 export function SettingsPage({ initialTab = 'general' }: { initialTab?: SettingsTab }) {
   const { sample, systemInfo, native } = useMonitor();
@@ -79,11 +86,16 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
           <ShieldCheck size={16} />
           <span>Diagnostics</span>
         </button>
+        <button className={activeTab === 'about' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'about'} onClick={() => setActiveTab('about')}>
+          <Info size={16} />
+          <span>About</span>
+        </button>
       </div>
 
       {activeTab === 'passport' && <SystemPassportPage embedded />}
       {activeTab === 'games' && <GameModeSettings />}
       {activeTab === 'diagnostics' && <TelemetryDiagnosticsPage embedded />}
+      {activeTab === 'about' && <AboutCompanion appMetadata={appMetadata} />}
       {activeTab === 'general' && (
       <div className="settings-grid">
         <Panel className="settings-panel settings-hero wide">
@@ -376,6 +388,214 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
         </Panel>
       </div>
       )}
+    </div>
+  );
+}
+
+function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
+  const { systemInfo, sample } = useMonitor();
+  const [supportBundlePath, setSupportBundlePath] = useState('');
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [actions, setActions] = useState<CompanionActionRecord[]>(() => readCompanionActions());
+  const [registryBackups, setRegistryBackups] = useState<RegistryBackup[]>([]);
+  const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
+  const subject = encodeURIComponent('Radium PCs Companion Assistance');
+  const supportBody = encodeURIComponent([
+    'Hi Radium PCs team,',
+    '',
+    'I need assistance with Radium PCs Companion.',
+    '',
+    `Bundle path: ${supportBundlePath || 'Not exported yet'}`,
+    `App version: ${appMetadata?.version ?? '0.1.0-pre'}`,
+    `System: ${systemInfo?.cpu ?? 'CPU pending'} / ${systemInfo?.gpu ?? 'GPU pending'}`,
+    `Motherboard: ${systemInfo?.motherboard ?? 'Pending'}`,
+    `Telemetry: ${sample?.state ?? 'pending'}`,
+    '',
+    'Recent Companion actions:',
+    summarizeCompanionActions(6),
+    '',
+    'Issue summary:',
+    '',
+  ].join('\n'));
+
+  useEffect(() => subscribeCompanionActions(() => setActions(readCompanionActions())), []);
+  useEffect(() => {
+    void refreshRegistryBackups();
+  }, []);
+
+  async function refreshRegistryBackups() {
+    try {
+      setRegistryBackups(await listRegistryBackups());
+    } catch {
+      setRegistryBackups([]);
+    }
+  }
+
+  async function handleSupportBundle() {
+    setSupportBusy(true);
+    try {
+      const result = await exportDiagnostics();
+      setSupportBundlePath(result.path);
+      recordCompanionAction('support', 'Support bundle prepared', result.path);
+    } catch (err) {
+      recordCompanionAction('support', 'Support bundle failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setSupportBusy(false);
+    }
+  }
+
+  async function handleRestoreBackup(backup: RegistryBackup) {
+    setRestoreBusyId(backup.id);
+    try {
+      const result = await restoreRegistryBackup(backup.id);
+      recordCompanionAction('maintenance', 'Registry backup restore requested', result.join(' / '));
+      await refreshRegistryBackups();
+    } finally {
+      setRestoreBusyId(null);
+    }
+  }
+
+  return (
+    <div className="settings-subpage about-companion">
+      <Panel className="settings-panel about-hero wide">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Radium PCs Companion</span>
+            <h2>Built for your Radium custom PC</h2>
+          </div>
+          <img className="settings-hero-wordmark" src={assets.radiumHeaderNew} alt="Radium PCs" />
+        </div>
+        <p>
+          Companion brings local telemetry, support diagnostics, safe cleanup tools, performance profiles, and ownership workflows together for Radium PCs gaming and workstation systems.
+        </p>
+        <div className="about-stat-grid">
+          <div><span>Version</span><strong>{appMetadata?.version ?? '0.1.0-pre'}</strong></div>
+          <div><span>Channel</span><strong>{appMetadata?.releaseChannel ?? 'pre-release'}</strong></div>
+          <div><span>Support mode</span><strong>Diagnostics first</strong></div>
+        </div>
+        <div className="about-action-row">
+          <button className="secondary-button" type="button" onClick={() => void handleSupportBundle()} disabled={supportBusy}>
+            <Download size={16} />
+            <span>{supportBusy ? 'Preparing bundle' : 'Prepare support bundle'}</span>
+          </button>
+          <a className="primary-button" href={`mailto:${companionEmail}?subject=${subject}&body=${supportBody}`}>
+            <Mail size={16} />
+            <span>Need Assistance with the Companion?</span>
+          </a>
+          <button className="secondary-button" type="button" onClick={() => openExternalUrl(radiumWebsite)}>
+            <ExternalLink size={16} />
+            <span>Visit Radium PCs</span>
+          </button>
+        </div>
+        {supportBundlePath && (
+          <div className="support-bundle-path">
+            <span>Latest support bundle</span>
+            <strong title={supportBundlePath}>{supportBundlePath}</strong>
+          </div>
+        )}
+      </Panel>
+
+      <div className="about-grid">
+        <Panel className="settings-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Company</span>
+              <h2>Radium PCs</h2>
+            </div>
+            <Info size={19} />
+          </div>
+          <p className="subtle">
+            Melbourne-based builders of custom and prebuilt gaming PCs, workstations, and water-cooled systems for Australian customers.
+          </p>
+          <div className="about-contact-list">
+            <a href={`tel:${radiumPhone.replace(/\s+/g, '')}`}><PhoneCall size={15} /><span>{radiumPhone}</span></a>
+            <a href={`mailto:${supportEmail}`}><Mail size={15} /><span>{supportEmail}</span></a>
+            <a href={radiumWebsite} target="_blank" rel="noreferrer noopener"><ExternalLink size={15} /><span>radiumpcs.com.au</span></a>
+            <span><MapPin size={15} /><span>{radiumAddress}</span></span>
+          </div>
+        </Panel>
+
+        <Panel className="settings-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Support workflow</span>
+              <h2>How to get help</h2>
+            </div>
+            <ShieldCheck size={19} />
+          </div>
+          <ul className="check-list">
+            <li><ShieldCheck size={16} /> Open Telemetry Diagnostics before emailing support.</li>
+            <li><ShieldCheck size={16} /> Export a diagnostics bundle if sensors, startup, or cleanup actions misbehave.</li>
+            <li><ShieldCheck size={16} /> Include your order/build context and what you were doing when the issue appeared.</li>
+            <li><ShieldCheck size={16} /> Use Companion assistance for app issues, or post-sale support for hardware/service requests.</li>
+          </ul>
+        </Panel>
+
+        <Panel className="settings-panel about-action-history">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Local history</span>
+              <h2>What Companion changed</h2>
+            </div>
+            <ClipboardList size={19} />
+          </div>
+          <p className="subtle">Local-only support context for recent Companion actions. It is not uploaded automatically.</p>
+          <div className="action-history-list">
+            {actions.length === 0 ? (
+              <div className="empty-state compact">
+                <ClipboardList size={20} />
+                <strong>No recent actions</strong>
+                <span>Profile changes, diagnostics exports, and tray maintenance actions will appear here.</span>
+              </div>
+            ) : actions.slice(0, 8).map((action) => (
+              <div className="action-history-row" key={action.id}>
+                <span>{action.category}</span>
+                <strong>{action.label}</strong>
+                <small title={action.detail}>{action.detail}</small>
+                <time>{action.timestamp}</time>
+              </div>
+            ))}
+          </div>
+          {actions.length > 0 && (
+            <button className="secondary-button compact-button" type="button" onClick={clearCompanionActions}>
+              <Trash2 size={15} />
+              <span>Clear local history</span>
+            </button>
+          )}
+        </Panel>
+
+        <Panel className="settings-panel about-action-history">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Restore centre</span>
+              <h2>Registry backups</h2>
+            </div>
+            <Archive size={19} />
+          </div>
+          <p className="subtle">Backups are local `.reg` exports created before registry cleanup. Restore only when you intend to roll back a previous clean.</p>
+          <div className="restore-centre-list">
+            {registryBackups.length === 0 ? (
+              <div className="empty-state compact">
+                <Archive size={20} />
+                <strong>No registry backups found</strong>
+                <span>Backups will appear here after Registry Cleaner creates them.</span>
+              </div>
+            ) : registryBackups.map((backup) => (
+              <div className="restore-centre-row" key={backup.id}>
+                <div>
+                  <strong>{backup.createdAt}</strong>
+                  <span title={backup.path}>{backup.path}</span>
+                </div>
+                <small>{backup.issueCount} item{backup.issueCount === 1 ? '' : 's'}</small>
+                <button className="secondary-button compact-button" type="button" disabled={restoreBusyId === backup.id} onClick={() => void handleRestoreBackup(backup)}>
+                  <ShieldCheck size={15} />
+                  <span>{restoreBusyId === backup.id ? 'Restoring' : 'Restore'}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

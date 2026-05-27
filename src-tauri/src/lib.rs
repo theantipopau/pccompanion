@@ -96,7 +96,7 @@ impl Default for StorageScanStatus {
             cancelled: false,
             progress_pct: 0,
             current_step: 0,
-            total_steps: 9,
+            total_steps: 11,
             message: "Idle".to_string(),
         }
     }
@@ -167,6 +167,21 @@ struct PerformanceProfileResult {
     applied_at: String,
     message: String,
     actions: Vec<String>,
+    validation: PowerProfileValidation,
+}
+
+#[derive(Debug, serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PowerProfileValidation {
+    status: String,
+    expected_plan: String,
+    detected_plan: String,
+    plan_verified: bool,
+    expected_processor: String,
+    detected_processor: String,
+    processor_verified: bool,
+    timer_policy: String,
+    notes: Vec<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -211,6 +226,29 @@ fn get_platform_telemetry_discovery(
     engine: tauri::State<'_, MonitoringEngine>,
 ) -> SensorDiscoveryReport {
     engine.telemetry_diagnostics_snapshot().sensor_discovery
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn probe_sensor_sidecar() -> sidecar_provider::RadiumSidecarSample {
+    sidecar_provider::query_sensor_sidecar()
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn probe_sensor_sidecar() -> serde_json::Value {
+    serde_json::json!({
+        "provider": "radium-lhm-pawnio",
+        "available": false,
+        "driverAvailable": false,
+        "status": "unsupported",
+        "executablePath": null,
+        "cpuTempC": null,
+        "cpuTempLabel": null,
+        "cpuFanRpm": null,
+        "storageTempC": null,
+        "notes": ["Sensor sidecar is only available on Windows."]
+    })
 }
 
 #[tauri::command]
@@ -513,6 +551,11 @@ fn clean_registry_issues(ids: Vec<String>, backup_id: String, dry_run: bool) -> 
 }
 
 #[tauri::command]
+fn list_registry_backups() -> Vec<windows_util::RegistryBackup> {
+    windows_util::list_registry_backups()
+}
+
+#[tauri::command]
 fn restore_registry_backup(backup_id: String) -> Vec<String> {
     windows_util::restore_registry_backup(backup_id)
 }
@@ -644,7 +687,7 @@ fn get_performance_profiles() -> Vec<PerformanceProfile> {
         PerformanceProfile {
             id: "gaming".into(),
             name: "Gaming".into(),
-            summary: "Prioritises sustained clocks, faster fan ramp targets, and foreground responsiveness.".into(),
+            summary: "Prioritises foreground responsiveness, performance plans, and low-latency scheduling.".into(),
             selected: false,
             recommended_for: "Competitive gaming, high refresh displays, and GPU-heavy sessions.".into(),
             fan_intent: "aggressive".into(),
@@ -680,8 +723,8 @@ fn get_performance_profiles() -> Vec<PerformanceProfile> {
 #[tauri::command]
 fn apply_performance_profile(id: String, dry_run: bool) -> PerformanceProfileResult {
     let mut actions = vec![
-        "Saved selected profile intent for the current session.".to_string(),
-        "Updated tray mode and overlay refresh behaviour.".to_string(),
+        "Accepted selected profile intent from Companion settings.".to_string(),
+        "Updated tray mode and overlay refresh intent.".to_string(),
     ];
     if dry_run {
         actions.push("Skipped power plan write (dry-run mode).".to_string());
@@ -696,10 +739,140 @@ fn apply_performance_profile(id: String, dry_run: bool) -> PerformanceProfileRes
         actions.push(crate::windows_util::set_timer_resolution(&id));
     }
     PerformanceProfileResult {
+        validation: validate_performance_profile(&id),
         applied_profile: id,
         applied_at: hardware::timestamp_now().1,
         message: "Performance profile applied.".into(),
         actions,
+    }
+}
+
+fn validate_performance_profile(profile_id: &str) -> PowerProfileValidation {
+    let expected = expected_power_profile_policy(profile_id);
+    #[cfg(windows)]
+    {
+        let mut notes = Vec::new();
+        let detected_plan = match query_active_power_plan() {
+            Ok(plan) => plan,
+            Err(err) => {
+                notes.push(format!("Active power plan query failed: {err}"));
+                "Unavailable".to_string()
+            }
+        };
+        let plan_verified = expected.plan_guids.iter().any(|guid| detected_plan.to_lowercase().contains(guid));
+
+        let min_pct = query_processor_setting_pct("PROCTHROTTLEMIN");
+        let max_pct = query_processor_setting_pct("PROCTHROTTLEMAX");
+        let boost = query_processor_setting_pct("PERFBOOSTMODE");
+        if let Err(err) = &min_pct {
+            notes.push(format!("Processor minimum query failed: {err}"));
+        }
+        if let Err(err) = &max_pct {
+            notes.push(format!("Processor maximum query failed: {err}"));
+        }
+        if let Err(err) = &boost {
+            notes.push(format!("Boost mode query failed: {err}"));
+        }
+
+        let detected_processor = match (&min_pct, &max_pct, &boost) {
+            (Ok(min), Ok(max), Ok(boost)) => format!("Processor {min}-{max}%, boost mode {boost}"),
+            _ => "Unavailable".to_string(),
+        };
+        let processor_verified = min_pct.ok() == Some(expected.min_pct)
+            && max_pct.ok() == Some(expected.max_pct)
+            && boost.ok() == Some(expected.boost);
+        let status = if plan_verified && processor_verified {
+            "verified"
+        } else if plan_verified || processor_verified {
+            "partial"
+        } else {
+            "needs_attention"
+        };
+
+        PowerProfileValidation {
+            status: status.to_string(),
+            expected_plan: expected.plan_label.to_string(),
+            detected_plan,
+            plan_verified,
+            expected_processor: format!(
+                "Processor {}-{}%, boost mode {}",
+                expected.min_pct, expected.max_pct, expected.boost
+            ),
+            detected_processor,
+            processor_verified,
+            timer_policy: expected.timer_label.to_string(),
+            notes,
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = profile_id;
+        PowerProfileValidation {
+            status: "unsupported".to_string(),
+            expected_plan: expected.plan_label.to_string(),
+            detected_plan: "Non-Windows build".to_string(),
+            plan_verified: false,
+            expected_processor: format!(
+                "Processor {}-{}%, boost mode {}",
+                expected.min_pct, expected.max_pct, expected.boost
+            ),
+            detected_processor: "Non-Windows build".to_string(),
+            processor_verified: false,
+            timer_policy: expected.timer_label.to_string(),
+            notes: vec!["Power profile validation is only available on Windows.".to_string()],
+        }
+    }
+}
+
+struct ExpectedPowerPolicy {
+    plan_label: &'static str,
+    plan_guids: &'static [&'static str],
+    min_pct: u32,
+    max_pct: u32,
+    boost: u32,
+    timer_label: &'static str,
+}
+
+fn expected_power_profile_policy(profile_id: &str) -> ExpectedPowerPolicy {
+    const POWER_SAVER: &str = "a1841308-3541-4fab-bc81-f71556f20b4a";
+    const BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    const HIGH_PERF: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    const ULTIMATE_PERF: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+
+    match profile_id {
+        "gaming" => ExpectedPowerPolicy {
+            plan_label: "Ultimate/High Performance",
+            plan_guids: &[ULTIMATE_PERF, HIGH_PERF],
+            min_pct: 10,
+            max_pct: 100,
+            boost: 2,
+            timer_label: "0.5 ms target",
+        },
+        "creator" => ExpectedPowerPolicy {
+            plan_label: "Ultimate/High Performance",
+            plan_guids: &[ULTIMATE_PERF, HIGH_PERF],
+            min_pct: 10,
+            max_pct: 100,
+            boost: 1,
+            timer_label: "0.5 ms target",
+        },
+        "quiet" => ExpectedPowerPolicy {
+            plan_label: "Power Saver",
+            plan_guids: &[POWER_SAVER],
+            min_pct: 5,
+            max_pct: 70,
+            boost: 0,
+            timer_label: "Windows default",
+        },
+        _ => ExpectedPowerPolicy {
+            plan_label: "Balanced",
+            plan_guids: &[BALANCED],
+            min_pct: 5,
+            max_pct: 100,
+            boost: 1,
+            timer_label: "1.0 ms target",
+        },
     }
 }
 
@@ -748,6 +921,59 @@ fn run_powercfg(args: &[&str]) -> Result<(), String> {
         Ok(())
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+#[cfg(windows)]
+fn query_active_power_plan() -> Result<String, String> {
+    let out = run_powercfg_output(&["/getactivescheme"])?;
+    let line = out.lines().find(|line| !line.trim().is_empty()).unwrap_or(out.trim());
+    if line.trim().is_empty() {
+        Err("powercfg returned no active scheme output".to_string())
+    } else {
+        Ok(line.trim().to_string())
+    }
+}
+
+#[cfg(windows)]
+fn query_processor_setting_pct(setting: &str) -> Result<u32, String> {
+    let out = run_powercfg_output(&["/query", "SCHEME_CURRENT", "SUB_PROCESSOR", setting])?;
+    parse_current_ac_power_index(&out)
+        .ok_or_else(|| format!("AC power setting index not found for {setting}"))
+}
+
+#[cfg(windows)]
+fn parse_current_ac_power_index(output: &str) -> Option<u32> {
+    output.lines().find_map(|line| {
+        let lower = line.to_lowercase();
+        if !lower.contains("current ac power setting index") {
+            return None;
+        }
+        let value = line.split(':').nth(1)?.trim();
+        if let Some(hex) = value.strip_prefix("0x").or_else(|| value.strip_prefix("0X")) {
+            u32::from_str_radix(hex, 16).ok()
+        } else {
+            value.parse::<u32>().ok()
+        }
+    })
+}
+
+#[cfg(windows)]
+fn run_powercfg_output(args: &[&str]) -> Result<String, String> {
+    let mut cmd = std::process::Command::new("powercfg");
+    cmd.args(args);
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err("powercfg returned non-zero status".to_string())
+        } else {
+            Err(stderr)
+        }
     }
 }
 
@@ -941,6 +1167,7 @@ pub fn run() {
             get_hardware_capabilities,
             get_telemetry_diagnostics,
             get_platform_telemetry_discovery,
+            probe_sensor_sidecar,
             optimize_ram,
             scan_bloatware,
             remove_bloatware,
@@ -963,6 +1190,7 @@ pub fn run() {
             scan_registry_issues,
             backup_registry_issues,
             clean_registry_issues,
+            list_registry_backups,
             restore_registry_backup,
             export_diagnostics,
             open_url,
@@ -1079,14 +1307,16 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open-dashboard", "Open Companion", true, None::<&str>)?;
     let toggle_osd = MenuItem::with_id(app, "toggle-osd", "Toggle OSD Overlay", true, None::<&str>)?;
     let ram_clean = MenuItem::with_id(app, "quick-ram-clean", "Quick RAM Clean", true, None::<&str>)?;
-    let performance = MenuItem::with_id(app, "performance-mode", "Performance Mode", true, None::<&str>)?;
-    let quiet = MenuItem::with_id(app, "quiet-mode", "Quiet Mode", true, None::<&str>)?;
+    let quiet = MenuItem::with_id(app, "profile-quiet", "Power Mode: Quiet", true, None::<&str>)?;
+    let balanced = MenuItem::with_id(app, "profile-balanced", "Power Mode: Balanced", true, None::<&str>)?;
+    let gaming = MenuItem::with_id(app, "profile-gaming", "Power Mode: Gaming", true, None::<&str>)?;
+    let creator = MenuItem::with_id(app, "profile-creator", "Power Mode: Creator", true, None::<&str>)?;
     let export_diagnostics = MenuItem::with_id(app, "export-diagnostics", "Diagnostics Export", true, None::<&str>)?;
     let restart_monitoring = MenuItem::with_id(app, "restart-monitoring", "Restart Monitoring Engine", true, None::<&str>)?;
     let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&open, &toggle_osd, &ram_clean, &performance, &quiet, &export_diagnostics, &restart_monitoring, &exit],
+        &[&open, &toggle_osd, &ram_clean, &quiet, &balanced, &gaming, &creator, &export_diagnostics, &restart_monitoring, &exit],
     )?;
 
     let icon = app.default_window_icon().cloned();
@@ -1122,11 +1352,9 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
             "quick-ram-clean" => {
                 let _ = app.emit("tray://quick-ram-clean", ());
             }
-            "performance-mode" => {
-                let _ = app.emit("tray://performance-mode", ());
-            }
-            "quiet-mode" => {
-                let _ = app.emit("tray://quiet-mode", ());
+            "profile-quiet" | "profile-balanced" | "profile-gaming" | "profile-creator" => {
+                let profile = event.id().as_ref().trim_start_matches("profile-");
+                let _ = app.emit(format!("tray://profile-{profile}").as_str(), ());
             }
             "export-diagnostics" => {
                 let _ = app.emit("tray://export-diagnostics", ());

@@ -190,7 +190,7 @@ export type StorageCleanupItem = {
   name: string;
   location: string;
   sizeGb: number;
-  category: 'Temporary' | 'Cache' | 'Downloads' | 'Logs' | 'Shaders' | 'Browser' | 'Recycle Bin' | 'Windows Update';
+  category: 'Temporary' | 'Cache' | 'Downloads' | 'Logs' | 'Shaders' | 'Browser' | 'Recycle Bin' | 'Windows Update' | 'App cache' | 'Explorer';
   selected: boolean;
   safe: boolean;
   description: string;
@@ -216,7 +216,19 @@ export type RegistryIssue = {
   hive: 'HKCU' | 'HKLM' | 'HKCR' | 'HKU';
   keyPath: string;
   valueName: string;
-  category: 'Missing file reference' | 'Uninstall leftover' | 'Invalid startup reference' | 'Obsolete file association' | 'Application path';
+  category:
+    | 'Missing file reference'
+    | 'Missing shared DLL'
+    | 'Uninstall leftover'
+    | 'Invalid startup reference'
+    | 'Obsolete file association'
+    | 'Application path'
+    | 'Help file'
+    | 'Font reference'
+    | 'MUI cache'
+    | 'Sound event'
+    | 'ActiveX/COM issue'
+    | 'Type library';
   severity: 'low' | 'medium' | 'high';
   selected: boolean;
   safe: boolean;
@@ -346,6 +358,19 @@ export type DiagnosticsExport = {
   discoveryAttemptCount: number;
 };
 
+export type SensorSidecarProbe = {
+  provider: string;
+  available: boolean;
+  driverAvailable: boolean;
+  status: string;
+  executablePath?: string | null;
+  cpuTempC?: number | null;
+  cpuTempLabel?: string | null;
+  cpuFanRpm?: number | null;
+  storageTempC?: number | null;
+  notes: string[];
+};
+
 export type PerformanceProfileId = 'quiet' | 'balanced' | 'gaming' | 'creator';
 
 export type PerformanceProfile = {
@@ -365,4 +390,17 @@ export type PerformanceProfileResult = {
   appliedAt: string;
   message: string;
   actions: string[];
+  validation: PowerProfileValidation;
+};
+
+export type PowerProfileValidation = {
+  status: 'verified' | 'partial' | 'needs_attention' | 'unsupported' | string;
+  expectedPlan: string;
+  detectedPlan: string;
+  planVerified: boolean;
+  expectedProcessor: string;
+  detectedProcessor: string;
+  processorVerified: boolean;
+  timerPolicy: string;
+  notes: string[];
 };

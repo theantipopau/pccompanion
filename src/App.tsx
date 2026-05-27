@@ -22,8 +22,10 @@ import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { recordCompanionAction } from './lib/actionHistory';
 import {
   exportDiagnostics,
+  applyPerformanceProfile,
   optimizeRam,
   restartMonitoringEngine,
   setCloseToTray,
@@ -32,6 +34,7 @@ import {
   showMainWindow,
 } from './services/systemService';
 import type { NavItem } from './types/navigation';
+import type { PerformanceProfileId } from './types/system';
 
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -86,6 +89,22 @@ function CompanionApp() {
   const [activeView, setActiveView] = useState('dashboard');
   const [splashVisible, setSplashVisible] = useState(true);
   const { settings, updateSettings } = useSettings();
+
+  const applyTrayProfile = (id: PerformanceProfileId) => {
+    void applyPerformanceProfile(id).then((result) => {
+      recordCompanionAction('tray', `${id} profile applied from tray`, result.validation?.status ?? result.message);
+    }).catch((err) => {
+      recordCompanionAction('tray', `${id} profile apply failed`, err instanceof Error ? err.message : String(err));
+    });
+    updateSettings((current) => ({
+      ...current,
+      experience: {
+        ...current.experience,
+        performanceProfile: id,
+        performanceMode: id === 'gaming' || id === 'creator' ? 'performance' : id === 'quiet' ? 'quiet' : 'balanced',
+      },
+    }));
+  };
 
   const page = useMemo(() => {
     switch (activeView) {
@@ -145,19 +164,24 @@ function CompanionApp() {
       });
     });
     listenSafely('tray://quick-ram-clean', () => {
-      void optimizeRam();
+      void optimizeRam().then((result) => {
+        recordCompanionAction('maintenance', 'Quick RAM clean', result.message);
+      }).catch((err) => recordCompanionAction('maintenance', 'Quick RAM clean failed', String(err)));
     });
-    listenSafely('tray://performance-mode', () => {
-      updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceProfile: 'gaming', performanceMode: 'performance' } }));
-    });
-    listenSafely('tray://quiet-mode', () => {
-      updateSettings((current) => ({ ...current, experience: { ...current.experience, performanceProfile: 'quiet', performanceMode: 'quiet' } }));
-    });
+    listenSafely('tray://profile-quiet', () => applyTrayProfile('quiet'));
+    listenSafely('tray://profile-balanced', () => applyTrayProfile('balanced'));
+    listenSafely('tray://profile-gaming', () => applyTrayProfile('gaming'));
+    listenSafely('tray://profile-creator', () => applyTrayProfile('creator'));
+    listenSafely('tray://performance-mode', () => applyTrayProfile('gaming'));
+    listenSafely('tray://quiet-mode', () => applyTrayProfile('quiet'));
     listenSafely('tray://export-diagnostics', () => {
-      void exportDiagnostics();
+      void exportDiagnostics().then((result) => {
+        recordCompanionAction('support', 'Diagnostics exported from tray', result.path);
+      }).catch((err) => recordCompanionAction('support', 'Diagnostics export failed from tray', String(err)));
     });
     listenSafely('tray://restart-monitoring', () => {
       void restartMonitoringEngine();
+      recordCompanionAction('diagnostics', 'Monitoring engine restart requested', 'Tray menu action');
       updateSettings((current) => ({
         ...current,
         monitoring: { ...current.monitoring, launchOnStartup: true },
@@ -220,7 +244,7 @@ function CompanionApp() {
           <SplashScreen
             onComplete={() => setSplashVisible(false)}
             steps={[
-              { label: 'Scanning hardware', icon: HardDrive },
+              { label: 'Starting Radium PCs Companion', icon: HardDrive },
               { label: 'Loading performance modules', icon: Sparkles },
               { label: 'Preparing monitoring engine', icon: Activity },
             ]}
