@@ -50,6 +50,20 @@ struct AppRuntimeState {
     osd_click_through: Mutex<bool>,
 }
 
+fn is_demo_brand_mode() -> bool {
+    std::env::var("VITE_BRAND_MODE")
+        .map(|value| value.eq_ignore_ascii_case("demo"))
+        .unwrap_or(false)
+}
+
+fn product_name_for_mode() -> &'static str {
+    if is_demo_brand_mode() {
+        "PC Companion"
+    } else {
+        "Radium PCs Companion"
+    }
+}
+
 #[derive(Debug, serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct StorageScanStatus {
@@ -129,7 +143,7 @@ struct DiagnosticsExport {
 #[tauri::command]
 fn get_app_metadata() -> AppMetadata {
     AppMetadata {
-        name: "Radium PCs Companion".to_string(),
+        name: product_name_for_mode().to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         release_channel: if env!("CARGO_PKG_VERSION").contains("pre") {
             "pre-release".to_string()
@@ -1427,9 +1441,10 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     )?;
 
     let icon = app.default_window_icon().cloned();
+    let tray_tooltip = product_name_for_mode();
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .tooltip("Radium PCs Companion")
+        .tooltip(tray_tooltip)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open-dashboard" => {
                 if let Some(window) = app.get_webview_window("main") {
