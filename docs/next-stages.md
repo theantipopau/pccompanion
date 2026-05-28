@@ -376,6 +376,7 @@ Current implementation progress:
 - CI backend quality extension (May 28, 2026): variant quality workflow now includes a dedicated Rust backend job for `cargo check` and URL validator tests.
 - Validation pass completed (May 28, 2026): frontend production build, Rust cargo check, targeted Rust URL validator tests, and source-mode demo brand leak checks all passed.
 - Git deployment (May 28, 2026): shipped to `main` as commit `d649dd3`.
+- Repo hygiene (May 28, 2026): `.gitignore` now excludes generated variant build outputs (`src-tauri/target-*`), local demo artifact output (`artifacts/demo/`), and local installer binaries (`radium_pcs_companion.exe`) to prevent false "thousands of changes" noise in SCM.
 - Network update checks, RGB, background game automation, and new hardware writes: deferred.
 - Local AI insights engine and optional local LLM copilot tab: in progress (local preview implemented; deeper insight model and persistence pending).
 - Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.

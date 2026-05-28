@@ -3,8 +3,11 @@ dist
 dist-ssr
 .vite
 src-tauri/target
+src-tauri/target-*
 src-tauri/binaries
 target
+artifacts/demo/
+radium_pcs_companion.exe
 tools/**/bin
 tools/**/obj
 *.log
