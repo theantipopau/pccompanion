@@ -1,12 +1,14 @@
 import { createContext, useEffect, useMemo, useState } from 'react';
 import type { CompanionSettings } from '../types/system';
 
-const SETTINGS_KEY = 'radium-companion-settings';
+import { brand } from '../lib/branding';
+
+const SETTINGS_KEY = `${brand.mode}-companion-settings`;
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 const defaultSettings: CompanionSettings = {
-  theme: 'radium-dark',
+  theme: brand.mode === 'demo' ? 'graphite' : 'radium-dark',
   tray: {
     minimizeToTray: true,
     minimizeOnMinimize: true,

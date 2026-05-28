@@ -3,6 +3,7 @@ import { ArrowRight, BadgeInfo, CheckCircle2, ClipboardList, Download, RefreshCw
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { brand } from '../lib/branding';
 import { Skeleton } from '../components/Skeleton';
 import { recordCompanionAction } from '../lib/actionHistory';
 import { exportDiagnostics, getTelemetryDiagnostics, probeSensorSidecar } from '../services/systemService';
@@ -166,7 +167,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
         <Panel className="diagnostics-panel wide">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Radium sensor provider</span>
+              <span className="eyebrow">Sensor provider</span>
               <h2>Sidecar validation path</h2>
             </div>
             <button className="secondary-button compact-button" type="button" onClick={() => void handleSidecarProbe()} disabled={probeBusy || busy}>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
+import { brand } from '../lib/branding';
 import { oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
 import { getHardwareCapabilities } from '../services/systemService';
@@ -70,8 +71,8 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
     },
   ];
   const scoreChip = (
-    <div className="passport-score-chip" title="Radium Performance Score">
-      <span>Radium Score</span>
+    <div className="passport-score-chip" title={brand.dashboardHeroTitle}>
+      <span>{brand.shortName} Score</span>
       <strong>{score.value}</strong>
       <small>{score.grade}</small>
     </div>
@@ -179,7 +180,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             <PassportField label="Passport ID" value={passportId} />
             <PassportField label="Validation state" value={validationState} />
             <PassportField label="Telemetry confidence" value={`${liveCapabilities} live capability lanes`} />
-            <PassportField label="Support tier" value={sample?.state === 'valid' ? 'Radium Premium Care' : 'Radium Guided Support'} />
+            <PassportField label="Support tier" value={sample?.state === 'valid' ? 'Premium Care' : 'Guided Support'} />
             <PassportField label="Firmware summary" value={systemInfo?.bios ?? 'Firmware metadata pending'} />
             <PassportField label="Build identity" value={`${systemInfo?.windows ?? 'Windows'} · ${score.grade} profile`} />
           </div>
@@ -210,7 +211,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
         <Panel className="passport-panel wide">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Radium Care</span>
+              <span className="eyebrow">Care</span>
               <h2>Owner readiness checklist</h2>
             </div>
             <ShieldCheck size={18} />

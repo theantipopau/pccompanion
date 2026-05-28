@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { assets } from '../lib/assets';
+import { brand } from '../lib/branding';
 
 type SplashStep = {
   label: string;
@@ -40,18 +40,21 @@ export function SplashScreen({ steps, onComplete }: SplashScreenProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.42, ease: [0.2, 0.7, 0.2, 1] }}
       >
-        <div className="splash-brand">
-          <span className="splash-brand-icon">
-            <img src={assets.radiumLogo} alt="" />
-          </span>
-          <img className="splash-logo" src={assets.radiumHeader} alt="Radium PCs" />
+        <div className="splash-logo-hero">
+          <img className="splash-logo" src={brand.splashLogo} alt={brand.productName} />
+          <p className="splash-tagline">{brand.splashTagline}</p>
         </div>
         <div className="splash-ring" aria-hidden="true">
+          <motion.span
+            className="splash-ring-outer"
+            animate={{ rotate: -360 }}
+            transition={{ repeat: Infinity, duration: 6.4, ease: 'linear' }}
+          />
           <motion.span
             animate={{ rotate: 360 }}
             transition={{ repeat: Infinity, duration: 3.2, ease: 'linear' }}
           />
-          <img src={assets.radiumLogo} alt="" />
+          <img src={brand.splashIcon} alt="" />
         </div>
         <div className="splash-steps">
           {steps.map((step, index) => {

@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
+import { brand } from '../lib/branding';
 import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
 import { clearCompanionActions, readCompanionActions, recordCompanionAction, subscribeCompanionActions, summarizeCompanionActions, type CompanionActionRecord } from '../lib/actionHistory';
 import { openExternalUrl } from '../services/native';
@@ -23,11 +24,11 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
 
 type SettingsTab = 'general' | 'games' | 'passport' | 'diagnostics' | 'about';
 
-const radiumWebsite = 'https://radiumpcs.com.au';
-const companionEmail = 'companion@radiumpcs.com.au';
-const supportEmail = 'support@radiumpcs.com.au';
-const radiumPhone = '1300 935 884';
-const radiumAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
+const radiumWebsite = brand.website;
+const companionEmail = brand.companionEmail;
+const supportEmail = brand.supportEmail;
+const radiumPhone = brand.phone;
+const radiumAddress = brand.address;
 
 export function SettingsPage({ initialTab = 'general' }: { initialTab?: SettingsTab }) {
   const { sample, systemInfo, native } = useMonitor();
@@ -35,9 +36,9 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [appMetadata, setAppMetadata] = useState<AppMetadata | null>(null);
   const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
-  const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : assets.radiumLogo;
-  const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : assets.radiumLogo;
-  const boardAsset = oemLogoForText(systemInfo?.motherboard ?? '') ?? assets.radiumLogo;
+  const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : brand.splashIcon;
+  const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : brand.splashIcon;
+  const boardAsset = oemLogoForText(systemInfo?.motherboard ?? '') ?? brand.splashIcon;
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -104,7 +105,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
               <span className="eyebrow">Companion profile</span>
               <h2>Current platform identity</h2>
             </div>
-            <img className="settings-hero-wordmark" src={assets.radiumHeaderNew} alt="Radium Companion" />
+            <img className="settings-hero-wordmark" src={brand.splashLogo} alt={brand.productName} />
           </div>
           <div className="settings-identity-row">
             <span className="settings-identity-pill">
@@ -337,7 +338,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
             <SensorSource label="CPU load / RAM / disks" value="sysinfo" live={!!sample} />
             <SensorSource
               label="CPU temperature"
-              value={sample?.cpu.temperature != null ? 'CPU package sensor' : 'Radium low-level provider required'}
+              value={sample?.cpu.temperature != null ? 'CPU package sensor' : 'Low-level provider integration required'}
               live={sample?.cpu.temperature != null}
               hint={sample?.cpu.temperature == null ? 'Ryzen desktop package temperature needs bundled SMN/MSR access; generic Windows WMI cannot expose it reliably.' : undefined}
             />
@@ -399,11 +400,11 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
   const [actions, setActions] = useState<CompanionActionRecord[]>(() => readCompanionActions());
   const [registryBackups, setRegistryBackups] = useState<RegistryBackup[]>([]);
   const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
-  const subject = encodeURIComponent('Radium PCs Companion Assistance');
+  const subject = encodeURIComponent(`${brand.productName} Assistance`);
   const supportBody = encodeURIComponent([
-    'Hi Radium PCs team,',
+    `Hi ${brand.name} team,`,
     '',
-    'I need assistance with Radium PCs Companion.',
+    `I need assistance with ${brand.productName}.`,
     '',
     `Bundle path: ${supportBundlePath || 'Not exported yet'}`,
     `App version: ${appMetadata?.version ?? '0.1.0-pre'}`,
@@ -460,13 +461,13 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
       <Panel className="settings-panel about-hero wide">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Radium PCs Companion</span>
-            <h2>Built for your Radium custom PC</h2>
+            <span className="eyebrow">{brand.dashboardEyebrow}</span>
+            <h2>{brand.settingsHeroTitle}</h2>
           </div>
-          <img className="settings-hero-wordmark" src={assets.radiumHeaderNew} alt="Radium PCs" />
+          <img className="settings-hero-wordmark" src={brand.splashLogo} alt={brand.productName} />
         </div>
         <p>
-          Companion brings local telemetry, support diagnostics, safe cleanup tools, performance profiles, and ownership workflows together for Radium PCs gaming and workstation systems.
+          {brand.settingsHeroBody}
         </p>
         <div className="about-stat-grid">
           <div><span>Version</span><strong>{appMetadata?.version ?? '0.1.0-pre'}</strong></div>
@@ -484,7 +485,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
           </a>
           <button className="secondary-button" type="button" onClick={() => openExternalUrl(radiumWebsite)}>
             <ExternalLink size={16} />
-            <span>Visit Radium PCs</span>
+            <span>Visit {brand.name}</span>
           </button>
         </div>
         {supportBundlePath && (
@@ -500,17 +501,15 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Company</span>
-              <h2>Radium PCs</h2>
+              <h2>{brand.name}</h2>
             </div>
             <Info size={19} />
           </div>
-          <p className="subtle">
-            Melbourne-based builders of custom and prebuilt gaming PCs, workstations, and water-cooled systems for Australian customers.
-          </p>
+          <p className="subtle">{brand.companyDescription}</p>
           <div className="about-contact-list">
             <a href={`tel:${radiumPhone.replace(/\s+/g, '')}`}><PhoneCall size={15} /><span>{radiumPhone}</span></a>
             <a href={`mailto:${supportEmail}`}><Mail size={15} /><span>{supportEmail}</span></a>
-            <a href={radiumWebsite} target="_blank" rel="noreferrer noopener"><ExternalLink size={15} /><span>radiumpcs.com.au</span></a>
+            <a href={radiumWebsite} target="_blank" rel="noreferrer noopener"><ExternalLink size={15} /><span>{brand.website.replace(/^https?:\/\//, '')}</span></a>
             <span><MapPin size={15} /><span>{radiumAddress}</span></span>
           </div>
         </Panel>

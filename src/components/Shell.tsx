@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer, Zap } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { assets } from '../lib/assets';
+import { brand } from '../lib/branding';
 import { pct, temp } from '../lib/format';
 import { extractTrayValue } from '../lib/trayIcon';
 import type { NavItem } from '../types/navigation';
@@ -21,15 +22,15 @@ type ShellProps = {
 };
 
 export function Shell({ navItems, activeView, onNavigate, children }: ShellProps) {
-  const companyWebsite = 'https://radiumpcs.com.au';
-  const phone = '1300 935 884';
-  const salesEmail = 'sales@radiumpcs.com.au';
-  const companionEmail = 'companion@radiumpcs.com.au';
-  const supportEmail = 'support@radiumpcs.com.au';
-  const operationsEmail = 'operations@radiumpcs.com.au';
-  const businessHours = 'Mon-Fri, 9:30am-5:30pm';
-  const storeAddress = '207 Hyde St, Yarraville VIC 3013, Australia';
-  const supportSubject = 'Radium PCs Companion Support';
+  const companyWebsite = brand.website;
+  const phone = brand.phone;
+  const salesEmail = brand.salesEmail;
+  const companionEmail = brand.companionEmail;
+  const supportEmail = brand.supportEmail;
+  const operationsEmail = brand.operationsEmail;
+  const businessHours = brand.businessHours;
+  const storeAddress = brand.address;
+  const supportSubject = brand.supportSubject;
   const { sample } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dashboardActive = activeView === 'dashboard';
@@ -49,7 +50,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
       .catch(() => undefined);
     return () => { alive = false; };
   }, []);
-  const quickActions = [
+  const quickActions = useMemo(() => [
     {
       id: 'action-open-system-passport',
       label: 'Open System Passport',
@@ -66,7 +67,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     },
     {
       id: 'action-open-radium-site',
-      label: 'Open Radium PCs website',
+      label: `Open ${brand.name} website`,
       icon: Globe2,
       keywords: 'website sales build consultation',
       run: () => window.open(companyWebsite, '_blank', 'noopener,noreferrer'),
@@ -85,36 +86,28 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
       keywords: 'settings preferences',
       run: () => onNavigate('settings'),
     },
-  ];
+  ], [onNavigate, companyWebsite, companionEmail, supportSubject]);
 
   const query = searchQuery.trim().toLowerCase();
-  const pageResults = navItems
-    .filter(item =>
-      query
-        ? item.label.toLowerCase().includes(query)
-        : true,
-    )
-    .map(item => ({
-      id: `page-${item.id}`,
-      label: item.label,
-      icon: item.icon,
-      run: () => onNavigate(item.id),
-    }));
-
-  const actionResults = quickActions
-    .filter(action =>
-      query
-        ? `${action.label} ${action.keywords}`.toLowerCase().includes(query)
-        : true,
-    )
-    .map(action => ({
-      id: action.id,
-      label: action.label,
-      icon: action.icon,
-      run: action.run,
-    }));
-
-  const searchResults = [...pageResults, ...actionResults].slice(0, 9);
+  const searchResults = useMemo(() => {
+    const pages = navItems
+      .filter(item => !query || item.label.toLowerCase().includes(query))
+      .map(item => ({
+        id: `page-${item.id}`,
+        label: item.label,
+        icon: item.icon,
+        run: () => onNavigate(item.id),
+      }));
+    const actions = quickActions
+      .filter(action => !query || `${action.label} ${action.keywords}`.toLowerCase().includes(query))
+      .map(action => ({
+        id: action.id,
+        label: action.label,
+        icon: action.icon,
+        run: action.run,
+      }));
+    return [...pages, ...actions].slice(0, 9);
+  }, [query, navItems, quickActions, onNavigate]);
 
   const navGroups: Array<{ label: string; ids: string[] }> = [
     { label: 'Monitor', ids: ['dashboard', 'thermals', 'processes'] },
@@ -203,11 +196,11 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
       <aside className={compactShell ? 'sidebar compact' : 'sidebar'} aria-label="Primary">
         <div className="brand-lockup">
           <span className="brand-icon-frame">
-            <img className="brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
+            <img className="brand-icon" src={brand.splashIcon} alt={brand.name} />
           </span>
           <span className="brand-copy">
-            <strong>Radium PCs</strong>
-            <span>Companion</span>
+            <strong>{brand.name}</strong>
+            <span>{brand.shortName}</span>
           </span>
         </div>
         <nav className="nav-list">
@@ -292,15 +285,15 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             </button>
           )}
         </div>
-        <div className="sidebar-brand-promo" aria-label="Radium Companion premium support panel">
-          <img src={assets.radiumHeaderNew} alt="Radium Companion" />
-          <p>Premium local support, diagnostics-first workflows, and lifecycle-safe tuning in one desktop suite.</p>
+        <div className="sidebar-brand-promo" aria-label={brand.shellPromoAlt}>
+          <img src={brand.splashLogo} alt={brand.productName} />
+          <p>{brand.sidebarPromoBody}</p>
         </div>
         <div className="sidebar-contact">
-          <span className="sidebar-metrics-label">Radium PCs Contact</span>
+          <span className="sidebar-metrics-label">{brand.companyLabel} Contact</span>
           <a className="sidebar-contact-link" href={companyWebsite} target="_blank" rel="noreferrer noopener">
             <Globe2 size={14} />
-            <span>radiumpcs.com.au</span>
+            <span>{brand.websiteLabel}</span>
             <ExternalLink size={12} />
           </a>
           <a className="sidebar-contact-link" href={`tel:${phone.replace(/\s+/g, '')}`}>
@@ -339,8 +332,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
         <header className={dashboardActive ? 'topbar dashboard-topbar' : 'topbar'} data-tauri-drag-region>
           {!dashboardActive && (
             <button className="topbar-brand" onClick={() => onNavigate('dashboard')} title="Open dashboard">
-              <img className="brand-icon" src={assets.radiumLogo} alt="Radium" />
-              <span>Companion</span>
+              <img className="brand-icon" src={brand.splashIcon} alt={brand.shortName} />
+              <span>{brand.shortName}</span>
             </button>
           )}
           <div className="search-wrapper">

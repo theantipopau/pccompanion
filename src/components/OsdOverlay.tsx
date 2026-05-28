@@ -3,6 +3,7 @@ import { Cpu, Fan, Gauge, MemoryStick, MonitorUp, Move } from 'lucide-react';
 import { useMemo, useRef } from 'react';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
+import { brand } from '../lib/branding';
 import { gb, mhz, pct, temp } from '../lib/format';
 
 type OsdOverlayProps = {
@@ -80,7 +81,7 @@ export function OsdOverlay({ forceVisible = false }: OsdOverlayProps) {
     >
       <div className="osd-grip" title="Drag overlay">
         <Move size={13} />
-        <span>Radium OSD</span>
+        <span>{brand.shortName} OSD</span>
       </div>
       <div className="osd-metrics">
         {metrics.map((metric) => {

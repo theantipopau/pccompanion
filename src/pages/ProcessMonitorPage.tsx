@@ -1,5 +1,5 @@
 import { Activity, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
@@ -38,10 +38,12 @@ export function ProcessMonitorPage() {
     };
   }, [autoRefresh, refresh]);
 
-  const sorted = [...procs].sort((a, b) => {
-    if (sortBy === 'name') return a.name.localeCompare(b.name);
-    return b[sortBy] - a[sortBy];
-  });
+  const sorted = useMemo(() => {
+    return [...procs].sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      return b[sortBy] - a[sortBy];
+    });
+  }, [procs, sortBy]);
 
   const totalCpu = sample ? Math.round(sample.cpu.usage) : null;
   const totalRamGb = sample ? sample.memory.usedGb.toFixed(1) : null;

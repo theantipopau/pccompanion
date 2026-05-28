@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Award, CircuitBoard, Sparkles } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
-import { assets } from '../lib/assets';
+import { brand } from '../lib/branding';
 import { setStartupMode } from '../services/systemService';
 import type { PerformanceProfileId, TrayMetric } from '../types/system';
 
@@ -12,8 +12,8 @@ type OnboardingFlowProps = {
 const stages = [
   {
     id: 'identity',
-    title: 'Welcome to Radium PCs Companion',
-    text: 'Thanks for purchasing a Radium PCs custom build. Companion is your local hub for telemetry, support diagnostics, cleanup, and performance profiles.',
+    title: `Welcome to ${brand.productName}`,
+    text: brand.onboardingIntro,
     icon: Sparkles,
   },
   {
@@ -25,7 +25,7 @@ const stages = [
   {
     id: 'passport',
     title: 'Support-ready from first launch',
-    text: 'System Passport and Telemetry Diagnostics keep useful build information close by if you ever need help from the Radium PCs team.',
+    text: brand.onboardingPassport,
     icon: Award,
   },
 ];
@@ -67,10 +67,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         transition={{ type: 'spring', stiffness: 220, damping: 24, mass: 0.66 }}
       >
         <div className="onboarding-brand">
-          <img src={assets.radiumLogo} alt="" />
+          <img src={brand.splashIcon} alt="" />
           <span className="eyebrow">First launch</span>
         </div>
-        <h2>Welcome to your Radium custom build</h2>
+        <h2>{brand.onboardingTitle}</h2>
         <p>Companion has finished initialising. Review the essentials below, then enter the live dashboard.</p>
         <div className="onboarding-quick-setup">
           <label>

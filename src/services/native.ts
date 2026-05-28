@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { brand } from '../lib/branding';
 
 /**
  * True when running inside the Tauri desktop shell.
@@ -50,7 +51,8 @@ function isAllowedExternalUrl(url: string): boolean {
     if (url.length > 2048 || /[\s"'<>|^`\\@]/.test(url)) return false;
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:') return false;
-    const allowedHosts = ['radiumpcs.com.au', 'github.com', 'nvidia.com', 'intel.com', 'amd.com'];
+    const brandHost = new URL(brand.website).hostname;
+    const allowedHosts = [brandHost, 'github.com', 'nvidia.com', 'intel.com', 'amd.com'];
     return allowedHosts.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
   } catch {
     return false;

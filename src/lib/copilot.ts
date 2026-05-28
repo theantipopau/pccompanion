@@ -1,4 +1,5 @@
 import type { HardwareSample, SystemInfo } from '../types/system';
+import { brand } from './branding';
 
 export type CopilotModelSuggestion = {
   title: string;
@@ -139,7 +140,7 @@ export function buildNonInvasiveInsights(sample: HardwareSample | null): string[
 export function buildCopilotContextPack(systemInfo: SystemInfo | null, sample: HardwareSample | null, insights: string[]): string {
   const lines: string[] = [];
 
-  lines.push('Radium CoPilot local context (offline):');
+  lines.push(`${brand.shortName} local context (offline):`);
   lines.push('- Policy: advisory only, never perform hidden automation, suggest reversible actions first.');
 
   if (systemInfo) {

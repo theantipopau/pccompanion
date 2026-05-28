@@ -1,9 +1,11 @@
 import { Bot, CheckCircle2, Copy, Cpu, Download, MessageSquare, PlugZap, RefreshCw, Send, ShieldCheck, Sparkles, Terminal } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
+import { brand } from '../lib/branding';
 import { buildCopilotContextPack, buildCopilotRecommendation, buildNonInvasiveInsights } from '../lib/copilot';
+import { runLocalAiSetup } from '../services/systemService';
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -18,9 +20,11 @@ type RuntimeTagsResponse = {
 
 export function AiCopilotPage() {
   const { sample, systemInfo } = useMonitor();
-  const recommendation = useMemo(() => buildCopilotRecommendation(systemInfo, sample), [sample, systemInfo]);
-  const insights = useMemo(() => buildNonInvasiveInsights(sample), [sample]);
-  const contextPack = useMemo(() => buildCopilotContextPack(systemInfo, sample, insights), [insights, sample, systemInfo]);
+  const deferredSample = useDeferredValue(sample);
+  const deferredSystemInfo = useDeferredValue(systemInfo);
+  const recommendation = useMemo(() => buildCopilotRecommendation(deferredSystemInfo, deferredSample), [deferredSample, deferredSystemInfo]);
+  const insights = useMemo(() => buildNonInvasiveInsights(deferredSample), [deferredSample]);
+  const contextPack = useMemo(() => buildCopilotContextPack(deferredSystemInfo, deferredSample, insights), [deferredSample, deferredSystemInfo, insights]);
 
   const [runtimeUrl, setRuntimeUrl] = useState('http://127.0.0.1:11434');
   const [modelName, setModelName] = useState(recommendation.general.modelTag);
@@ -34,11 +38,12 @@ export function AiCopilotPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: 'Radium CoPilot is local-first. Connect a local runtime (for example Ollama) to chat offline.',
+      content: `${brand.shortName} is local-first. Connect a local runtime (for example Ollama) to chat offline.`,
     },
   ]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [nativeActionBusy, setNativeActionBusy] = useState(false);
 
   const hasInstalledModel = (target: string) => {
     const normalized = normalizeModelTag(target);
@@ -125,6 +130,24 @@ export function AiCopilotPage() {
     } catch (error) {
       setRuntimeState('error');
       setRuntimeMessage(error instanceof Error ? error.message : 'Could not refresh local models.');
+    }
+  }
+
+  async function handleNativeSetupAction(action: 'install_ollama' | 'pull_model' | 'start_runtime') {
+    if (nativeActionBusy) return;
+    setNativeActionBusy(true);
+    try {
+      const message = await runLocalAiSetup(action, action === 'pull_model' ? modelName : undefined);
+      setRuntimeState('connected');
+      setRuntimeMessage(message);
+      if (action === 'pull_model' || action === 'start_runtime') {
+        await handleRefreshModels();
+      }
+    } catch (error) {
+      setRuntimeState('error');
+      setRuntimeMessage(error instanceof Error ? error.message : 'Native setup action failed.');
+    } finally {
+      setNativeActionBusy(false);
     }
   }
 
@@ -215,9 +238,108 @@ export function AiCopilotPage() {
     <div className="page">
       <PageHeader
         eyebrow="Local-first"
-        title="Radium CoPilot"
+        title={brand.mode === 'demo' ? 'PC Companion' : 'Radium CoPilot'}
         description="Offline model recommendations and optional local LLM chat. No cloud dependency is required for this workflow."
       />
+
+      <Panel className="copilot-search-hero">
+        <div className="panel-heading compact">
+          <div>
+            <span className="eyebrow">Prompt</span>
+            <h2>{brand.mode === 'demo' ? 'Ask PC Companion' : 'Ask Radium CoPilot'}</h2>
+          </div>
+          <MessageSquare size={18} />
+        </div>
+        <p className="copilot-search-caption">Search, ask, and troubleshoot from local telemetry context. Settings and runtime controls are directly underneath.</p>
+        <div className="copilot-search-center">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Ask your local model about thermals, profile trade-offs, startup impact, or diagnostics..."
+            rows={3}
+          />
+          <button className="primary-button" type="button" onClick={handleSendMessage} disabled={sending || !draft.trim()}>
+            <Send size={14} />
+            <span>{sending ? 'Sending...' : 'Send'}</span>
+          </button>
+        </div>
+      </Panel>
+
+      <Panel className="copilot-chat-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Runtime settings</span>
+            <h2>Local model runtime and controls</h2>
+          </div>
+          <PlugZap size={19} />
+        </div>
+
+        <div className="copilot-runtime-config">
+          <label>
+            Runtime URL
+            <input value={runtimeUrl} onChange={(event) => setRuntimeUrl(event.target.value)} placeholder="http://127.0.0.1:11434" />
+          </label>
+          <label>
+            Model tag
+            <input value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder="qwen2.5:7b-instruct-q4_K_M" />
+          </label>
+          <div className="copilot-runtime-actions">
+            <button className="secondary-button" type="button" onClick={handleConnectRuntime} disabled={runtimeState === 'checking'}>
+              <PlugZap size={14} />
+              <span>{runtimeState === 'checking' ? 'Checking...' : 'Connect runtime'}</span>
+            </button>
+            <button className="secondary-button" type="button" onClick={handleRefreshModels} disabled={runtimeState === 'checking'}>
+              <RefreshCw size={14} />
+              <span>Refresh models</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="copilot-native-actions">
+          <button className="secondary-button" type="button" disabled={nativeActionBusy} onClick={() => handleNativeSetupAction('install_ollama')}>
+            <Download size={14} />
+            <span>{nativeActionBusy ? 'Working...' : 'Install Ollama'}</span>
+          </button>
+          <button className="secondary-button" type="button" disabled={nativeActionBusy} onClick={() => handleNativeSetupAction('pull_model')}>
+            <Terminal size={14} />
+            <span>{nativeActionBusy ? 'Working...' : 'Pull selected model'}</span>
+          </button>
+          <button className="secondary-button" type="button" disabled={nativeActionBusy} onClick={() => handleNativeSetupAction('start_runtime')}>
+            <Bot size={14} />
+            <span>{nativeActionBusy ? 'Working...' : 'Start runtime'}</span>
+          </button>
+        </div>
+
+        <div className="copilot-toggle-row">
+          <label>
+            <input type="checkbox" checked={lockToLocalhost} onChange={(event) => setLockToLocalhost(event.target.checked)} />
+            <span>Lock runtime to localhost only</span>
+          </label>
+          <label>
+            <input type="checkbox" checked={attachContextPack} onChange={(event) => setAttachContextPack(event.target.checked)} />
+            <span>Attach safe local context pack</span>
+          </label>
+        </div>
+
+        <p className={`copilot-runtime-state ${runtimeState}`}>{runtimeMessage}</p>
+
+        <div className="copilot-installed-row">
+          <strong>Installed models</strong>
+          {installedModels.length > 0 ? (
+            <label>
+              Select installed model
+              <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
+                {installedModels.map((entry) => (
+                  <option key={entry} value={entry}>{entry}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p>No local models discovered yet. Connect runtime, then pull one of the recommended models.</p>
+          )}
+          <span>{discoveryLabel}</span>
+        </div>
+      </Panel>
 
       <div className="copilot-layout">
         <Panel className="copilot-recommendation-panel">
@@ -332,61 +454,10 @@ export function AiCopilotPage() {
       <Panel className="copilot-chat-panel">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Local runtime</span>
-            <h2>Chat with your local model</h2>
+            <span className="eyebrow">Conversation</span>
+            <h2>Chat transcript</h2>
           </div>
           <MessageSquare size={19} />
-        </div>
-
-        <div className="copilot-runtime-config">
-          <label>
-            Runtime URL
-            <input value={runtimeUrl} onChange={(event) => setRuntimeUrl(event.target.value)} placeholder="http://127.0.0.1:11434" />
-          </label>
-          <label>
-            Model tag
-            <input value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder="qwen2.5:7b-instruct-q4_K_M" />
-          </label>
-          <div className="copilot-runtime-actions">
-            <button className="secondary-button" type="button" onClick={handleConnectRuntime} disabled={runtimeState === 'checking'}>
-              <PlugZap size={14} />
-              <span>{runtimeState === 'checking' ? 'Checking...' : 'Connect runtime'}</span>
-            </button>
-            <button className="secondary-button" type="button" onClick={handleRefreshModels} disabled={runtimeState === 'checking'}>
-              <RefreshCw size={14} />
-              <span>Refresh models</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="copilot-toggle-row">
-          <label>
-            <input type="checkbox" checked={lockToLocalhost} onChange={(event) => setLockToLocalhost(event.target.checked)} />
-            <span>Lock runtime to localhost only</span>
-          </label>
-          <label>
-            <input type="checkbox" checked={attachContextPack} onChange={(event) => setAttachContextPack(event.target.checked)} />
-            <span>Attach safe local context pack</span>
-          </label>
-        </div>
-
-        <p className={`copilot-runtime-state ${runtimeState}`}>{runtimeMessage}</p>
-
-        <div className="copilot-installed-row">
-          <strong>Installed models</strong>
-          {installedModels.length > 0 ? (
-            <label>
-              Select installed model
-              <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
-                {installedModels.map((entry) => (
-                  <option key={entry} value={entry}>{entry}</option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <p>No local models discovered yet. Connect runtime, then pull one of the recommended models.</p>
-          )}
-          <span>{discoveryLabel}</span>
         </div>
 
         <div className="copilot-chat-log">
@@ -396,19 +467,6 @@ export function AiCopilotPage() {
               <p>{message.content}</p>
             </article>
           ))}
-        </div>
-
-        <div className="copilot-chat-input-row">
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask your local model about system tuning, diagnostics, or profile trade-offs..."
-            rows={3}
-          />
-          <button className="primary-button" type="button" onClick={handleSendMessage} disabled={sending || !draft.trim()}>
-            <Send size={14} />
-            <span>{sending ? 'Sending...' : 'Send'}</span>
-          </button>
         </div>
       </Panel>
     </div>

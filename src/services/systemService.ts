@@ -36,16 +36,27 @@ import type {
   SystemInfo,
   TrayStatus,
 } from '../types/system';
+import { brand } from '../lib/branding';
 
 export async function getAppMetadata(): Promise<AppMetadata> {
   return callNative<AppMetadata>('get_app_metadata', undefined, async () => ({
-    name: 'Radium PCs Companion',
+    name: brand.productName,
     version: '0.1.0-pre',
     releaseChannel: 'pre-release',
     buildProfile: 'browser',
     updateStatus: 'manual',
     releaseNotesUrl: 'https://github.com/theantipopau/pccompanion/releases',
   }));
+}
+
+export type LocalAiSetupAction = 'install_ollama' | 'pull_model' | 'start_runtime';
+
+export async function runLocalAiSetup(action: LocalAiSetupAction, model?: string): Promise<string> {
+  return callNative<string>(
+    'run_local_ai_setup',
+    { action, model },
+    async () => `[browser] Local AI setup action '${action}' is available in desktop mode only.`,
+  );
 }
 
 export async function getSystemInfo(): Promise<SystemInfo> {

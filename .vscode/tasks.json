@@ -293,6 +293,150 @@
 				"src-tauri/Cargo.toml"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "build-exe-demo-final",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"build:exe:demo"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "build-exe-demo-final-2",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"build:exe:demo"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "build-exe-demo-fresh-target",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$env:CARGO_TARGET_DIR='F:/radiumpcs/src-tauri/target-demo-final'; npm.cmd run build:exe:demo"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "build-exe-demo-fresh-cmd",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"cd /d F:\\radiumpcs && set CARGO_TARGET_DIR=F:\\radiumpcs\\src-tauri\\target-demo-final&& npm.cmd run build:exe:demo"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "build-exe-radium-fresh-cmd",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"cd /d F:\\radiumpcs && set CARGO_TARGET_DIR=F:\\radiumpcs\\src-tauri\\target-radium-final&& npm.cmd run build:exe"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "check-build-procs",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"tasklist | findstr /I \"cargo.exe rustc.exe makensis.exe\""
+			],
+			"isBackground": false
+		},
+		{
+			"label": "check-build-procs-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Get-Process cargo,rustc,makensis -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "check-demo-icon-artifacts",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$p='F:\\radiumpcs\\src-tauri\\target-demo-icon-final\\release\\bundle\\nsis\\PC Companion_0.1.0-pre_x64-setup.exe'; if(Test-Path $p){Get-Item $p | Select-Object FullName,Length,LastWriteTime | Format-List}else{Write-Output 'MISSING'}"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "check-demo-icon-artifacts-2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$p=\"F:/radiumpcs/src-tauri/target-demo-icon-final/release/bundle/nsis/PC Companion_0.1.0-pre_x64-setup.exe\"; if (Test-Path $p) { Get-Item $p | Select-Object FullName,Length,LastWriteTime | Format-List } else { 'MISSING' }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "check-demo-icon-artifacts-3",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Get-ChildItem F:/radiumpcs/src-tauri/target-demo-icon-final/release/bundle/nsis/*.exe -ErrorAction SilentlyContinue | Select-Object FullName,Length,LastWriteTime | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "kill-hung-build-procs",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"Stop-Process -Name cargo,rustc,makensis,node -Force -ErrorAction SilentlyContinue; Get-Process cargo,rustc,makensis,node -ErrorAction SilentlyContinue | Select-Object Id,ProcessName | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "build-exe-demo-icon-fresh-cmd",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"cd /d F:\\radiumpcs && set CARGO_TARGET_DIR=F:\\radiumpcs\\src-tauri\\target-demo-icon-final&& npm.cmd run build:exe:demo"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

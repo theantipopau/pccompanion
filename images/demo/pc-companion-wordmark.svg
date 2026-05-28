@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 180" role="img" aria-labelledby="title desc">
+  <title id="title">PC Companion wordmark</title>
+  <desc id="desc">Neutral orange wordmark for demo PC Companion build.</desc>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd3a5" />
+      <stop offset="55%" stop-color="#ff9b36" />
+      <stop offset="100%" stop-color="#ff7a00" />
+    </linearGradient>
+  </defs>
+  <rect width="820" height="180" rx="32" fill="none" />
+  <g fill="none" stroke="url(#brand)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" transform="translate(18 24)">
+    <rect x="0" y="0" width="116" height="82" rx="18" opacity="0.9" />
+    <path d="M20 44h18l10-18 16 34 14-23h18" opacity="0.95" />
+    <path d="M36 106h44" opacity="0.8" />
+  </g>
+  <g fill="url(#brand)">
+    <path d="M190 60h96c30 0 49 17 49 43 0 30-22 47-57 47h-34v22h-54zm54 38v17h27c8 0 13-3 13-8 0-6-5-9-13-9z" />
+    <path d="M356 60h53v91h84v39H356z" />
+    <path d="M532 60h89c57 0 94 34 94 84s-37 84-94 84h-89zm54 38v52h28c27 0 44-18 44-41 0-24-17-41-44-41z" opacity="0.98" />
+    <path d="M191 35h114v9H191z" opacity="0.4" />
+    <path d="M520 35h123v9H520z" opacity="0.4" />
+  </g>
+  <text x="190" y="170" font-family="Segoe UI, Bahnschrift, sans-serif" font-size="28" font-weight="700" fill="#f0d0ad" letter-spacing="10">SYSTEM PERFORMANCE SUITE</text>
+</svg>

@@ -1,5 +1,5 @@
 import { AlertTriangle, Cpu, ExternalLink, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Sparkles, Thermometer, Zap, type LucideIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge as RadialGauge } from '../components/Gauge';
@@ -11,6 +11,7 @@ import { Skeleton } from '../components/Skeleton';
 import { StatePill } from '../components/StatePill';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
+import { brand } from '../lib/branding';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
 import { assets, oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { computePerformanceScore } from '../lib/performanceScore';
@@ -36,7 +37,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   const history = sample?.history ?? [];
   const animateCharts = settings.experience.animations;
-  const performanceScore = computePerformanceScore(sample);
+  const performanceScore = useMemo(() => computePerformanceScore(sample), [sample]);
   const gpuProvider = sample?.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI';
   const nominal = sample?.state === 'valid';
   const sampleAgeMs = sample ? Math.max(0, Date.now() - sample.timestamp) : null;
@@ -103,7 +104,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     { id: 'net', label: 'NET', value: sample ? mbps(sample.network.downMbps) : 'Scan', detail: sample ? `${mbps(sample.network.upMbps)} up` : 'Pending' },
   ];
   const storageMaxUsed = sample?.storage.reduce((max, drive) => Math.max(max, drive.usedPercent), 0) ?? 0;
-  const careActions = buildCareActions({
+  const careActions = useMemo(() => buildCareActions({
     cpuTempMissing: sample ? sample.cpu.temperature == null : false,
     storageMaxUsed,
     scoreValue: performanceScore.value,
@@ -111,12 +112,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     latestDriver: driverUpdateInfo?.latestVersion,
     driverUrl: driverUpdateInfo?.downloadUrl,
     telemetryReady: nominal,
-  });
+  }), [sample, driverUpdateInfo, performanceScore.value, storageMaxUsed, nominal]);
 
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Radium PCs Companion"
+        eyebrow={brand.dashboardEyebrow}
         title="Dashboard"
         description="Overview of your system's performance."
         action={(
@@ -147,11 +148,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="hero-ambient" aria-hidden="true" />
           <div className="hero-monitor-top">
             <div className="hero-identity-main">
-              <div className="hero-identity-brand" aria-label="Radium PCs Companion identity">
-                <img className="dashboard-brand-icon" src={assets.radiumLogo} alt="Radium PCs" />
+              <div className="hero-identity-brand" aria-label={`${brand.productName} identity`}>
+                <img className="dashboard-brand-icon" src={brand.splashIcon} alt={brand.name} />
                 <div className="hero-brand-copy">
-                  <strong>Radium PCs Companion</strong>
-                  <span>Companion</span>
+                  <strong>{brand.productName}</strong>
+                  <span>{brand.shortName}</span>
                 </div>
               </div>
               <h2>{deviceName}</h2>
@@ -194,7 +195,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 ))}
               </div>
               <div className="hero-premium-asset" aria-hidden="true">
-                <img src={assets.radiumHeaderNew} alt="" />
+                <img src={brand.splashLogo} alt="" />
                 <span>Premium support workflow</span>
               </div>
             </div>
@@ -269,7 +270,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">OEM readiness</span>
-              <h2>Radium Performance Score</h2>
+              <h2>{brand.dashboardHeroTitle}</h2>
             </div>
             <div className="score-pill">{performanceScore.grade}</div>
           </div>

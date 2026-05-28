@@ -4,6 +4,7 @@ import { isNative } from '../services/native';
 import type { HardwareSample, MetricPoint, SystemInfo } from '../types/system';
 import { temp, pct } from '../lib/format';
 import { useSettings } from '../hooks/useSettings';
+import { brand } from '../lib/branding';
 import { renderTrayIconRgba, extractTrayValue } from '../lib/trayIcon';
 
 type MonitorContextValue = {
@@ -123,7 +124,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
 
             const modeLabel = settings.experience.performanceMode.toUpperCase();
             void setTrayStatus({
-              tooltip: `Radium PCs Companion\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} - NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} - Telemetry ${next.state}\nMode ${modeLabel} - Tray ${trayLabel}\nDouble-click: Open - Menu: OSD, RAM clean, modes`,
+              tooltip: `${brand.productName}\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} - NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} - Telemetry ${next.state}\nMode ${modeLabel} - Tray ${trayLabel}\nDouble-click: Open - Menu: OSD, RAM clean, modes`,
               mode: settings.experience.performanceMode,
               overlayEnabled: settings.overlay.enabled,
             });

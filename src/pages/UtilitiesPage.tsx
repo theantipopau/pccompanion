@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useSettings } from '../hooks/useSettings';
+import { brand } from '../lib/branding';
 import { assets } from '../lib/assets';
 import { getPerformanceProfiles } from '../services/systemService';
 import type { PerformanceProfile } from '../types/system';
@@ -39,7 +40,7 @@ const modules: UtilityModule[] = [
     icon: Rocket,
     status: 'live',
     group: 'live',
-    oem: assets.radiumLogo,
+    oem: brand.splashIcon,
     text: 'Quiet, Balanced, Creator, and Gaming profiles apply supported OS controls and keep low-level writes gated.',
     action: { label: 'Open profiles', view: 'profiles' },
   },
@@ -48,7 +49,7 @@ const modules: UtilityModule[] = [
     icon: TimerReset,
     status: 'live',
     group: 'live',
-    oem: assets.radiumLogo,
+    oem: brand.splashIcon,
     text: 'Review startup entries with publisher, impact, and reversible enable/disable actions.',
     action: { label: 'Open startup', view: 'startup' },
   },
@@ -95,7 +96,7 @@ const modules: UtilityModule[] = [
     action: { label: 'Open benchmark', view: 'benchmark' },
   },
   {
-    title: 'Radium sensor provider',
+    title: 'Sensor provider',
     icon: Cpu,
     status: 'driver_required',
     group: 'planned',
@@ -111,11 +112,11 @@ const modules: UtilityModule[] = [
     text: 'Manual per-game profile mappings come before automatic background switching.',
   },
   {
-    title: 'Radium CoPilot',
+    title: 'CoPilot',
     icon: Bot,
     status: 'planned',
     group: 'planned',
-    oem: assets.radiumLogo,
+    oem: brand.splashIcon,
     text: 'Offline-first assistant with hardware-based local model recommendations and optional local chat runtime.',
     action: { label: 'Open CoPilot', view: 'copilot' },
   },
@@ -127,7 +128,7 @@ const maintenanceTools: UtilityModule[] = [
     icon: HardDrive,
     status: 'live',
     group: 'live',
-    oem: assets.radiumLogo,
+    oem: brand.splashIcon,
     text: 'Analyse temp files, browser caches, shader caches, update payloads, logs, downloads review areas, and the Recycle Bin with safe-target cleanup.',
     action: { label: 'Open system cleaner', view: 'storage' },
   },
@@ -136,8 +137,8 @@ const maintenanceTools: UtilityModule[] = [
     icon: FileWarning,
     status: 'live',
     group: 'live',
-    oem: assets.radiumLogo,
-    text: 'CCleaner-style scope with Radium guardrails: .reg backups, idempotent deletes, safe defaults, and review-only risky registry areas.',
+    oem: brand.splashIcon,
+    text: 'CCleaner-style scope with guardrails: .reg backups, idempotent deletes, safe defaults, and review-only risky registry areas.',
     action: { label: 'Open registry', view: 'registry' },
   },
   {
@@ -145,7 +146,7 @@ const maintenanceTools: UtilityModule[] = [
     icon: PackageMinus,
     status: 'live',
     group: 'live',
-    oem: assets.radiumLogo,
+    oem: brand.splashIcon,
     text: 'Review Microsoft inbox apps and third-party preload packages by risk, category, publisher, detected state, and restore path.',
     action: { label: 'Open remover', view: 'cleanup' },
   },
@@ -180,7 +181,7 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Expansion framework"
+        eyebrow={brand.mode === 'demo' ? 'Demo framework' : 'Expansion framework'}
         title={title}
         description="Capability-led PC ownership workflows. Live tools are reversible; staged hardware controls stay gated until native adapters are proven."
       />

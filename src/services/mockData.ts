@@ -14,6 +14,7 @@ import type {
   SystemInfo,
   Vendor,
 } from '../types/system';
+import { brand } from '../lib/branding';
 
 const start = Date.now();
 
@@ -36,7 +37,7 @@ export function mockSystemInfo(): SystemInfo {
     cpuVendor: guessCpuVendor(cpu),
     gpu: 'NVIDIA GeForce RTX class GPU',
     gpuVendor: 'nvidia',
-    motherboard: 'Radium validated performance motherboard',
+    motherboard: brand.mode === 'demo' ? 'Custom builder performance motherboard' : 'Radium validated performance motherboard',
     ram: '32 GB DDR5',
     ramSpeed: '6000 MT/s',
     storage: ['2 TB NVMe Gen4 SSD', '4 TB game library drive'],
@@ -318,7 +319,7 @@ export function mockStorageCleanupItems(): StorageCleanupItem[] {
     {
       id: 'diagnostic-logs',
       name: 'Old diagnostic logs',
-      location: 'ProgramData\\Radium PCs Companion\\logs',
+      location: `ProgramData\\${brand.productName}\\logs`,
       sizeGb: 0.7,
       category: 'Logs',
       selected: true,
@@ -381,7 +382,7 @@ export function mockRegistryBackup(issueCount: number): RegistryBackup {
   return {
     id: `backup-${Date.now()}`,
     createdAt: new Date().toLocaleString(),
-    path: '%USERPROFILE%\\Documents\\Radium PCs Companion\\registry-backups\\backup.reg',
+    path: `%USERPROFILE%\\Documents\\${brand.productName}\\registry-backups\\backup.reg`,
     issueCount,
   };
 }
@@ -474,7 +475,7 @@ export function mockListTopProcesses(limit = 30): ProcessInfo[] {
     ['chrome.exe', 8.2, 620],
     ['Code.exe', 5.1, 480],
     ['nvcontainer.exe', 0.6, 38],
-    ['RadiumCompanion.exe', 0.9, 95],
+    [`${brand.mode === 'demo' ? 'PCCompanionDemo.exe' : 'RadiumCompanion.exe'}`, 0.9, 95],
     ['dwm.exe', 1.2, 42],
     ['csrss.exe', 0.1, 8],
     ['lsass.exe', 0.3, 22],

@@ -1,5 +1,7 @@
-const ACTION_HISTORY_KEY = 'radium-companion-action-history-v1';
-const ACTION_HISTORY_EVENT = 'radium-action-history-updated';
+import { brand } from './branding';
+
+const ACTION_HISTORY_KEY = `${brand.mode}-companion-action-history-v1`;
+const ACTION_HISTORY_EVENT = `${brand.mode}-action-history-updated`;
 const MAX_ACTION_HISTORY = 40;
 
 export type CompanionActionRecord = {

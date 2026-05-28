@@ -464,6 +464,112 @@ fn open_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn run_local_ai_setup(action: String, model: Option<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || run_local_ai_setup_blocking(&action, model.as_deref()))
+        .await
+        .map_err(|e| format!("run_local_ai_setup join error: {e}"))?
+}
+
+fn run_local_ai_setup_blocking(action: &str, model: Option<&str>) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        match action {
+            "install_ollama" => {
+                let out = run_hidden_command_output(
+                    "winget",
+                    &[
+                        "install",
+                        "--id",
+                        "Ollama.Ollama",
+                        "-e",
+                        "--accept-source-agreements",
+                        "--accept-package-agreements",
+                    ],
+                )?;
+                if out.status.success() {
+                    return Ok("Ollama install command finished successfully.".to_string());
+                }
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                return Err(format!(
+                    "Ollama install failed (code {:?}). {} {}",
+                    out.status.code(),
+                    stdout,
+                    stderr
+                )
+                .trim()
+                .to_string());
+            }
+            "pull_model" => {
+                let model = model.ok_or_else(|| "Model tag is required for pull_model".to_string())?;
+                validate_model_tag(model)?;
+                let out = run_hidden_command_output("ollama", &["pull", model])?;
+                if out.status.success() {
+                    return Ok(format!("Model pull completed: {model}"));
+                }
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                return Err(format!(
+                    "Model pull failed for {model} (code {:?}). {} {}",
+                    out.status.code(),
+                    stdout,
+                    stderr
+                )
+                .trim()
+                .to_string());
+            }
+            "start_runtime" => {
+                let mut cmd = std::process::Command::new("ollama");
+                cmd.arg("serve");
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+                }
+                cmd.stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .stdin(std::process::Stdio::null())
+                    .spawn()
+                    .map_err(|e| format!("Failed to start ollama runtime: {e}"))?;
+                return Ok("Local runtime start requested: ollama serve".to_string());
+            }
+            _ => return Err("Unsupported local AI setup action".to_string()),
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = (action, model);
+        Err("Local AI setup actions are currently implemented for Windows only".to_string())
+    }
+}
+
+fn validate_model_tag(model: &str) -> Result<(), String> {
+    if model.is_empty() || model.len() > 96 {
+        return Err("Invalid model tag length".to_string());
+    }
+    if !model
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, ':' | '.' | '_' | '-'))
+    {
+        return Err("Model tag contains blocked characters".to_string());
+    }
+    Ok(())
+}
+
+fn run_hidden_command_output(program: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd.output()
+        .map_err(|e| format!("Failed to run {program}: {e}"))
+}
+
 fn validate_external_url(url: &str) -> Result<(), String> {
     const MAX_URL_LEN: usize = 2048;
     const ALLOWED_HOSTS: &[&str] = &[
@@ -1194,6 +1300,7 @@ pub fn run() {
             restore_registry_backup,
             export_diagnostics,
             open_url,
+            run_local_ai_setup,
             check_driver_update,
             get_performance_profiles,
             apply_performance_profile,

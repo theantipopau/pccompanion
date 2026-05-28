@@ -23,6 +23,7 @@ import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { brand } from './lib/branding';
 import { recordCompanionAction } from './lib/actionHistory';
 import {
   exportDiagnostics,
@@ -83,7 +84,7 @@ function OverlayOnlyApp() {
 function CompanionApp() {
   const [onboardingVisible, setOnboardingVisible] = useState(() => {
     try {
-      return window.localStorage.getItem('radium-onboarding-complete-v1') !== '1';
+      return window.localStorage.getItem(`${brand.mode}-onboarding-complete-v1`) !== '1';
     } catch {
       return true;
     }
@@ -248,7 +249,7 @@ function CompanionApp() {
           <SplashScreen
             onComplete={() => setSplashVisible(false)}
             steps={[
-              { label: 'Starting Radium PCs Companion', icon: HardDrive },
+              { label: `Starting ${brand.productName}`, icon: HardDrive },
               { label: 'Loading performance modules', icon: Sparkles },
               { label: 'Preparing monitoring engine', icon: Activity },
             ]}
@@ -261,7 +262,7 @@ function CompanionApp() {
             onComplete={() => {
               setOnboardingVisible(false);
               try {
-                window.localStorage.setItem('radium-onboarding-complete-v1', '1');
+                window.localStorage.setItem(`${brand.mode}-onboarding-complete-v1`, '1');
               } catch {
                 // ignore storage failures and continue onboarding flow.
               }

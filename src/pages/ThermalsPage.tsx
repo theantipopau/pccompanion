@@ -6,6 +6,7 @@ import { Panel } from '../components/Panel';
 import { ThermalCaseView } from '../components/ThermalCaseView';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
+import { brand } from '../lib/branding';
 import { oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { mbps, mhz, pct, temp } from '../lib/format';
 import type { Vendor } from '../types/system';
@@ -55,7 +56,7 @@ export function ThermalsPage() {
       <PageHeader
         eyebrow="Monitoring"
         title="Thermals"
-        description="A physical view of heat, airflow, and component load across a typical Radium PCs gaming or workstation build."
+        description={brand.mode === 'demo' ? 'A physical view of heat, airflow, and component load across a typical gaming or workstation build.' : 'A physical view of heat, airflow, and component load across a typical Radium PCs gaming or workstation build.'}
       />
       <div className="thermals-grid">
         <ThermalCaseView />
@@ -116,7 +117,7 @@ export function ThermalsPage() {
           <Panel className="airflow-notes">
             <span className="eyebrow">Sensor accuracy</span>
             <h2>Measured values only</h2>
-            <p>The thermal map only shows temperatures that are actually reported by hardware providers. CPU package temperature on this build needs a hardware monitor bridge or Radium provider before it can be displayed.</p>
+            <p>The thermal map only shows temperatures that are actually reported by hardware providers. CPU package temperature on this build needs a hardware monitor bridge or provider integration before it can be displayed.</p>
             <small>Network telemetry for overlay sync: {sample ? mbps(sample.network.downMbps) : 'Scanning'}</small>
           </Panel>
         </div>
