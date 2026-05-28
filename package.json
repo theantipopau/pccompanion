@@ -13,6 +13,7 @@
     "build:sensor-sidecar": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sensor-sidecar.ps1",
     "build:exe": "npm run build:sensor-sidecar && tauri build",
     "build:exe:demo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_demo_exe.ps1",
+    "verify:demo-brand-leak": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify_demo_brand_leak.ps1",
     "verify:demo-dev-config-restore": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify_demo_dev_config_restore.ps1",
     "package:windows": "npm run build:sensor-sidecar && tauri build",
     "package:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1",

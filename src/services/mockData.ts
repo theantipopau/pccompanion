@@ -37,7 +37,7 @@ export function mockSystemInfo(): SystemInfo {
     cpuVendor: guessCpuVendor(cpu),
     gpu: 'NVIDIA GeForce RTX class GPU',
     gpuVendor: 'nvidia',
-    motherboard: brand.mode === 'demo' ? 'Custom builder performance motherboard' : 'Radium validated performance motherboard',
+    motherboard: brand.mode === 'demo' ? 'Custom builder performance motherboard' : `${brand.name} validated performance motherboard`,
     ram: '32 GB DDR5',
     ramSpeed: '6000 MT/s',
     storage: ['2 TB NVMe Gen4 SSD', '4 TB game library drive'],

@@ -238,7 +238,7 @@ export function AiCopilotPage() {
     <div className="page">
       <PageHeader
         eyebrow="Local-first"
-        title={brand.mode === 'demo' ? 'PC Companion' : 'Radium CoPilot'}
+        title={brand.mode === 'demo' ? 'PC Companion' : `${brand.name} CoPilot`}
         description="Offline model recommendations and optional local LLM chat. No cloud dependency is required for this workflow."
       />
 
@@ -246,7 +246,7 @@ export function AiCopilotPage() {
         <div className="panel-heading compact">
           <div>
             <span className="eyebrow">Prompt</span>
-            <h2>{brand.mode === 'demo' ? 'Ask PC Companion' : 'Ask Radium CoPilot'}</h2>
+            <h2>{brand.mode === 'demo' ? 'Ask PC Companion' : `Ask ${brand.name} CoPilot`}</h2>
           </div>
           <MessageSquare size={18} />
         </div>

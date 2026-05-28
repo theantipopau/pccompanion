@@ -4,6 +4,7 @@ import type { CompanionSettings } from '../types/system';
 import { brand } from '../lib/branding';
 
 const SETTINGS_KEY = `${brand.mode}-companion-settings`;
+const SETTINGS_STORAGE_VERSION = 2;
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
@@ -57,7 +58,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<CompanionSettings>(() => {
     try {
       const stored = window.localStorage.getItem(SETTINGS_KEY);
-      return stored ? mergeSettings(defaultSettings, JSON.parse(stored) as Partial<CompanionSettings>) : defaultSettings;
+      if (!stored) return defaultSettings;
+      const parsed = JSON.parse(stored) as unknown;
+      const migrated = migrateSettingsEnvelope(parsed);
+      return mergeSettings(defaultSettings, migrated);
     } catch {
       return defaultSettings;
     }
@@ -65,7 +69,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      const payload: StoredSettingsEnvelope = {
+        version: SETTINGS_STORAGE_VERSION,
+        data: settings,
+      };
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
     } catch {
       // Keep running with in-memory settings if local storage is blocked or full.
     }
@@ -95,4 +103,29 @@ function mergeSettings(base: CompanionSettings, partial: Partial<CompanionSettin
     experience: { ...base.experience, ...partial.experience },
     gameMode: { ...base.gameMode, ...partial.gameMode, mappings: partial.gameMode?.mappings ?? base.gameMode.mappings },
   };
+}
+
+type StoredSettingsEnvelope = {
+  version: number;
+  data: Partial<CompanionSettings>;
+};
+
+function isSettingsEnvelope(value: unknown): value is StoredSettingsEnvelope {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { version?: unknown; data?: unknown };
+  return typeof candidate.version === 'number' && !!candidate.data && typeof candidate.data === 'object';
+}
+
+function migrateSettingsEnvelope(raw: unknown): Partial<CompanionSettings> {
+  if (isSettingsEnvelope(raw)) {
+    if (raw.version >= SETTINGS_STORAGE_VERSION) {
+      return raw.data;
+    }
+
+    // Future migrations can branch here by version and normalize shape safely.
+    return raw.data;
+  }
+
+  // v1 legacy payload was the settings object directly.
+  return (raw ?? {}) as Partial<CompanionSettings>;
 }

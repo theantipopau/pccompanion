@@ -56,7 +56,9 @@ export function ThermalsPage() {
       <PageHeader
         eyebrow="Monitoring"
         title="Thermals"
-        description={brand.mode === 'demo' ? 'A physical view of heat, airflow, and component load across a typical gaming or workstation build.' : 'A physical view of heat, airflow, and component load across a typical Radium PCs gaming or workstation build.'}
+        description={brand.mode === 'demo'
+          ? 'A physical view of heat, airflow, and component load across a typical gaming or workstation build.'
+          : `A physical view of heat, airflow, and component load across a typical ${brand.name} gaming or workstation build.`}
       />
       <div className="thermals-grid">
         <ThermalCaseView />

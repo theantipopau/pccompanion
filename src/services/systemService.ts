@@ -315,7 +315,7 @@ export async function getPlatformTelemetryDiscovery(): Promise<SensorDiscoveryRe
 
 export async function probeSensorSidecar(): Promise<SensorSidecarProbe> {
   return callNative<SensorSidecarProbe>('probe_sensor_sidecar', undefined, async () => ({
-    provider: 'radium-lhm-pawnio',
+    provider: 'lhm-pawnio',
     available: false,
     driverAvailable: false,
     status: 'browser_preview',

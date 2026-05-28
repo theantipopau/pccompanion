@@ -1,0 +1,53 @@
+name: Variant Quality Matrix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web-radium:
+    name: Web Build (radium)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app (radium)
+        run: npm run build
+
+      - name: Verify demo dev config restore safety
+        run: npm run verify:demo-dev-config-restore
+
+  web-demo:
+    name: Web Build + Leak Check (demo)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app (demo)
+        run: npm run build
+        env:
+          VITE_BRAND_MODE: demo
+
+      - name: Verify no demo brand leakage
+        run: npm run verify:demo-brand-leak
