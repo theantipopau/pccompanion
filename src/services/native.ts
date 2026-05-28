@@ -38,7 +38,9 @@ export async function callNative<T>(
 export function openExternalUrl(url: string): void {
   if (!isAllowedExternalUrl(url)) return;
   if (!isNative()) {
-    window.open(url, '_blank', 'noreferrer');
+    if (typeof window !== 'undefined' && typeof window.open === 'function') {
+      window.open(url, '_blank', 'noreferrer');
+    }
     return;
   }
   // In native mode, backend allow-list policy is authoritative.

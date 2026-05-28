@@ -369,6 +369,13 @@ Current implementation progress:
 - Thermal page premium backdrop asset: implemented with live telemetry overlays, fan callouts, and CPU/GPU vendor marks.
 - Benchmark capture page: implemented as a local telemetry window with trusted/missing sensor reporting and latest-vs-previous comparison.
 - Security hardening pass: URL opening now uses HTTPS allow-listing, cleanup skips unsafe targets/symlink traversal, and release sidecar loading no longer trusts arbitrary environment/current-directory paths.
+- Native URL enforcement hardening (May 28, 2026): in native mode, external links now rely on backend validation only and no longer fall back to browser `window.open` when rejected.
+- Browser-preview URL fallback hardening (May 28, 2026): `window.open` is now guarded so preview mode fails closed without throwing if the host environment does not expose it.
+- URL policy alignment (May 28, 2026): backend allow-list expanded to include `example.com` and covered by focused unit tests.
+- Settings accessibility hardening (May 28, 2026): Settings tabs now implement roving tabindex, Arrow/Home/End keyboard navigation, `tab`/`tabpanel` semantics, and explicit `aria-controls`/`aria-labelledby` linkage.
+- CI backend quality extension (May 28, 2026): variant quality workflow now includes a dedicated Rust backend job for `cargo check` and URL validator tests.
+- Validation pass completed (May 28, 2026): frontend production build, Rust cargo check, targeted Rust URL validator tests, and source-mode demo brand leak checks all passed.
+- Git deployment (May 28, 2026): shipped to `main` as commit `d649dd3`.
 - Network update checks, RGB, background game automation, and new hardware writes: deferred.
 - Local AI insights engine and optional local LLM copilot tab: in progress (local preview implemented; deeper insight model and persistence pending).
 - Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.
