@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Archive, Bell, ClipboardList, Download, ExternalLink, Gamepad2, Gauge, Info, Mail, MapPin, MonitorDot, Palette, PhoneCall, Plus, Power, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -24,6 +24,8 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
 
 type SettingsTab = 'general' | 'games' | 'passport' | 'diagnostics' | 'about';
 
+const SETTINGS_TAB_ORDER: SettingsTab[] = ['general', 'passport', 'games', 'diagnostics', 'about'];
+
 const radiumWebsite = brand.website;
 const companionEmail = brand.companionEmail;
 const supportEmail = brand.supportEmail;
@@ -34,6 +36,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
   const { sample, systemInfo, native } = useMonitor();
   const { settings, updateSettings, resetSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [appMetadata, setAppMetadata] = useState<AppMetadata | null>(null);
   const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
   const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : brand.splashIcon;
@@ -56,6 +59,49 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
     };
   }, []);
 
+  function tabButtonId(tab: SettingsTab): string {
+    return `settings-tab-${tab}`;
+  }
+
+  function tabPanelId(tab: SettingsTab): string {
+    return `settings-panel-${tab}`;
+  }
+
+  function focusTabAt(index: number) {
+    const clamped = (index + SETTINGS_TAB_ORDER.length) % SETTINGS_TAB_ORDER.length;
+    const tab = SETTINGS_TAB_ORDER[clamped];
+    setActiveTab(tab);
+    tabRefs.current[clamped]?.focus();
+  }
+
+  function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tab: SettingsTab) {
+    const currentIndex = SETTINGS_TAB_ORDER.indexOf(tab);
+    if (currentIndex < 0) return;
+
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        event.preventDefault();
+        focusTabAt(currentIndex + 1);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        event.preventDefault();
+        focusTabAt(currentIndex - 1);
+        break;
+      case 'Home':
+        event.preventDefault();
+        focusTabAt(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        focusTabAt(SETTINGS_TAB_ORDER.length - 1);
+        break;
+      default:
+        break;
+    }
+  }
+
   return (
     <div className="page">
       <PageHeader
@@ -71,33 +117,105 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
       />
 
       <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-        <button className={activeTab === 'general' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'general'} onClick={() => setActiveTab('general')}>
+        <button
+          ref={(element) => { tabRefs.current[0] = element; }}
+          id={tabButtonId('general')}
+          className={activeTab === 'general' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'general'}
+          aria-controls={tabPanelId('general')}
+          tabIndex={activeTab === 'general' ? 0 : -1}
+          onKeyDown={(event) => handleTabKeyDown(event, 'general')}
+          onClick={() => setActiveTab('general')}
+        >
           <SlidersHorizontal size={16} />
           <span>General</span>
         </button>
-        <button className={activeTab === 'passport' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'passport'} onClick={() => setActiveTab('passport')}>
+        <button
+          ref={(element) => { tabRefs.current[1] = element; }}
+          id={tabButtonId('passport')}
+          className={activeTab === 'passport' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'passport'}
+          aria-controls={tabPanelId('passport')}
+          tabIndex={activeTab === 'passport' ? 0 : -1}
+          onKeyDown={(event) => handleTabKeyDown(event, 'passport')}
+          onClick={() => setActiveTab('passport')}
+        >
           <Gauge size={16} />
           <span>System Passport</span>
         </button>
-        <button className={activeTab === 'games' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'games'} onClick={() => setActiveTab('games')}>
+        <button
+          ref={(element) => { tabRefs.current[2] = element; }}
+          id={tabButtonId('games')}
+          className={activeTab === 'games' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'games'}
+          aria-controls={tabPanelId('games')}
+          tabIndex={activeTab === 'games' ? 0 : -1}
+          onKeyDown={(event) => handleTabKeyDown(event, 'games')}
+          onClick={() => setActiveTab('games')}
+        >
           <Gamepad2 size={16} />
           <span>Game Mode</span>
         </button>
-        <button className={activeTab === 'diagnostics' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'diagnostics'} onClick={() => setActiveTab('diagnostics')}>
+        <button
+          ref={(element) => { tabRefs.current[3] = element; }}
+          id={tabButtonId('diagnostics')}
+          className={activeTab === 'diagnostics' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'diagnostics'}
+          aria-controls={tabPanelId('diagnostics')}
+          tabIndex={activeTab === 'diagnostics' ? 0 : -1}
+          onKeyDown={(event) => handleTabKeyDown(event, 'diagnostics')}
+          onClick={() => setActiveTab('diagnostics')}
+        >
           <ShieldCheck size={16} />
           <span>Diagnostics</span>
         </button>
-        <button className={activeTab === 'about' ? 'active' : ''} type="button" role="tab" aria-selected={activeTab === 'about'} onClick={() => setActiveTab('about')}>
+        <button
+          ref={(element) => { tabRefs.current[4] = element; }}
+          id={tabButtonId('about')}
+          className={activeTab === 'about' ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'about'}
+          aria-controls={tabPanelId('about')}
+          tabIndex={activeTab === 'about' ? 0 : -1}
+          onKeyDown={(event) => handleTabKeyDown(event, 'about')}
+          onClick={() => setActiveTab('about')}
+        >
           <Info size={16} />
           <span>About</span>
         </button>
       </div>
 
-      {activeTab === 'passport' && <SystemPassportPage embedded />}
-      {activeTab === 'games' && <GameModeSettings />}
-      {activeTab === 'diagnostics' && <TelemetryDiagnosticsPage embedded />}
-      {activeTab === 'about' && <AboutCompanion appMetadata={appMetadata} />}
+      {activeTab === 'passport' && (
+        <section id={tabPanelId('passport')} role="tabpanel" aria-labelledby={tabButtonId('passport')}>
+          <SystemPassportPage embedded />
+        </section>
+      )}
+      {activeTab === 'games' && (
+        <section id={tabPanelId('games')} role="tabpanel" aria-labelledby={tabButtonId('games')}>
+          <GameModeSettings />
+        </section>
+      )}
+      {activeTab === 'diagnostics' && (
+        <section id={tabPanelId('diagnostics')} role="tabpanel" aria-labelledby={tabButtonId('diagnostics')}>
+          <TelemetryDiagnosticsPage embedded />
+        </section>
+      )}
+      {activeTab === 'about' && (
+        <section id={tabPanelId('about')} role="tabpanel" aria-labelledby={tabButtonId('about')}>
+          <AboutCompanion appMetadata={appMetadata} />
+        </section>
+      )}
       {activeTab === 'general' && (
+      <section id={tabPanelId('general')} role="tabpanel" aria-labelledby={tabButtonId('general')}>
       <div className="settings-grid">
         <Panel className="settings-panel settings-hero wide">
           <div className="panel-heading">
@@ -388,6 +506,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
           </div>
         </Panel>
       </div>
+      </section>
       )}
     </div>
   );

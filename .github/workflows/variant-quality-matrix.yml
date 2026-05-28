@@ -6,6 +6,22 @@ on:
   pull_request:
 
 jobs:
+  backend-rust:
+    name: Backend Check (rust)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Cargo tests (URL validator)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib external_url_validator
+
   web-radium:
     name: Web Build (radium)
     runs-on: windows-latest

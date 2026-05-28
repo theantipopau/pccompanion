@@ -588,6 +588,7 @@ fn validate_external_url(url: &str) -> Result<(), String> {
     const MAX_URL_LEN: usize = 2048;
     const ALLOWED_HOSTS: &[&str] = &[
         "radiumpcs.com.au",
+        "example.com",
         "github.com",
         "nvidia.com",
         "intel.com",
@@ -1515,6 +1516,7 @@ mod tests {
     #[test]
     fn external_url_validator_allows_known_https_hosts() {
         assert!(validate_external_url("https://radiumpcs.com.au").is_ok());
+        assert!(validate_external_url("https://example.com").is_ok());
         assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases").is_ok());
         assert!(validate_external_url("https://www.nvidia.com/Download/index.aspx").is_ok());
     }

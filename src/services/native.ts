@@ -41,9 +41,8 @@ export function openExternalUrl(url: string): void {
     window.open(url, '_blank', 'noreferrer');
     return;
   }
-  invoke('open_url', { url }).catch(() => {
-    window.open(url, '_blank', 'noreferrer');
-  });
+  // In native mode, backend allow-list policy is authoritative.
+  void invoke('open_url', { url });
 }
 
 function isAllowedExternalUrl(url: string): boolean {
