@@ -377,6 +377,7 @@ Current implementation progress:
 - Validation pass completed (May 28, 2026): frontend production build, Rust cargo check, targeted Rust URL validator tests, and source-mode demo brand leak checks all passed.
 - Git deployment (May 28, 2026): shipped to `main` as commit `d649dd3`.
 - Repo hygiene (May 28, 2026): `.gitignore` now excludes generated variant build outputs (`src-tauri/target-*`), local demo artifact output (`artifacts/demo/`), and local installer binaries (`radium_pcs_companion.exe`) to prevent false "thousands of changes" noise in SCM.
+- Visual polish pass (May 29, 2026): shared page chrome was refined with richer page-header cards, deeper panel depth, and a more premium settings tab strip without changing behavior.
 - Network update checks, RGB, background game automation, and new hardware writes: deferred.
 - Local AI insights engine and optional local LLM copilot tab: in progress (local preview implemented; deeper insight model and persistence pending).
 - Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.
