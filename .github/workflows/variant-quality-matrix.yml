@@ -6,46 +6,30 @@ on:
   pull_request:
 
 jobs:
-  backend-rust:
-    name: Backend Check (rust)
+  core-quality-gates:
+    name: Core Quality Gates (radium)
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cargo check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
-
-      - name: Cargo tests (URL validator)
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib external_url_validator
-
-  web-radium:
-    name: Web Build (radium)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build web app (radium)
-        run: npm run build
-
-      - name: Verify demo dev config restore safety
-        run: npm run verify:demo-dev-config-restore
+      - name: Run quality gate (radium)
+        run: npm run quality:gate
 
   web-demo:
-    name: Web Build + Leak Check (demo)
+    name: Quality Gate (demo)
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -60,10 +44,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web app (demo)
-        run: npm run build
+      - name: Run quality gate (demo)
+        run: npm run quality:gate:demo
         env:
           VITE_BRAND_MODE: demo
-
-      - name: Verify no demo brand leakage
-        run: npm run verify:demo-brand-leak

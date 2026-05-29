@@ -401,3 +401,36 @@ Current implementation progress:
 - [current-state.md](current-state.md)
 - [architecture.md](architecture.md)
 - [context_log.md](context_log.md)
+
+## May 29, 2026 Execution Plan (Radium + Demo)
+
+### Shared quality gates (hooked in)
+
+The following unified quality scripts are now the baseline gates for both variants:
+
+- `npm run quality:gate` (radium baseline):
+	- web build,
+	- rust cargo check,
+	- URL policy tests,
+	- demo-dev config restore verifier.
+- `npm run quality:gate:demo` (demo baseline with `VITE_BRAND_MODE=demo`):
+	- demo web build,
+	- demo brand leak source scan.
+
+CI workflow now consumes these gate scripts directly to reduce drift between local and CI checks.
+
+### Radium next
+
+1. Finish deferred network update polling with fail-closed UI behavior.
+2. Continue sensor-provider depth work (CPU package matching, fan rows, SMART rows).
+3. Add deterministic local insight cards with confidence levels (no cloud dependency).
+
+### Demo next
+
+1. Expand feature-flag module gating to explicitly hide/lock premium-only flows.
+2. Add artifact identity assertions for demo package metadata (name, identifier, icon).
+3. Keep strict bundle leak scan as optional/nightly until dead-code elimination is fully deterministic.
+
+### No-regression rule
+
+For both variants, each implementation slice must keep `quality:gate` and `quality:gate:demo` green before merge.
