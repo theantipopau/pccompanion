@@ -1,10 +1,10 @@
 import { Bot, CheckCircle2, Copy, Cpu, Download, MessageSquare, PlugZap, RefreshCw, Send, ShieldCheck, Sparkles, Terminal } from 'lucide-react';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { brand } from '../lib/branding';
-import { buildCopilotContextPack, buildCopilotRecommendation, buildNonInvasiveInsights } from '../lib/copilot';
+import { buildCopilotContextPack, buildCopilotRecommendation, buildNonInvasiveInsights, confidenceLabel } from '../lib/copilot';
 import { runLocalAiSetup } from '../services/systemService';
 
 type ChatMessage = {
@@ -18,6 +18,16 @@ type RuntimeTagsResponse = {
   models?: Array<{ name?: string; model?: string }>;
 };
 
+type CopilotPersistedSettings = {
+  runtimeUrl: string;
+  modelName: string;
+  lockToLocalhost: boolean;
+  attachContextPack: boolean;
+};
+
+const COPILOT_SETTINGS_KEY = `${brand.mode}:copilot-local-settings:v1`;
+const RUNTIME_TIMEOUT_MS = 4500;
+
 export function AiCopilotPage() {
   const { sample, systemInfo } = useMonitor();
   const deferredSample = useDeferredValue(sample);
@@ -25,11 +35,12 @@ export function AiCopilotPage() {
   const recommendation = useMemo(() => buildCopilotRecommendation(deferredSystemInfo, deferredSample), [deferredSample, deferredSystemInfo]);
   const insights = useMemo(() => buildNonInvasiveInsights(deferredSample), [deferredSample]);
   const contextPack = useMemo(() => buildCopilotContextPack(deferredSystemInfo, deferredSample, insights), [deferredSample, deferredSystemInfo, insights]);
+  const savedSettings = useMemo(() => loadCopilotSettings(), []);
 
-  const [runtimeUrl, setRuntimeUrl] = useState('http://127.0.0.1:11434');
-  const [modelName, setModelName] = useState(recommendation.general.modelTag);
-  const [lockToLocalhost, setLockToLocalhost] = useState(true);
-  const [attachContextPack, setAttachContextPack] = useState(true);
+  const [runtimeUrl, setRuntimeUrl] = useState(savedSettings?.runtimeUrl ?? 'http://127.0.0.1:11434');
+  const [modelName, setModelName] = useState(savedSettings?.modelName ?? recommendation.general.modelTag);
+  const [lockToLocalhost, setLockToLocalhost] = useState(savedSettings?.lockToLocalhost ?? true);
+  const [attachContextPack, setAttachContextPack] = useState(savedSettings?.attachContextPack ?? true);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>('disconnected');
   const [runtimeMessage, setRuntimeMessage] = useState('Not connected yet.');
@@ -45,9 +56,13 @@ export function AiCopilotPage() {
   const [sending, setSending] = useState(false);
   const [nativeActionBusy, setNativeActionBusy] = useState(false);
 
-  const hasInstalledModel = (target: string) => {
+  useEffect(() => {
+    saveCopilotSettings({ runtimeUrl, modelName, lockToLocalhost, attachContextPack });
+  }, [attachContextPack, lockToLocalhost, modelName, runtimeUrl]);
+
+  const hasInstalledModel = (target: string, models = installedModels) => {
     const normalized = normalizeModelTag(target);
-    return installedModels.some((entry) => {
+    return models.some((entry) => {
       const current = normalizeModelTag(entry);
       return current === normalized || modelBase(current) === modelBase(normalized);
     });
@@ -81,14 +96,20 @@ export function AiCopilotPage() {
   }
 
   async function fetchRuntimeModels(baseUrl: string): Promise<string[]> {
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/tags`, { method: 'GET' });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), RUNTIME_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/tags`, { method: 'GET', signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json() as RuntimeTagsResponse;
+      return Array.from(new Set((payload.models ?? [])
+        .map((entry) => (entry.name ?? entry.model ?? '').trim())
+        .filter((entry) => entry.length > 0)));
+    } finally {
+      window.clearTimeout(timeout);
     }
-    const payload = await response.json() as RuntimeTagsResponse;
-    return Array.from(new Set((payload.models ?? [])
-      .map((entry) => (entry.name ?? entry.model ?? '').trim())
-      .filter((entry) => entry.length > 0)));
   }
 
   async function handleConnectRuntime() {
@@ -103,14 +124,14 @@ export function AiCopilotPage() {
       const models = await fetchRuntimeModels(runtimeUrl);
       setInstalledModels(models);
       setDiscoveryLabel(models.length > 0 ? `Detected ${models.length} local model${models.length > 1 ? 's' : ''}.` : 'Runtime reachable, no local models found yet.');
-      if (models.length > 0 && !hasInstalledModel(modelName)) {
+      if (models.length > 0 && !hasInstalledModel(modelName, models)) {
         setModelName(models[0]);
       }
       setRuntimeState('connected');
       setRuntimeMessage('Local runtime reachable. Chat is ready.');
     } catch (error) {
       setRuntimeState('error');
-      setRuntimeMessage(error instanceof Error ? error.message : 'Could not connect to local runtime.');
+      setRuntimeMessage(describeRuntimeError(error, 'connect'));
     }
   }
 
@@ -129,7 +150,7 @@ export function AiCopilotPage() {
       setRuntimeMessage('Model list refreshed from local runtime.');
     } catch (error) {
       setRuntimeState('error');
-      setRuntimeMessage(error instanceof Error ? error.message : 'Could not refresh local models.');
+      setRuntimeMessage(describeRuntimeError(error, 'refresh'));
     }
   }
 
@@ -226,7 +247,7 @@ export function AiCopilotPage() {
         ...current,
         {
           role: 'assistant',
-          content: `Local model request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+          content: `Local model request failed: ${describeRuntimeError(error, 'chat')}`,
         },
       ]);
     } finally {
@@ -414,9 +435,21 @@ export function AiCopilotPage() {
             </div>
             <ShieldCheck size={18} />
           </div>
-          <div className="copilot-bullet-list">
+          <div className="copilot-insight-list">
             {insights.map((insight) => (
-              <span key={insight}>{insight}</span>
+              <article key={insight.id} className={`copilot-insight-card tone-${insight.tone}`}>
+                <div className="copilot-insight-topline">
+                  <strong>{insight.title}</strong>
+                  <span>{confidenceLabel(insight.confidence)}</span>
+                </div>
+                <p>{insight.summary}</p>
+                <div className="copilot-insight-signals">
+                  {insight.signals.map((signal) => (
+                    <span key={signal}>{signal}</span>
+                  ))}
+                </div>
+                <small>{insight.suggestedAction}</small>
+              </article>
             ))}
           </div>
           <div className="copilot-runtime-chip-row">
@@ -480,4 +513,56 @@ function normalizeModelTag(value: string): string {
 
 function modelBase(value: string): string {
   return normalizeModelTag(value).split(':')[0];
+}
+
+function loadCopilotSettings(): CopilotPersistedSettings | null {
+  try {
+    const raw = window.localStorage.getItem(COPILOT_SETTINGS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CopilotPersistedSettings>;
+    if (typeof parsed.runtimeUrl !== 'string' || typeof parsed.modelName !== 'string') return null;
+    return {
+      runtimeUrl: parsed.runtimeUrl,
+      modelName: parsed.modelName,
+      lockToLocalhost: parsed.lockToLocalhost !== false,
+      attachContextPack: parsed.attachContextPack !== false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveCopilotSettings(settings: CopilotPersistedSettings) {
+  try {
+    window.localStorage.setItem(COPILOT_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Local storage can be unavailable in restricted preview hosts; defaults remain usable.
+  }
+}
+
+function describeRuntimeError(error: unknown, operation: 'connect' | 'refresh' | 'chat'): string {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return 'Local runtime timed out. Check that Ollama is running on the configured localhost URL.';
+  }
+
+  const message = error instanceof Error ? error.message : '';
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return operation === 'chat'
+      ? 'Could not reach the local runtime for chat. Confirm Ollama is running and the model is loaded.'
+      : 'Could not reach the local runtime. Confirm Ollama is running and listening on the configured URL.';
+  }
+
+  if (/HTTP 404/.test(message)) {
+    return 'Runtime responded, but the Ollama-compatible API endpoint was not found.';
+  }
+
+  if (/HTTP 500|HTTP 503/.test(message)) {
+    return 'Runtime responded with an internal error. The selected model may not be loaded yet.';
+  }
+
+  if (/HTTP 403|HTTP 401/.test(message)) {
+    return 'Runtime rejected the request. Check local API permissions or proxy settings.';
+  }
+
+  return message || 'Could not complete the local runtime request.';
 }

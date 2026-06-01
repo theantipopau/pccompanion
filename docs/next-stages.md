@@ -333,7 +333,10 @@ Status:
 - Runtime connectivity and installed-model discovery are active via local `GET /api/tags`.
 - Chat calls use local `POST /api/chat` with optional safe context-pack injection.
 - Localhost-only lock mode and non-invasive advisory defaults are active.
-- Remaining work: persist CoPilot settings, add confidence-typed insight cards, and harden local runtime error taxonomy.
+- CoPilot runtime preferences now persist locally per brand mode.
+- Deterministic insights now emit typed cards with confidence labels, source signals, tone, and a safe suggested action.
+- Local runtime requests now have a short timeout and clearer connection / endpoint / missing-model error messages.
+- Remaining work: add Dashboard/Utilities insight-card surfaces, broaden source aggregation beyond the live sample, and validate clean-machine local-runtime setup.
 
 Likely files:
 
@@ -378,8 +381,13 @@ Current implementation progress:
 - Git deployment (May 28, 2026): shipped to `main` as commit `d649dd3`.
 - Repo hygiene (May 28, 2026): `.gitignore` now excludes generated variant build outputs (`src-tauri/target-*`), local demo artifact output (`artifacts/demo/`), and local installer binaries (`radium_pcs_companion.exe`) to prevent false "thousands of changes" noise in SCM.
 - Visual polish pass (May 29, 2026): shared page chrome was refined with richer page-header cards, deeper panel depth, and a more premium settings tab strip without changing behavior.
+- Showcase readiness pass (May 30, 2026): a fresh Radium NSIS installer was built at `src-tauri/target-radium-final/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe` with timestamp `2026-05-30 07:01:06`; lifecycle smoke passed across repeated background launch/exit cycles and release artifact metadata matched the expected Radium product identity.
 - Network update checks, RGB, background game automation, and new hardware writes: deferred.
-- Local AI insights engine and optional local LLM copilot tab: in progress (local preview implemented; deeper insight model and persistence pending).
+- Local AI insights engine and optional local LLM copilot tab: in progress (local preview, persisted runtime settings, typed insight cards, and runtime error taxonomy implemented; deeper source aggregation pending).
+- Local CoPilot enhancement pass (June 1, 2026): runtime URL/model/context preferences now persist locally, deterministic insights render as confidence-typed cards with source signals and safe suggested actions, and local runtime failures are classified more clearly while remaining localhost-first.
+- GUI responsiveness pass (June 1, 2026): CoPilot insight headers/signals now wrap safely, mobile CoPilot controls stretch into tap-friendly rows, chat/prompt textareas are shorter on narrow screens, and touch/narrow surfaces suppress hover transforms that could make the UI feel jumpy.
+- Radium walkthrough installer rebuild (June 1, 2026): after clarifying that the requested demo/walkthrough package should keep Radium branding, `npm.cmd run build:exe` passed and the latest audited artifacts are `artifacts/radium/radium-pcs-companion-20260601-203136.exe` plus `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`. Both artifacts report `ProductName` and `FileDescription` as `Radium PCs Companion`.
+- Product-readiness pass (June 1, 2026): Dashboard now has a current-state strip for active profile, telemetry/provider freshness, tray/startup state, and local safety posture. `scripts/pre_release_artifact_audit.ps1` now fails on wrong Radium metadata, catches accidental neutral `PC Companion` artifacts, writes a SHA-256 manifest, and supports `-RequireSignature` for signed releases. Security posture is documented in `docs/security-readiness.md`.
 - Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.
 - Radium Care checklist: implemented in System Passport as support-friendly ownership readiness, not a firmware/OEM control layer.
 - Restore Centre: implemented for Registry Cleaner backups. It reads existing backup manifests and restores through the same guarded backend command used by Registry Cleaner.
@@ -435,3 +443,10 @@ CI workflow now consumes these gate scripts directly to reduce drift between loc
 ### No-regression rule
 
 For both variants, each implementation slice must keep `quality:gate` and `quality:gate:demo` green before merge.
+
+### May 30 showcase status
+
+- Radium walkthrough installer: ready.
+- Verified artifact path: `src-tauri/target-radium-final/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`.
+- Verified lifecycle smoke: pass.
+- Verified bundle metadata: `ProductName` and `FileDescription` both report `Radium PCs Companion`.

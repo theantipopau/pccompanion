@@ -18,6 +18,18 @@ export type CopilotRecommendation = {
   notes: string[];
 };
 
+export type CopilotInsightConfidence = 'high' | 'medium' | 'needs_more_data';
+
+export type CopilotInsightCard = {
+  id: string;
+  title: string;
+  summary: string;
+  confidence: CopilotInsightConfidence;
+  signals: string[];
+  suggestedAction: string;
+  tone: 'green' | 'amber' | 'red' | 'cyan';
+};
+
 export function buildCopilotRecommendation(systemInfo: SystemInfo | null, sample: HardwareSample | null): CopilotRecommendation {
   const ramGb = sample?.memory.totalGb ?? parseRamGb(systemInfo?.ram);
   const vramGb = sample?.gpu.vramTotalGb ?? 0;
@@ -107,37 +119,120 @@ export function buildCopilotRecommendation(systemInfo: SystemInfo | null, sample
   };
 }
 
-export function buildNonInvasiveInsights(sample: HardwareSample | null): string[] {
+export function buildNonInvasiveInsights(sample: HardwareSample | null): CopilotInsightCard[] {
   if (!sample) {
-    return ['Telemetry not ready yet. Keep this page open for 5-10 seconds to build local insights.'];
+    return [{
+      id: 'telemetry-warming',
+      title: 'Telemetry warming up',
+      summary: 'Local telemetry is not ready yet, so recommendations stay conservative.',
+      confidence: 'needs_more_data',
+      signals: ['No hardware sample received yet'],
+      suggestedAction: 'Keep this page open for 5-10 seconds before acting on advice.',
+      tone: 'cyan',
+    }];
   }
 
-  const insights: string[] = [];
+  const insights: CopilotInsightCard[] = [];
 
   if (sample.cpu.temperature !== null && sample.cpu.temperature >= 85) {
-    insights.push('CPU package temperature is elevated; review profile mode and cooling path before heavy workloads.');
+    insights.push({
+      id: 'cpu-temp-high',
+      title: 'CPU thermals need attention',
+      summary: 'CPU package temperature is elevated for sustained work.',
+      confidence: 'high',
+      signals: [`CPU package ${Math.round(sample.cpu.temperature)} C`, `CPU load ${Math.round(sample.cpu.usage)}%`],
+      suggestedAction: 'Review profile mode and cooling path before heavy workloads.',
+      tone: sample.cpu.temperature >= 92 ? 'red' : 'amber',
+    });
+  } else if (sample.cpu.temperature === null) {
+    insights.push({
+      id: 'cpu-temp-missing',
+      title: 'CPU package sensor missing',
+      summary: 'CPU load is available, but package temperature is not currently measured.',
+      confidence: 'medium',
+      signals: [`CPU load ${Math.round(sample.cpu.usage)}%`, 'CPU package temperature unavailable'],
+      suggestedAction: 'Open Telemetry Diagnostics to inspect provider and sidecar state.',
+      tone: 'amber',
+    });
   }
+
   if (sample.gpu.temperature !== null && sample.gpu.temperature >= 82) {
-    insights.push('GPU temperature is high under current load; consider cleaning airflow paths or reducing sustained boost behavior.');
+    insights.push({
+      id: 'gpu-temp-high',
+      title: 'GPU thermals are running hot',
+      summary: 'GPU temperature is high under the current load.',
+      confidence: 'high',
+      signals: [`GPU ${Math.round(sample.gpu.temperature)} C`, `Provider ${sample.gpu.provider}`, `GPU load ${Math.round(sample.gpu.usage)}%`],
+      suggestedAction: 'Check airflow, dust filters, and sustained boost settings.',
+      tone: sample.gpu.temperature >= 88 ? 'red' : 'amber',
+    });
   }
+
   if (sample.memory.usage >= 86) {
-    insights.push('RAM pressure is high; closing background apps or running RAM Cleaner may improve responsiveness.');
+    insights.push({
+      id: 'ram-pressure',
+      title: 'RAM pressure is high',
+      summary: 'Memory usage is high enough to affect responsiveness.',
+      confidence: 'high',
+      signals: [`RAM ${Math.round(sample.memory.usage)}%`, `${sample.memory.usedGb.toFixed(1)} / ${sample.memory.totalGb.toFixed(1)} GB used`],
+      suggestedAction: 'Close background apps or run RAM Cleaner if the system feels sluggish.',
+      tone: sample.memory.usage >= 94 ? 'red' : 'amber',
+    });
   }
+
+  const fullestDrive = sample.storage.reduce((current, drive) => (drive.usedPercent > current.usedPercent ? drive : current), { label: '', usedPercent: 0 });
+  if (fullestDrive.usedPercent >= 88) {
+    insights.push({
+      id: 'storage-headroom',
+      title: 'Storage headroom is low',
+      summary: 'At least one drive is close to the point where updates and game installs can struggle.',
+      confidence: 'high',
+      signals: [`${fullestDrive.label || 'Highest drive'} ${Math.round(fullestDrive.usedPercent)}% used`],
+      suggestedAction: 'Open System Cleaner and review safe cleanup targets first.',
+      tone: fullestDrive.usedPercent >= 94 ? 'red' : 'amber',
+    });
+  }
+
   if (sample.cpu.usage >= 90 && sample.gpu.usage < 60) {
-    insights.push('Workload appears CPU-bound; a coding/general LLM should prioritize CPU efficiency and lower context sizes.');
+    insights.push({
+      id: 'cpu-bound-workload',
+      title: 'Current workload looks CPU-bound',
+      summary: 'CPU usage is much higher than GPU usage, so local model responsiveness may depend on CPU headroom.',
+      confidence: 'medium',
+      signals: [`CPU load ${Math.round(sample.cpu.usage)}%`, `GPU load ${Math.round(sample.gpu.usage)}%`],
+      suggestedAction: 'Prefer smaller models or lower context sizes while this workload is active.',
+      tone: 'cyan',
+    });
   }
+
   if (sample.state !== 'valid') {
-    insights.push(`Telemetry confidence is currently ${sample.state}; recommendations should be treated as provisional until sensors stabilize.`);
+    insights.push({
+      id: 'telemetry-degraded',
+      title: 'Telemetry confidence is limited',
+      summary: `Current telemetry state is ${sample.state}. Recommendations may be provisional until sensors stabilize.`,
+      confidence: 'needs_more_data',
+      signals: [`Telemetry state ${sample.state}`, `GPU provider ${sample.gpu.provider}`],
+      suggestedAction: 'Use Diagnostics to confirm which sensors are live before tuning.',
+      tone: 'amber',
+    });
   }
 
   if (insights.length === 0) {
-    insights.push('System telemetry looks stable. Local AI can run in non-invasive mode with no background automation enabled.');
+    insights.push({
+      id: 'stable-baseline',
+      title: 'System telemetry looks stable',
+      summary: 'No urgent thermal, memory, storage, or telemetry issues are visible in the current sample.',
+      confidence: 'high',
+      signals: [`Telemetry state ${sample.state}`, `RAM ${Math.round(sample.memory.usage)}%`, `GPU provider ${sample.gpu.provider}`],
+      suggestedAction: 'Local AI can stay in advisory mode with no background automation enabled.',
+      tone: 'green',
+    });
   }
 
   return insights.slice(0, 4);
 }
 
-export function buildCopilotContextPack(systemInfo: SystemInfo | null, sample: HardwareSample | null, insights: string[]): string {
+export function buildCopilotContextPack(systemInfo: SystemInfo | null, sample: HardwareSample | null, insights: CopilotInsightCard[]): string {
   const lines: string[] = [];
 
   lines.push(`${brand.shortName} local context (offline):`);
@@ -161,11 +256,20 @@ export function buildCopilotContextPack(systemInfo: SystemInfo | null, sample: H
 
   if (insights.length > 0) {
     lines.push('- Current local insights:');
-    insights.forEach((entry) => lines.push(`  - ${entry}`));
+    insights.forEach((entry) => {
+      lines.push(`  - ${entry.title} (${confidenceLabel(entry.confidence)}): ${entry.summary}`);
+      lines.push(`    Suggested action: ${entry.suggestedAction}`);
+    });
   }
 
   lines.push('- Output style: concise, practical, and non-invasive.');
   return lines.join('\n');
+}
+
+export function confidenceLabel(confidence: CopilotInsightConfidence): string {
+  if (confidence === 'high') return 'High confidence';
+  if (confidence === 'medium') return 'Medium confidence';
+  return 'Needs more data';
 }
 
 function parseRamGb(value: string | undefined): number {

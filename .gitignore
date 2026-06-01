@@ -7,6 +7,7 @@ src-tauri/target-*
 src-tauri/binaries
 target
 artifacts/demo/
+artifacts/radium/
 radium_pcs_companion.exe
 tools/**/bin
 tools/**/obj

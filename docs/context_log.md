@@ -6,6 +6,62 @@
 
 ---
 
+### Phase: Local CoPilot Insight Hardening (2026-06-01)
+
+#### Implementation
+- Reviewed the full `/docs` set and aligned this pass with the documented Stage G local AI direction.
+- Upgraded `src/lib/copilot.ts` from plain insight strings to typed `CopilotInsightCard` records with confidence (`High confidence`, `Medium confidence`, `Needs more data`), source signals, tone, and a safe suggested action.
+- Updated the CoPilot context pack so local chat receives structured insight summaries instead of unclassified prose.
+- Updated `src/pages/AiCopilotPage.tsx` to render confidence insight cards, persist runtime URL/model/context/localhost-lock preferences per brand mode, and use a bounded runtime discovery timeout.
+- Fixed model discovery selection so newly fetched local model lists are checked directly rather than through stale React state.
+- Added clearer local runtime error taxonomy for timeout, unreachable runtime, missing Ollama-compatible endpoints, server errors, and permission/proxy rejection.
+- Added matching CoPilot insight-card CSS in `src/styles.css`.
+- Added a follow-up GUI responsiveness pass:
+  - CoPilot insight titles and signal chips now wrap safely instead of forcing horizontal overflow.
+  - CoPilot panels use tighter padding on tablet layouts.
+  - Mobile CoPilot command/runtime/toggle controls stretch into tap-friendly full-width rows.
+  - Prompt/chat textareas use shorter minimum heights on narrow screens.
+  - Touch and narrow viewports suppress hover transforms/large hover shadows that can make panels feel jumpy.
+- Added a Dashboard current-state strip for active profile, telemetry/provider freshness, tray/startup behavior, and local safety posture.
+- Replaced the print-only artifact audit with a strict Radium artifact identity audit:
+  - fails if ProductName/FileDescription are not `Radium PCs Companion`,
+  - catches accidental neutral `PC Companion` artifacts,
+  - writes a SHA-256 manifest under `artifacts/radium/`,
+  - supports `-RequireSignature` for signed release gates.
+- Added `npm.cmd run verify:radium-artifact`.
+- Added `docs/security-readiness.md` for marketed/paid distribution guardrails.
+- Updated `docs/current-state.md`, `docs/roadmap.md`, and `docs/next-stages.md` with this pass.
+
+#### Validation
+- `npm.cmd run build` passed.
+- `npm.cmd run check:rust` passed.
+- `npm.cmd run test:url-policy` passed; 2 targeted URL validator tests passed.
+- `npm.cmd run verify:demo-brand-leak` passed in non-strict source-scan mode.
+- `npm.cmd run verify:demo-dev-config-restore` passed.
+- `npm.cmd run verify:radium-artifact` passed against the final release output and wrote `artifacts/radium/radium-artifact-manifest-20260601-203157.json`.
+- `scripts/pre_release_artifact_audit.ps1` passed against the final copied Radium walkthrough artifacts and wrote `artifacts/radium/radium-artifact-manifest-20260601-203158.json`.
+- `npm.cmd run build:exe:demo` passed, but this produced the neutral/open `PC Companion` variant and was not the requested Radium-branded walkthrough package.
+- Neutral demo build copied:
+  - `artifacts/demo/pc-companion-demo-20260601-200358.exe`
+  - `artifacts/demo/pc-companion-demo-setup-20260601-200358.exe`
+- Artifact metadata check: both rebuilt demo artifacts report `ProductName` and `FileDescription` as `PC Companion`.
+- Post-demo-build checks passed again:
+  - `npm.cmd run verify:demo-dev-config-restore`
+  - `npm.cmd run verify:demo-brand-leak`
+- `npm.cmd run build:exe` was then run for the Radium-branded package.
+- Radium walkthrough build copied:
+  - `artifacts/radium/radium-pcs-companion-20260601-203136.exe`
+  - `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`
+- Artifact metadata check: both rebuilt Radium artifacts report `ProductName` and `FileDescription` as `Radium PCs Companion`.
+- `.gitignore` now excludes `artifacts/radium/` so regenerated Radium walkthrough installers remain local build outputs like the neutral demo artifacts.
+- `npm run build` was attempted first but PowerShell blocked the `npm.ps1` shim under the local execution policy; `npm.cmd` is the validated Windows invocation.
+
+#### Remaining work
+- Validate the CoPilot runtime workflow on a clean machine with Ollama not installed, installed with no models, and installed with at least one model.
+- Add Dashboard/Utilities insight-card surfaces once the live-sample analyzer is broadened with diagnostics, benchmark, and action-history signals.
+
+---
+
 ### Phase: Sidecar Packaging, Dashboard Layout, and Settings Consolidation (2026-05-25)
 
 #### Implementation

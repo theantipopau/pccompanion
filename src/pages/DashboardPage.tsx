@@ -113,6 +113,29 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     driverUrl: driverUpdateInfo?.downloadUrl,
     telemetryReady: nominal,
   }), [sample, driverUpdateInfo, performanceScore.value, storageMaxUsed, nominal]);
+  const statusItems = useMemo(() => buildDashboardStatusItems({
+    activeProfile: settings.experience.performanceProfile,
+    gpuProvider,
+    telemetryState: sample?.state ?? (loading ? 'initializing' : 'unavailable'),
+    sampleAgeLabel,
+    trayMetric: settings.tray.liveIconMetric,
+    startWithWindows: settings.tray.startWithWindows,
+    startMinimized: settings.tray.startMinimized,
+    overlayEnabled: settings.overlay.enabled,
+    localOnly: true,
+    native,
+  }), [
+    gpuProvider,
+    loading,
+    native,
+    sample?.state,
+    sampleAgeLabel,
+    settings.experience.performanceProfile,
+    settings.overlay.enabled,
+    settings.tray.liveIconMetric,
+    settings.tray.startMinimized,
+    settings.tray.startWithWindows,
+  ]);
 
   return (
     <div className="page">
@@ -142,6 +165,22 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           Hardware monitoring error: {error}
         </div>
       )}
+
+      <section className="dashboard-status-strip" aria-label="Current app state">
+        {statusItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article key={item.id} className={`dashboard-status-card tone-${item.tone}`}>
+              <Icon size={16} />
+              <span>
+                <small>{item.label}</small>
+                <strong>{item.value}</strong>
+                <em>{item.detail}</em>
+              </span>
+            </article>
+          );
+        })}
+      </section>
 
       <div className={`dashboard-grid dashboard-theme-${hardwareTheme}`}>
         <Panel className="hero-monitor">
@@ -481,6 +520,80 @@ type CareAction = {
   url?: string;
   tone: 'green' | 'amber' | 'cyan';
 };
+
+type DashboardStatusItem = {
+  id: string;
+  label: string;
+  value: string;
+  detail: string;
+  icon: LucideIcon;
+  tone: 'green' | 'amber' | 'cyan';
+};
+
+function buildDashboardStatusItems({
+  activeProfile,
+  gpuProvider,
+  telemetryState,
+  sampleAgeLabel,
+  trayMetric,
+  startWithWindows,
+  startMinimized,
+  overlayEnabled,
+  localOnly,
+  native,
+}: {
+  activeProfile: string;
+  gpuProvider: string;
+  telemetryState: string;
+  sampleAgeLabel: string;
+  trayMetric: string;
+  startWithWindows: boolean;
+  startMinimized: boolean;
+  overlayEnabled: boolean;
+  localOnly: boolean;
+  native: boolean;
+}): DashboardStatusItem[] {
+  const profileLabel = activeProfile.charAt(0).toUpperCase() + activeProfile.slice(1);
+  const trayLabel = trayMetric === 'disabled'
+    ? 'Static icon'
+    : `${trayMetric.replace(/([A-Z])/g, ' $1').replace(/^./, (value) => value.toUpperCase())}`;
+  const telemetryOk = telemetryState === 'valid';
+
+  return [
+    {
+      id: 'profile',
+      label: 'Active profile',
+      value: profileLabel,
+      detail: 'OS-level safe controls only',
+      icon: Zap,
+      tone: activeProfile === 'quiet' ? 'cyan' : activeProfile === 'gaming' || activeProfile === 'creator' ? 'amber' : 'green',
+    },
+    {
+      id: 'telemetry',
+      label: 'Telemetry',
+      value: telemetryOk ? 'Live' : telemetryState,
+      detail: `${gpuProvider} provider - ${sampleAgeLabel}`,
+      icon: Gauge,
+      tone: telemetryOk ? 'green' : 'amber',
+    },
+    {
+      id: 'tray',
+      label: 'Tray and startup',
+      value: startWithWindows ? 'Startup enabled' : 'Manual start',
+      detail: `${trayLabel}${startMinimized ? ' - starts minimized' : ''}`,
+      icon: MonitorUp,
+      tone: startWithWindows ? 'green' : 'cyan',
+    },
+    {
+      id: 'security',
+      label: 'Safety posture',
+      value: localOnly && native ? 'Local guarded' : localOnly ? 'Preview guarded' : 'Review',
+      detail: overlayEnabled ? 'OSD enabled - writes still confirmed' : 'No cloud upload or hidden writes',
+      icon: ShieldCheck,
+      tone: 'green',
+    },
+  ];
+}
 
 function buildCareActions({
   cpuTempMissing,

@@ -174,3 +174,35 @@ For demo web leak checks:
 
 - This log complements `docs/next-stages.md` by focusing specifically on dual-variant architecture, white-label reliability, and CI safeguards.
 - Continue keeping one repository with explicit brand packs and automation guardrails rather than forking.
+
+---
+
+## 6) Latest Neutral Demo Artifact Refresh
+
+Date: 2026-06-01
+
+- Rebuilt the neutral/open demo Windows executable and NSIS installer with `npm.cmd run build:exe:demo`.
+- Note: this is the unbranded `PC Companion` variant, not the Radium-branded walkthrough package.
+- Confirmed Tauri config restoration with `npm.cmd run verify:demo-dev-config-restore`.
+- Confirmed non-strict source brand leak scan with `npm.cmd run verify:demo-brand-leak`.
+- Latest timestamped artifacts:
+  - `artifacts/demo/pc-companion-demo-20260601-200358.exe`
+  - `artifacts/demo/pc-companion-demo-setup-20260601-200358.exe`
+- Metadata check: both artifacts report `ProductName` and `FileDescription` as `PC Companion`.
+
+---
+
+## 7) Latest Radium-Branded Walkthrough Artifact Refresh
+
+Date: 2026-06-01
+
+- Rebuilt the Radium-branded executable and NSIS installer with `npm.cmd run build:exe`.
+- Copied the requested Radium walkthrough artifacts into `artifacts/radium/`.
+- Added strict Radium artifact identity auditing through `npm.cmd run verify:radium-artifact`.
+- Latest audit manifests:
+  - `artifacts/radium/radium-artifact-manifest-20260601-203157.json`
+  - `artifacts/radium/radium-artifact-manifest-20260601-203158.json`
+- Latest timestamped artifacts:
+  - `artifacts/radium/radium-pcs-companion-20260601-203136.exe`
+  - `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`
+- Metadata check: both artifacts report `ProductName` and `FileDescription` as `Radium PCs Companion`.
