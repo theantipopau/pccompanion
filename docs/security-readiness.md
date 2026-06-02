@@ -38,11 +38,28 @@ The artifact audit must fail if:
 - required files are missing,
 - `-RequireSignature` is used and Authenticode status is not `Valid`.
 
+## Signing Workflow
+
+Signing is intentionally secret-free in this repository. Do not commit certificates, passwords, hardware-token PINs, or signing service credentials.
+
+Install Windows SDK / Visual Studio Build Tools so `signtool.exe` is available, then provide one of:
+
+- `RADIUM_SIGN_PFX` and `RADIUM_SIGN_PFX_PASSWORD` for a local PFX, or
+- `RADIUM_SIGN_CERT_THUMBPRINT` for a certificate already installed in the Windows certificate store.
+
+Run:
+
+```powershell
+npm.cmd run sign:radium
+```
+
+The signing script signs the release EXE and NSIS installer, then runs `scripts/pre_release_artifact_audit.ps1 -RequireSignature`.
+
 ## Before Paid Distribution
 
 - Obtain and apply an Authenticode code-signing certificate.
 - Run `scripts/pre_release_artifact_audit.ps1 -RequireSignature` on the signed EXE and installer.
-- Complete installer/uninstaller walkthrough on a clean tester machine.
+- Complete `docs/clean-machine-test.md` on a clean tester machine.
 - Validate Windows Defender / SmartScreen behavior on the signed package.
 - Re-run lifecycle smoke and capture logs after signing.
 - Keep third-party binary provenance evidence for PawnIO/LibreHardwareMonitor sidecar components.
@@ -50,6 +67,8 @@ The artifact audit must fail if:
 ## Residual Risks
 
 - Current pre-release artifacts are unsigned unless a signing step is added outside this repo.
+- This workspace has Windows SDK `signtool.exe` discoverable, but no signing identity is configured. `npm.cmd run sign:radium` fails closed until `RADIUM_SIGN_PFX` / `RADIUM_SIGN_PFX_PASSWORD` or `RADIUM_SIGN_CERT_THUMBPRINT` is provided.
+- Local lifecycle smoke currently needs an elevated tester pass: the stricter smoke gate correctly fails if a background process remains after stop, and this workspace had an access-denied leftover process from the release EXE.
 - Real hardware matrix remains incomplete for NVIDIA, AMD, Intel Arc, and hybrid GPU systems.
 - CPU package temperature and board/fan sensors may require privileged provider paths on some systems.
 - Local CoPilot setup needs clean-machine validation across no-runtime, runtime/no-model, and installed-model cases.

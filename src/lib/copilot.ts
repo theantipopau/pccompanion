@@ -1,4 +1,5 @@
 import type { HardwareSample, SystemInfo } from '../types/system';
+import type { CompanionActionRecord } from './actionHistory';
 import { brand } from './branding';
 
 export type CopilotModelSuggestion = {
@@ -119,9 +120,11 @@ export function buildCopilotRecommendation(systemInfo: SystemInfo | null, sample
   };
 }
 
-export function buildNonInvasiveInsights(sample: HardwareSample | null): CopilotInsightCard[] {
+export function buildNonInvasiveInsights(sample: HardwareSample | null, actions: CompanionActionRecord[] = []): CopilotInsightCard[] {
+  const actionInsight = buildRecentActionInsight(actions);
+
   if (!sample) {
-    return [{
+    const warmingInsight: CopilotInsightCard = {
       id: 'telemetry-warming',
       title: 'Telemetry warming up',
       summary: 'Local telemetry is not ready yet, so recommendations stay conservative.',
@@ -129,7 +132,8 @@ export function buildNonInvasiveInsights(sample: HardwareSample | null): Copilot
       signals: ['No hardware sample received yet'],
       suggestedAction: 'Keep this page open for 5-10 seconds before acting on advice.',
       tone: 'cyan',
-    }];
+    };
+    return [warmingInsight, ...(actionInsight ? [actionInsight] : [])].slice(0, 5);
   }
 
   const insights: CopilotInsightCard[] = [];
@@ -217,6 +221,10 @@ export function buildNonInvasiveInsights(sample: HardwareSample | null): Copilot
     });
   }
 
+  if (actionInsight) {
+    insights.push(actionInsight);
+  }
+
   if (insights.length === 0) {
     insights.push({
       id: 'stable-baseline',
@@ -229,10 +237,15 @@ export function buildNonInvasiveInsights(sample: HardwareSample | null): Copilot
     });
   }
 
-  return insights.slice(0, 4);
+  return insights.slice(0, 5);
 }
 
-export function buildCopilotContextPack(systemInfo: SystemInfo | null, sample: HardwareSample | null, insights: CopilotInsightCard[]): string {
+export function buildCopilotContextPack(
+  systemInfo: SystemInfo | null,
+  sample: HardwareSample | null,
+  insights: CopilotInsightCard[],
+  actions: CompanionActionRecord[] = [],
+): string {
   const lines: string[] = [];
 
   lines.push(`${brand.shortName} local context (offline):`);
@@ -262,6 +275,16 @@ export function buildCopilotContextPack(systemInfo: SystemInfo | null, sample: H
     });
   }
 
+  const recentActions = actions.slice(0, 6);
+  if (recentActions.length > 0) {
+    lines.push('- Recent local Companion actions:');
+    recentActions.forEach((action) => {
+      lines.push(`  - ${action.timestamp}: ${action.category} - ${action.label} (${action.detail})`);
+    });
+  } else {
+    lines.push('- Recent local Companion actions: none recorded.');
+  }
+
   lines.push('- Output style: concise, practical, and non-invasive.');
   return lines.join('\n');
 }
@@ -278,4 +301,77 @@ function parseRamGb(value: string | undefined): number {
   if (!match) return 16;
   const parsed = Number.parseFloat(match[1]);
   return Number.isFinite(parsed) ? parsed : 16;
+}
+
+function buildRecentActionInsight(actions: CompanionActionRecord[]): CopilotInsightCard | null {
+  const recent = actions.slice(0, 8);
+  if (recent.length === 0) return null;
+
+  const latest = recent[0];
+  const maintenanceCount = countCategory(recent, 'maintenance');
+  const profileCount = countCategory(recent, 'profile');
+  const diagnosticCount = countCategory(recent, 'diagnostics') + countCategory(recent, 'support');
+  const hasFailure = recent.some((action) => /fail|error|denied|blocked/i.test(`${action.label} ${action.detail}`));
+
+  if (hasFailure) {
+    return {
+      id: 'recent-action-needs-review',
+      title: 'Recent action needs review',
+      summary: 'The local action history includes a failed or blocked operation that may matter for troubleshooting.',
+      confidence: 'medium',
+      signals: [`Latest: ${latest.label}`, `${recent.length} recent action${recent.length === 1 ? '' : 's'}`],
+      suggestedAction: 'Review About > Local history and export diagnostics before retrying the same workflow.',
+      tone: 'amber',
+    };
+  }
+
+  if (maintenanceCount > 0) {
+    return {
+      id: 'recent-maintenance-context',
+      title: 'Maintenance history is available',
+      summary: 'Recent cleanup or restore activity can be used as local support context if behavior changed afterwards.',
+      confidence: 'medium',
+      signals: [`${maintenanceCount} maintenance action${maintenanceCount === 1 ? '' : 's'}`, `Latest: ${latest.label}`],
+      suggestedAction: 'Keep the context pack attached when asking about cleanup side effects or support next steps.',
+      tone: 'cyan',
+    };
+  }
+
+  if (profileCount > 0) {
+    return {
+      id: 'recent-profile-context',
+      title: 'Profile changes are in context',
+      summary: 'Recent performance profile activity is available for comparing thermals, noise, and responsiveness.',
+      confidence: 'medium',
+      signals: [`${profileCount} profile action${profileCount === 1 ? '' : 's'}`, `Latest: ${latest.label}`],
+      suggestedAction: 'Run two Benchmark captures if you want proof that a profile change helped.',
+      tone: 'green',
+    };
+  }
+
+  if (diagnosticCount > 0) {
+    return {
+      id: 'recent-support-context',
+      title: 'Support context is ready',
+      summary: 'Recent diagnostics or support-bundle actions can help explain sensor and startup behavior.',
+      confidence: 'medium',
+      signals: [`${diagnosticCount} support action${diagnosticCount === 1 ? '' : 's'}`, `Latest: ${latest.label}`],
+      suggestedAction: 'Use the attached context pack for local chat or include the diagnostics bundle when contacting support.',
+      tone: 'cyan',
+    };
+  }
+
+  return {
+    id: 'recent-actions-context',
+    title: 'Recent actions are in context',
+    summary: 'The local CoPilot can include recent Companion activity when answering workflow questions.',
+    confidence: 'medium',
+    signals: [`${recent.length} recent action${recent.length === 1 ? '' : 's'}`, `Latest: ${latest.label}`],
+    suggestedAction: 'Ask follow-up questions with the safe local context pack enabled.',
+    tone: 'cyan',
+  };
+}
+
+function countCategory(actions: CompanionActionRecord[], category: CompanionActionRecord['category']): number {
+  return actions.filter((action) => action.category === category).length;
 }

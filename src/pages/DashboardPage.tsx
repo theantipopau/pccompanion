@@ -235,7 +235,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               </div>
               <div className="hero-premium-asset" aria-hidden="true">
                 <img src={brand.splashLogo} alt="" />
-                <span>Premium support workflow</span>
+                <span>Local-first premium support workflow</span>
+                <div className="hero-premium-proof">
+                  <small>Validated</small>
+                  <small>Private</small>
+                  <small>Support-ready</small>
+                </div>
               </div>
             </div>
           </div>

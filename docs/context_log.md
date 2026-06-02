@@ -6,6 +6,68 @@
 
 ---
 
+### Phase: Responsiveness, Telemetry, and Maintenance Safety Pass (2026-06-02)
+
+#### Implementation
+- Reduced UI motion cost in dense surfaces:
+  - shortened base/slow transition timings,
+  - removed panel lift-on-hover and heavy hover glow,
+  - removed transform-on-hover from cleanup/storage/registry rows,
+  - shortened RAM/progress bar width transitions,
+  - made the sidecar probe grid auto-fit so the added version cell wraps cleanly.
+- Checked LibreHardwareMonitor against the official GitHub release stream:
+  - latest release is `v0.9.6` from 2026-02-14,
+  - the project already references `LibreHardwareMonitorLib` `0.9.6`,
+  - the bundled `LibreHardwareMonitorLib.dll` reports `FileVersion 0.9.6.0` and `ProductVersion 0.9.6+3d331e3370efb858411f19511373eff65a218701`.
+- Added `scripts/build-sensor-sidecar.ps1` guardrails so sidecar builds fail if the project reference or staged DLL drifts from the reviewed `0.9.6` LibreHardwareMonitor version.
+- Added the loaded LibreHardwareMonitor library version to the sidecar JSON output, Rust sidecar provider model, diagnostics provider notes, and Telemetry Diagnostics sidecar probe UI.
+- Tightened System Cleaner behavior:
+  - fixed scan progress total-step mismatch (`11` steps end-to-end),
+  - native cleanup now reuses the completed backend scan snapshot instead of rescanning all storage targets when the user clicks Clean,
+  - Firefox cleanup now deletes only `cache2` contents under each profile instead of deleting from the parent Profiles directory,
+  - the System Cleaner UI logs that cleanup is using the completed scan snapshot and explicitly states the Firefox cache safety boundary.
+- Improved RAM Optimizer clarity:
+  - backend result now reports scanned, trimmed, and skipped process counts,
+  - UI now shows trim coverage so a low reclaimed-GB result does not look like a failed action when Windows simply had little reclaimable memory.
+- Improved Registry Cleaner effectiveness without broadening risky deletes:
+  - missing-file parser now recognizes unquoted executable/library paths with spaces, e.g. `C:\Program Files\Vendor\App\helper.exe --background`,
+  - added tests for quoted paths, unquoted paths with spaces, and DLL entrypoint strings.
+
+#### Validation
+- `npm.cmd run build` passed.
+- `npm.cmd run check:rust` passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` passed: 11 tests.
+- `npm.cmd run build:sensor-sidecar` passed and staged the sidecar/runtime.
+- Direct sidecar smoke passed:
+  - `src-tauri\binaries\dotnet-runtime\dotnet.exe src-tauri\binaries\radium-sensor-sidecar-x86_64-pc-windows-msvc.dll --once`
+  - returned JSON with `libraryVersion` `0.9.6+3d331e3370efb858411f19511373eff65a218701`,
+  - returned `no_matching_sensors` on this host without fabricating CPU package temperature.
+
+#### Remaining work
+- Validate the updated maintenance tools on a disposable Windows tester profile before using live cleanup on customer machines.
+- Run installer/uninstaller lifecycle testing on a machine where the app process can be elevated/terminated cleanly.
+- Continue real-hardware telemetry validation on NVIDIA and AMD desktops.
+
+---
+
+### Phase: Local CoPilot Support Context Refinement (2026-06-02)
+
+#### Implementation
+- Extended `src/lib/copilot.ts` so typed local insight cards can include recent local Companion action history in addition to live telemetry.
+- Added action-history insight rules for failed/blocked operations, maintenance activity, performance profile changes, diagnostics/support bundle activity, and generic recent workflow context.
+- Updated the CoPilot context pack to include the latest local Companion actions when the user keeps the safe context pack attached.
+- Updated `src/pages/AiCopilotPage.tsx` to subscribe to the existing local action-history event stream and refresh insight cards/context without page reloads.
+- Kept the feature advisory-only: no new write action, upload path, automation, or cloud dependency was added.
+
+#### Validation
+- `npm.cmd run build` passed after the action-history CoPilot refinement.
+
+#### Remaining work
+- Add Dashboard/Utilities insight-card surfaces once diagnostics, benchmark, and action-history signals are consolidated behind a shared analyzer contract.
+- Continue clean-machine CoPilot runtime validation with Ollama missing, installed without models, and installed with a pulled model.
+
+---
+
 ### Phase: Local CoPilot Insight Hardening (2026-06-01)
 
 #### Implementation
@@ -30,6 +92,9 @@
   - supports `-RequireSignature` for signed release gates.
 - Added `npm.cmd run verify:radium-artifact`.
 - Added `docs/security-readiness.md` for marketed/paid distribution guardrails.
+- Added `scripts/sign-radium-artifacts.ps1` and `npm.cmd run sign:radium` for future Authenticode signing without storing secrets in the repo.
+- Added `docs/clean-machine-test.md` as the manual install/reboot/tray/uninstall checklist for tester machines.
+- Tightened `scripts/pre_release_lifecycle_smoke.ps1` so it now fails when the app remains running after a stop attempt instead of only printing `AFTER_EXIT` counts.
 - Updated `docs/current-state.md`, `docs/roadmap.md`, and `docs/next-stages.md` with this pass.
 
 #### Validation
@@ -40,6 +105,8 @@
 - `npm.cmd run verify:demo-dev-config-restore` passed.
 - `npm.cmd run verify:radium-artifact` passed against the final release output and wrote `artifacts/radium/radium-artifact-manifest-20260601-203157.json`.
 - `scripts/pre_release_artifact_audit.ps1` passed against the final copied Radium walkthrough artifacts and wrote `artifacts/radium/radium-artifact-manifest-20260601-203158.json`.
+- `npm.cmd run sign:radium` found Windows SDK `signtool.exe` but failed closed because no signing identity was configured.
+- The stricter lifecycle smoke detected `CYCLE_1_PROCESS_STILL_RUNNING_AFTER_STOP=1`. The remaining process could not be terminated from this shell (`Access is denied`), so lifecycle validation needs an elevated tester-machine pass.
 - `npm.cmd run build:exe:demo` passed, but this produced the neutral/open `PC Companion` variant and was not the requested Radium-branded walkthrough package.
 - Neutral demo build copied:
   - `artifacts/demo/pc-companion-demo-20260601-200358.exe`
@@ -1808,3 +1875,11 @@ src/
 - OSD overlay component implemented
 - System tray integration (menu, double-click)
 - Basic Rust backend with sysinfo CPU/RAM (temperatures and GPU were placeholder `0.0`)
+# Phase: Premium Visual Polish Pass (2026-06-02)
+
+- Audited the existing visual asset set and kept the pass asset-light: the current Radium logo, wordmark, app icons, vendor marks, and thermal hero imagery already cover the premium companion needs without another large bitmap.
+- Added a sidebar "Radium validated" badge using the existing brand iconography and shell styling so the app chrome communicates local-first telemetry and support-ready reporting.
+- Refined the dashboard premium support tile with local-first/private/support-ready proof chips, reusing the current Radium wordmark instead of adding bundle weight.
+- Upgraded the command-search empty state with the Radium mark and quick hint chips so even no-result moments feel branded and intentional.
+- Added subtle layered panel treatments to the sidebar promo, hero support tile, and tray telemetry preview to make the interface feel more like a polished PC companion surface.
+- Validation note: frontend build was not rerun for this visual pass because the environment rejected the escalated build command due to the current usage-limit gate.

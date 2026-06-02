@@ -288,6 +288,15 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
         <div className="sidebar-brand-promo" aria-label={brand.shellPromoAlt}>
           <img src={brand.splashLogo} alt={brand.productName} />
           <p>{brand.sidebarPromoBody}</p>
+          <div className="sidebar-premium-badge">
+            <span className="premium-badge-mark">
+              <ShieldCheck size={14} />
+            </span>
+            <span>
+              <strong>Radium validated</strong>
+              <small>Local-first telemetry and support-ready reports</small>
+            </span>
+          </div>
         </div>
         <div className="sidebar-contact">
           <span className="sidebar-metrics-label">{brand.companyLabel} Contact</span>
@@ -382,8 +391,19 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                   );
                 }) : (
                   <div className="search-empty" role="status" aria-live="polite">
-                    <strong>No matches found</strong>
-                    <span>Try terms like diagnostics, passport, memory, or settings.</span>
+                    <div className="search-empty-heading">
+                      <img src={brand.splashIcon} alt="" aria-hidden="true" />
+                      <span>
+                        <strong>No matches found</strong>
+                        <span>Try a module, maintenance task, or support workflow.</span>
+                      </span>
+                    </div>
+                    <div className="search-empty-hints" aria-hidden="true">
+                      <span>diagnostics</span>
+                      <span>passport</span>
+                      <span>memory</span>
+                      <span>settings</span>
+                    </div>
                   </div>
                 )}
               </div>

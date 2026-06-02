@@ -49,20 +49,24 @@ Useful project documents:
 | [Sensor provider plan](docs/radium-sensor-provider.md) | PawnIO, LibreHardwareMonitor, and sidecar strategy |
 | [Compatibility matrix](docs/compatibility-matrix.md) | Hardware validation tracking |
 | [Telemetry engine](docs/telemetry-engine.md) | Provider model and diagnostics detail |
+| [Security readiness](docs/security-readiness.md) | Release signing, safety posture, and pre-distribution checklist |
+| [Clean machine test](docs/clean-machine-test.md) | Tester walkthrough criteria for a fresh install |
+| [Dual variant log](docs/dual-variant-enhancement-log.md) | Radium and demo variant build split history |
 
 ## What It Does
 
 | Experience | Details |
 |---|---|
-| Live dashboard | CPU, GPU, RAM, network, storage, provider state, system identity, and support readiness. |
+| Live dashboard | CPU, GPU, RAM, network, storage, provider state, system identity, support readiness, active profile, and telemetry freshness strip. |
 | Thermal view | Premium case visualisation with component overlays, vendor branding, airflow cues, and truthful unavailable states. |
-| Telemetry diagnostics | Provider orchestration, sensor provenance, namespace inventory, capability coverage, and support export. |
-| System Passport | Machine identity, motherboard, BIOS, GPU, storage, RAM, and support-focused metadata. |
+| Telemetry diagnostics | Provider orchestration, sensor provenance, namespace inventory, capability coverage, sidecar lifecycle with LHM version, and support export. |
+| System Passport | Machine identity, motherboard, BIOS, GPU, storage, RAM, support metadata, and Radium Care owner-readiness checklist. |
 | Tray control | Live tray metric icon, tooltip, OSD toggle, quick RAM clean, performance/quiet modes, diagnostics export, and exit. |
-| Maintenance tools | Bloatware review, registry checks, startup manager, storage cleaner, memory cleaner, and staged utilities. |
-| Performance profiles | Quiet, Balanced, Creator, and Gaming flows with planned-change preview and safety-gated native writes. |
+| Maintenance tools | Bloatware review, registry checks (including unquoted path detection), startup manager, storage cleaner, RAM optimizer with trim coverage, and staged utilities. |
+| Performance profiles | Quiet, Balanced, Creator, and Gaming flows with planned-change preview, processor power tuning, timer resolution, and safety-gated native writes. |
 | Benchmark capture | Live sensor trust, benchmark result cards, and latest-vs-previous comparison deltas. |
-| Radium CoPilot (preview) | Offline-first local LLM recommendations, local runtime model discovery, and optional local chat. |
+| About and support | Owner support routing, local diagnostics bundle export, action history, and Restore Centre for Registry Cleaner backups. |
+| Radium CoPilot (preview) | Offline-first local LLM recommendations, local runtime model discovery, action-history context injection, and optional local chat. |
 
 ## Radium CoPilot (Local Preview)
 
@@ -77,6 +81,7 @@ Current behaviour:
 - Chat requests are sent to the same local runtime endpoint (`POST /api/chat`).
 - A localhost lock mode is enabled by default to prevent accidental remote runtime usage.
 - Optional safe context-pack injection provides curated local diagnostics context for better responses.
+- Recent local Companion action history is included in the context pack when available, giving CoPilot awareness of recent maintenance, profile changes, and support activity.
 
 Important scope notes:
 
@@ -163,6 +168,8 @@ Important current behaviour:
 - Runtime sidecar discovery checks `$INSTDIR\binaries`, matching Tauri/NSIS resource staging.
 - Diagnostics clearly distinguish `sidecar_not_found`, `no_matching_sensors`, `partial_no_cpu_temp`, and `live`.
 - CPU package temperature is only accepted when a real hardware monitor row matches policy.
+- The loaded LibreHardwareMonitor library version is reported in the sidecar JSON output, the Rust provider model, and the Telemetry Diagnostics sidecar probe UI. Current reviewed version: `0.9.6`.
+- Sidecar build guardrails fail the build if the project reference or staged DLL drifts from the reviewed LHM version.
 
 ## Diagnostics And Support
 
@@ -253,15 +260,21 @@ Recommended tester flow:
 
 ## Validation Snapshot
 
-Latest local validation in this workspace:
+Latest local validation in this workspace (2026-06-02):
 
 | Check | Result |
 |---|---|
 | `npm.cmd run build` | Passed |
+| `npm.cmd run check:rust` | Passed |
 | `cargo check --manifest-path src-tauri\Cargo.toml` | Passed |
-| `cargo test --manifest-path src-tauri\Cargo.toml --lib external_url_validator` | Passed |
-| `git diff --check` | Passed |
+| `cargo test --manifest-path src-tauri\Cargo.toml --lib` | Passed (11 tests) |
+| `npm.cmd run build:sensor-sidecar` | Passed; LHM `0.9.6` version verified |
 | `npm.cmd run build:exe` | Passed |
+| `npm.cmd run build:exe:demo` | Passed |
+| `npm.cmd run verify:radium-artifact` | Passed; manifest written to `artifacts/radium/` |
+| `npm.cmd run verify:demo-brand-leak` | Passed |
+| `npm.cmd run verify:demo-dev-config-restore` | Passed |
+| `npm.cmd run test:url-policy` | Passed |
 
 Note: in the sandboxed environment, NuGet access may be blocked while publishing the sensor sidecar. The build script falls back to the existing staged Release sidecar output and still produces the final NSIS installer.
 
@@ -338,9 +351,15 @@ See [docs/next-stages.md](docs/next-stages.md) for the working implementation pl
 | Script | Purpose |
 |---|---|
 | `npm run dev` | Browser preview with mock data |
-| `npm run desktop` | Tauri desktop app |
+| `npm run desktop` | Tauri desktop app (Radium-branded) |
+| `npm run desktop:demo` | Tauri desktop app (neutral demo variant) |
 | `npm run build` | Frontend production build |
-| `npm run build:exe` | Full Tauri build and NSIS installer |
+| `npm run build:exe` | Full Tauri build and NSIS installer (Radium-branded) |
+| `npm run build:exe:demo` | Full Tauri build and NSIS installer (neutral demo variant) |
+| `npm run build:sensor-sidecar` | Build and stage the .NET sensor sidecar |
+| `npm run check:rust` | `cargo check` for the Tauri Rust crate |
+| `npm run quality:gate` | Full pre-release quality gate |
+| `npm run verify:radium-artifact` | Artifact SHA-256 manifest and brand validation |
 | `npm run package:portable` | Portable package script |
 | `npm run check:desktop` | Environment prerequisite check |
 

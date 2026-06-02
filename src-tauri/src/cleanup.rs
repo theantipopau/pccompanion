@@ -2,8 +2,7 @@
 ///
 /// All Windows-specific operations use the `windows` crate.  Safe-only paths
 /// are used — no undocumented kernel APIs.
-
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 const HEAVY_SCAN_MAX_ENTRIES: usize = 40_000;
@@ -16,6 +15,9 @@ pub struct RamCleanupResult {
     pub before_gb: f32,
     pub after_gb: f32,
     pub freed_gb: f32,
+    pub processes_scanned: u32,
+    pub processes_trimmed: u32,
+    pub processes_skipped: u32,
     pub mode: &'static str,
     pub message: String,
 }
@@ -47,6 +49,9 @@ pub fn optimize_ram() -> RamCleanupResult {
         before_gb,
         after_gb,
         freed_gb,
+        processes_scanned: total,
+        processes_trimmed: trimmed,
+        processes_skipped: total.saturating_sub(trimmed),
         mode: "safe",
         message: if trimmed == 0 {
             format!(
@@ -78,8 +83,7 @@ fn trim_all_working_sets() -> (u32, u32) {
 
     // Also trim our own process first (no OpenProcess needed).
     unsafe {
-        let self_handle =
-            windows::Win32::System::Threading::GetCurrentProcess();
+        let self_handle = windows::Win32::System::Threading::GetCurrentProcess();
         let _ = K32EmptyWorkingSet(self_handle);
     }
 
@@ -114,7 +118,7 @@ fn trim_all_working_sets() -> (u32, u32) {
 
 // ─── Storage Scanner ─────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageCleanupItem {
     pub id: String,
@@ -192,7 +196,9 @@ where
                 category: "Temporary".to_string(),
                 selected: true,
                 safe: true,
-                description: "System-level temporary files. Safe to delete when no installers are running.".to_string(),
+                description:
+                    "System-level temporary files. Safe to delete when no installers are running."
+                        .to_string(),
             });
         }
     }
@@ -204,8 +210,16 @@ where
     }
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
         let shader_paths = [
-            ("nvidia-dxcache", "NVIDIA DX shader cache", r"NVIDIA\DXCache"),
-            ("nvidia-glcache", "NVIDIA GL shader cache", r"NVIDIA\GLCache"),
+            (
+                "nvidia-dxcache",
+                "NVIDIA DX shader cache",
+                r"NVIDIA\DXCache",
+            ),
+            (
+                "nvidia-glcache",
+                "NVIDIA GL shader cache",
+                r"NVIDIA\GLCache",
+            ),
             ("amd-dxcache", "AMD DX shader cache", r"AMD\DxCache"),
             ("d3dscache", "D3D shader cache", r"D3DSCache"),
         ];
@@ -213,8 +227,7 @@ where
         for (id, name, rel) in &shader_paths {
             let full = std::path::Path::new(&local).join(rel);
             if full.exists() {
-                let (size, _, _) =
-                    dir_size_estimate_cancel(&full, HEAVY_SCAN_MAX_ENTRIES, cancel);
+                let (size, _, _) = dir_size_estimate_cancel(&full, HEAVY_SCAN_MAX_ENTRIES, cancel);
                 items.push(StorageCleanupItem {
                     id: id.to_string(),
                     name: name.to_string(),
@@ -223,7 +236,8 @@ where
                     category: "Shaders".to_string(),
                     selected: true,
                     safe: true,
-                    description: "Driver shader cache — automatically rebuilt on next game launch.".to_string(),
+                    description: "Driver shader cache — automatically rebuilt on next game launch."
+                        .to_string(),
                 });
             }
 
@@ -254,7 +268,9 @@ where
                 category: "Logs".to_string(),
                 selected: false,
                 safe: true,
-                description: "Crash dump archives. Safe to remove if you do not need them for debugging.".to_string(),
+                description:
+                    "Crash dump archives. Safe to remove if you do not need them for debugging."
+                        .to_string(),
             });
         }
     }
@@ -349,14 +365,32 @@ where
     }
     if let Ok(appdata) = std::env::var("APPDATA") {
         let comm_paths = [
-            ("discord-cache", "Discord cache", std::path::Path::new(&appdata).join("discord").join("Cache")),
-            ("discord-code-cache", "Discord code cache", std::path::Path::new(&appdata).join("discord").join("Code Cache")),
-            ("teams-cache", "Microsoft Teams cache", std::path::Path::new(&appdata).join("Microsoft").join("Teams").join("Cache")),
+            (
+                "discord-cache",
+                "Discord cache",
+                std::path::Path::new(&appdata).join("discord").join("Cache"),
+            ),
+            (
+                "discord-code-cache",
+                "Discord code cache",
+                std::path::Path::new(&appdata)
+                    .join("discord")
+                    .join("Code Cache"),
+            ),
+            (
+                "teams-cache",
+                "Microsoft Teams cache",
+                std::path::Path::new(&appdata)
+                    .join("Microsoft")
+                    .join("Teams")
+                    .join("Cache"),
+            ),
         ];
 
         for (id, name, path) in comm_paths {
             if path.exists() {
-                let (size, _, was_cancelled) = dir_size_estimate_cancel(&path, HEAVY_SCAN_MAX_ENTRIES / 2, cancel);
+                let (size, _, was_cancelled) =
+                    dir_size_estimate_cancel(&path, HEAVY_SCAN_MAX_ENTRIES / 2, cancel);
                 if was_cancelled {
                     return items;
                 }
@@ -435,7 +469,8 @@ where
         });
     }
 
-    let delivery_cache = std::path::Path::new(r"C:\ProgramData\Microsoft\Windows\DeliveryOptimization\Cache");
+    let delivery_cache =
+        std::path::Path::new(r"C:\ProgramData\Microsoft\Windows\DeliveryOptimization\Cache");
     if delivery_cache.exists() {
         let (size, estimated, was_cancelled) =
             dir_size_estimate_cancel(delivery_cache, HEAVY_SCAN_MAX_ENTRIES, cancel);
@@ -518,47 +553,72 @@ where
 /// Execute a storage cleanup (or dry-run).
 pub fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Vec<String> {
     let items = scan_storage_cleanup();
-    let map: std::collections::HashMap<_, _> = items
-        .iter()
-        .map(|i| (i.id.as_str(), i))
-        .collect();
+    run_storage_cleanup_from_items(ids, dry_run, items)
+}
+
+/// Execute a storage cleanup against a completed scan snapshot.
+///
+/// The Tauri layer stores the scan snapshot produced by this backend and passes
+/// it back here to avoid re-walking large cache trees when the user clicks
+/// Clean. Unknown IDs still fail closed, and review-only targets remain blocked.
+pub fn run_storage_cleanup_from_items(
+    ids: Vec<String>,
+    dry_run: bool,
+    items: Vec<StorageCleanupItem>,
+) -> Vec<String> {
+    let map: std::collections::HashMap<_, _> = items.iter().map(|i| (i.id.as_str(), i)).collect();
 
     ids.into_iter()
-        .map(|id| {
-            match map.get(id.as_str()) {
-                None => format!("[error] {id}: item not found in scan results"),
-                Some(item) => {
-                    if !item.safe {
-                        return format!("[blocked] {}: cleanup target requires manual review", item.name);
+        .map(|id| match map.get(id.as_str()) {
+            None => format!("[error] {id}: item not found in scan results"),
+            Some(item) => {
+                if !item.safe {
+                    return format!(
+                        "[blocked] {}: cleanup target requires manual review",
+                        item.name
+                    );
+                }
+                if dry_run {
+                    format!(
+                        "[dry-run] {}: would reclaim {:.2} GB from {}",
+                        item.name, item.size_gb, item.location
+                    )
+                } else {
+                    if item.id == "recycle-bin" {
+                        return clear_recycle_bin();
                     }
-                    if dry_run {
-                        format!(
-                            "[dry-run] {}: would reclaim {:.2} GB from {}",
-                            item.name, item.size_gb, item.location
-                        )
-                    } else {
-                        if item.id == "recycle-bin" {
-                            return clear_recycle_bin();
-                        }
-                        if item.id == "thumbnail-cache" {
-                            return match delete_matching_files(std::path::Path::new(&item.location), "thumbcache_") {
-                                Ok(freed) => format!(
-                                    "[ok] {}: reclaimed {:.2} GB",
-                                    item.name,
-                                    bytes_to_gb_u64(freed)
-                                ),
-                                Err(e) => format!("[error] {}: {e}", item.name),
-                            };
-                        }
-
-                        match delete_dir_contents(std::path::Path::new(&item.location)) {
+                    if item.id == "thumbnail-cache" {
+                        return match delete_matching_files(
+                            std::path::Path::new(&item.location),
+                            "thumbcache_",
+                        ) {
                             Ok(freed) => format!(
                                 "[ok] {}: reclaimed {:.2} GB",
                                 item.name,
                                 bytes_to_gb_u64(freed)
                             ),
                             Err(e) => format!("[error] {}: {e}", item.name),
-                        }
+                        };
+                    }
+                    if item.id == "firefox-cache" {
+                        return match delete_firefox_cache_dirs(std::path::Path::new(&item.location))
+                        {
+                            Ok(freed) => format!(
+                                "[ok] {}: reclaimed {:.2} GB from profile cache2 folders",
+                                item.name,
+                                bytes_to_gb_u64(freed)
+                            ),
+                            Err(e) => format!("[error] {}: {e}", item.name),
+                        };
+                    }
+
+                    match delete_dir_contents(std::path::Path::new(&item.location)) {
+                        Ok(freed) => format!(
+                            "[ok] {}: reclaimed {:.2} GB",
+                            item.name,
+                            bytes_to_gb_u64(freed)
+                        ),
+                        Err(e) => format!("[error] {}: {e}", item.name),
                     }
                 }
             }
@@ -664,7 +724,11 @@ fn dir_size_limited_cancel(path: &std::path::Path, budget: &mut usize, cancel: &
     size
 }
 
-fn matching_files_size(path: &std::path::Path, prefix: &str, cancel: &AtomicBool) -> (u64, bool, bool) {
+fn matching_files_size(
+    path: &std::path::Path,
+    prefix: &str,
+    cancel: &AtomicBool,
+) -> (u64, bool, bool) {
     let mut size = 0u64;
     let mut visited = 0usize;
     let mut estimated = false;
@@ -686,7 +750,10 @@ fn matching_files_size(path: &std::path::Path, prefix: &str, cancel: &AtomicBool
             let Some(name) = p.file_name().and_then(|value| value.to_str()) else {
                 continue;
             };
-            if name.to_ascii_lowercase().starts_with(&prefix.to_ascii_lowercase()) {
+            if name
+                .to_ascii_lowercase()
+                .starts_with(&prefix.to_ascii_lowercase())
+            {
                 if let Ok(meta) = p.metadata() {
                     size += meta.len();
                 }
@@ -743,13 +810,28 @@ fn delete_matching_files(path: &std::path::Path, prefix: &str) -> std::io::Resul
         let Some(name) = p.file_name().and_then(|value| value.to_str()) else {
             continue;
         };
-        if !name.to_ascii_lowercase().starts_with(&prefix.to_ascii_lowercase()) {
+        if !name
+            .to_ascii_lowercase()
+            .starts_with(&prefix.to_ascii_lowercase())
+        {
             continue;
         }
         let size = p.metadata().map(|meta| meta.len()).unwrap_or(0);
         if std::fs::remove_file(&p).is_ok() {
             freed += size;
         }
+    }
+    Ok(freed)
+}
+
+fn delete_firefox_cache_dirs(profiles_root: &std::path::Path) -> std::io::Result<u64> {
+    let mut freed = 0u64;
+    for entry in std::fs::read_dir(profiles_root)?.flatten() {
+        let cache = entry.path().join("cache2");
+        if !cache.is_dir() {
+            continue;
+        }
+        freed += delete_dir_contents(&cache)?;
     }
     Ok(freed)
 }
@@ -820,7 +902,10 @@ fn clear_recycle_bin() -> String {
                 "[ok] Recycle Bin: nothing to empty".to_string()
             }
         } else if emptied_any {
-            format!("[ok] Recycle Bin: emptied with some skipped items ({})", failures.len())
+            format!(
+                "[ok] Recycle Bin: emptied with some skipped items ({})",
+                failures.len()
+            )
         } else {
             format!("[error] Recycle Bin: {}", failures.join("; "))
         };
@@ -834,7 +919,10 @@ fn clear_recycle_bin() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{bytes_to_gb_u64, delete_dir_contents, dir_size, run_storage_cleanup};
+    use super::{
+        bytes_to_gb_u64, delete_dir_contents, delete_firefox_cache_dirs, dir_size,
+        run_storage_cleanup, run_storage_cleanup_from_items, StorageCleanupItem,
+    };
 
     fn temp_test_dir(name: &str) -> std::path::PathBuf {
         let stamp = std::time::SystemTime::now()
@@ -877,5 +965,46 @@ mod tests {
         let log = run_storage_cleanup(vec!["no-such-id".to_string()], true);
         assert_eq!(log.len(), 1);
         assert!(log[0].starts_with("[error] no-such-id: item not found in scan results"));
+    }
+
+    #[test]
+    fn firefox_cleanup_only_empties_cache2_folders() {
+        let root = temp_test_dir("firefox");
+        let profile = root.join("abc.default-release");
+        let cache = profile.join("cache2");
+        std::fs::create_dir_all(&cache).expect("create cache2");
+        std::fs::write(cache.join("entry.bin"), vec![0u8; 512]).expect("write cache entry");
+        std::fs::write(profile.join("places.sqlite"), vec![1u8; 512]).expect("write profile data");
+
+        let freed = delete_firefox_cache_dirs(&root).expect("delete cache2 folders");
+        assert!(freed >= 512);
+        assert!(!cache.join("entry.bin").exists());
+        assert!(profile.join("places.sqlite").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn storage_cleanup_can_use_existing_scan_snapshot() {
+        let root = temp_test_dir("snapshot");
+        std::fs::create_dir_all(&root).expect("create snapshot dir");
+        std::fs::write(root.join("cache.bin"), vec![0u8; 1024]).expect("write cache file");
+        let item = StorageCleanupItem {
+            id: "snapshot-cache".to_string(),
+            name: "Snapshot cache".to_string(),
+            location: root.to_string_lossy().to_string(),
+            size_gb: bytes_to_gb_u64(1024),
+            category: "Temporary".to_string(),
+            selected: true,
+            safe: true,
+            description: "Test cache".to_string(),
+        };
+
+        let log = run_storage_cleanup_from_items(vec![item.id.clone()], false, vec![item]);
+        assert_eq!(log.len(), 1);
+        assert!(log[0].starts_with("[ok] Snapshot cache: reclaimed"));
+        assert_eq!(dir_size(&root), 0);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

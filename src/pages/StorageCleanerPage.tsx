@@ -137,6 +137,7 @@ export function StorageCleanerPage() {
     }
 
     setCleaning(true);
+    setLog([`[info] Cleaning ${selected.length} safe target(s) from the completed scan snapshot...`]);
     try {
       const result = await runStorageCleanup(selected);
       setLog(result);
@@ -261,6 +262,7 @@ export function StorageCleanerPage() {
           <ul className="check-list">
             <li><CheckCircle2 size={16} /> Personal downloads require explicit review</li>
             <li><CheckCircle2 size={16} /> Shader caches are marked rebuildable</li>
+            <li><CheckCircle2 size={16} /> Firefox cleanup only empties cache2 folders, not profiles</li>
             <li><CheckCircle2 size={16} /> Native cleanup will log every deleted path</li>
             <li><CheckCircle2 size={16} /> One-click cleanup is limited to targets marked safe</li>
           </ul>

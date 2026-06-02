@@ -122,6 +122,9 @@ export function mockRamCleanup(): Promise<RamCleanupResult> {
         beforeGb,
         afterGb: Number(Math.max(beforeGb - freedGb, 8).toFixed(1)),
         freedGb,
+        processesScanned: 86,
+        processesTrimmed: 61,
+        processesSkipped: 25,
         mode: 'safe',
         message: 'Released standby lists and prompted idle working sets. No services or user processes were terminated.',
       });

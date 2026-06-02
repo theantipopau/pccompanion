@@ -1,25 +1,25 @@
-mod cleanup;
-mod hardware;
-#[cfg(windows)]
-mod wmi_provider;
-#[cfg(windows)]
-mod nvml_provider;
 #[cfg(windows)]
 mod amd_provider;
+mod cleanup;
+#[cfg(windows)]
+mod driver_update;
+mod hardware;
 #[cfg(windows)]
 mod igcl_provider;
 #[cfg(windows)]
-mod sidecar_provider;
+mod nvml_provider;
 #[cfg(windows)]
-mod driver_update;
+mod sidecar_provider;
 mod windows_util;
+#[cfg(windows)]
+mod wmi_provider;
 
+use log::LevelFilter;
 use serde::Deserialize;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use log::LevelFilter;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
@@ -32,8 +32,6 @@ use hardware::{
     HardwareCapability, HardwareSample, MetricPoint, MonitoringEngine, SensorDiscoveryReport,
     SystemInfo, TelemetryDiagnosticsSnapshot,
 };
-
-
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,11 +108,13 @@ impl Default for StorageScanStatus {
             cancelled: false,
             progress_pct: 0,
             current_step: 0,
-            total_steps: 11,
+            total_steps: STORAGE_SCAN_TOTAL_STEPS,
             message: "Idle".to_string(),
         }
     }
 }
+
+const STORAGE_SCAN_TOTAL_STEPS: usize = 11;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -208,8 +208,6 @@ struct ProcessInfo {
     status: String,
 }
 
-
-
 #[tauri::command]
 fn get_system_info(engine: tauri::State<'_, MonitoringEngine>) -> SystemInfo {
     let sys_guard = engine.sysinfo.lock().expect("sysinfo lock");
@@ -226,12 +224,16 @@ fn get_hardware_sample(
 }
 
 #[tauri::command]
-fn get_hardware_capabilities(engine: tauri::State<'_, MonitoringEngine>) -> Vec<HardwareCapability> {
+fn get_hardware_capabilities(
+    engine: tauri::State<'_, MonitoringEngine>,
+) -> Vec<HardwareCapability> {
     engine.capability_snapshot()
 }
 
 #[tauri::command]
-fn get_telemetry_diagnostics(engine: tauri::State<'_, MonitoringEngine>) -> TelemetryDiagnosticsSnapshot {
+fn get_telemetry_diagnostics(
+    engine: tauri::State<'_, MonitoringEngine>,
+) -> TelemetryDiagnosticsSnapshot {
     engine.telemetry_diagnostics_snapshot()
 }
 
@@ -256,6 +258,7 @@ fn probe_sensor_sidecar() -> serde_json::Value {
         "available": false,
         "driverAvailable": false,
         "status": "unsupported",
+        "libraryVersion": null,
         "executablePath": null,
         "cpuTempC": null,
         "cpuTempLabel": null,
@@ -311,17 +314,32 @@ async fn scan_storage_cleanup() -> Result<Vec<cleanup::StorageCleanupItem>, Stri
 }
 
 #[tauri::command]
-async fn run_storage_cleanup(ids: Vec<String>, dry_run: bool) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || cleanup::run_storage_cleanup(ids, dry_run))
-        .await
-        .map_err(|e| format!("run_storage_cleanup join error: {e}"))
+async fn run_storage_cleanup(
+    ids: Vec<String>,
+    dry_run: bool,
+    state: tauri::State<'_, StorageScanState>,
+) -> Result<Vec<String>, String> {
+    let scan_items = state.items.lock().expect("storage scan items lock").clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Some(items) = scan_items {
+            cleanup::run_storage_cleanup_from_items(ids, dry_run, items)
+        } else {
+            cleanup::run_storage_cleanup(ids, dry_run)
+        }
+    })
+    .await
+    .map_err(|e| format!("run_storage_cleanup join error: {e}"))
 }
 
 #[tauri::command]
 fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> StorageScanStatus {
     let mut running = state.running.lock().expect("storage scan running lock");
     if *running {
-        return state.status.lock().expect("storage scan status lock").clone();
+        return state
+            .status
+            .lock()
+            .expect("storage scan status lock")
+            .clone();
     }
 
     *running = true;
@@ -340,7 +358,7 @@ fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> Stor
             cancelled: false,
             progress_pct: 0,
             current_step: 0,
-            total_steps: 9,
+            total_steps: STORAGE_SCAN_TOTAL_STEPS,
             message: "Starting storage scan".to_string(),
         };
     }
@@ -358,7 +376,9 @@ fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> Stor
                 let pct = if total == 0 {
                     0
                 } else {
-                    ((done as f32 / total as f32) * 100.0).round().clamp(0.0, 100.0) as u8
+                    ((done as f32 / total as f32) * 100.0)
+                        .round()
+                        .clamp(0.0, 100.0) as u8
                 };
                 if let Ok(mut status) = status_for_scan.lock() {
                     status.running = true;
@@ -398,14 +418,22 @@ fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> Stor
         }
     });
 
-    state.status.lock().expect("storage scan status lock").clone()
+    state
+        .status
+        .lock()
+        .expect("storage scan status lock")
+        .clone()
 }
 
 #[tauri::command]
 fn get_storage_cleanup_scan_status(
     state: tauri::State<'_, StorageScanState>,
 ) -> StorageScanStatusPayload {
-    let status = state.status.lock().expect("storage scan status lock").clone();
+    let status = state
+        .status
+        .lock()
+        .expect("storage scan status lock")
+        .clone();
     let items = if status.completed {
         state.items.lock().expect("storage scan items lock").clone()
     } else {
@@ -449,9 +477,9 @@ async fn check_driver_update(
         {
             match vendor.to_lowercase().as_str() {
                 "nvidia" => crate::driver_update::check_nvidia_driver_update(&current),
-                "amd"    => crate::driver_update::check_amd_driver_update(&current),
-                "intel"  => crate::driver_update::check_intel_arc_driver_update(&current),
-                _        => None,
+                "amd" => crate::driver_update::check_amd_driver_update(&current),
+                "intel" => crate::driver_update::check_intel_arc_driver_update(&current),
+                _ => None,
             }
         }
         #[cfg(not(windows))]
@@ -480,9 +508,11 @@ fn open_url(url: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn run_local_ai_setup(action: String, model: Option<String>) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || run_local_ai_setup_blocking(&action, model.as_deref()))
-        .await
-        .map_err(|e| format!("run_local_ai_setup join error: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        run_local_ai_setup_blocking(&action, model.as_deref())
+    })
+    .await
+    .map_err(|e| format!("run_local_ai_setup join error: {e}"))?
 }
 
 fn run_local_ai_setup_blocking(action: &str, model: Option<&str>) -> Result<String, String> {
@@ -516,7 +546,8 @@ fn run_local_ai_setup_blocking(action: &str, model: Option<&str>) -> Result<Stri
                 .to_string());
             }
             "pull_model" => {
-                let model = model.ok_or_else(|| "Model tag is required for pull_model".to_string())?;
+                let model =
+                    model.ok_or_else(|| "Model tag is required for pull_model".to_string())?;
                 validate_model_tag(model)?;
                 let out = run_hidden_command_output("ollama", &["pull", model])?;
                 if out.status.success() {
@@ -601,7 +632,10 @@ fn validate_external_url(url: &str) -> Result<(), String> {
     if url.chars().any(|ch| ch.is_control() || ch.is_whitespace()) {
         return Err("URL contains unsafe characters".to_string());
     }
-    if url.chars().any(|ch| matches!(ch, '"' | '\'' | '<' | '>' | '|' | '^' | '`' | '\\' | '@')) {
+    if url
+        .chars()
+        .any(|ch| matches!(ch, '"' | '\'' | '<' | '>' | '|' | '^' | '`' | '\\' | '@'))
+    {
         return Err("URL contains blocked shell metacharacters".to_string());
     }
     let Some(rest) = url.strip_prefix("https://") else {
@@ -651,7 +685,10 @@ fn open_external_url_windows(url: &str) -> Result<(), String> {
         )
     };
     if result.0 as isize <= 32 {
-        Err(format!("ShellExecute failed with code {}", result.0 as isize))
+        Err(format!(
+            "ShellExecute failed with code {}",
+            result.0 as isize
+        ))
     } else {
         Ok(())
     }
@@ -738,7 +775,10 @@ fn export_diagnostics(
             "Sensor fields with null values indicate unavailable provider data."
         ]
     });
-    let message = match std::fs::write(&path, serde_json::to_string_pretty(&payload).unwrap_or_default()) {
+    let message = match std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&payload).unwrap_or_default(),
+    ) {
         Ok(_) => "Diagnostics bundle exported locally.".to_string(),
         Err(err) => format!("Diagnostics export failed: {err}"),
     };
@@ -880,7 +920,10 @@ fn validate_performance_profile(profile_id: &str) -> PowerProfileValidation {
                 "Unavailable".to_string()
             }
         };
-        let plan_verified = expected.plan_guids.iter().any(|guid| detected_plan.to_lowercase().contains(guid));
+        let plan_verified = expected
+            .plan_guids
+            .iter()
+            .any(|guid| detected_plan.to_lowercase().contains(guid));
 
         let min_pct = query_processor_setting_pct("PROCTHROTTLEMIN");
         let max_pct = query_processor_setting_pct("PROCTHROTTLEMAX");
@@ -1003,19 +1046,23 @@ fn expected_power_profile_policy(profile_id: &str) -> ExpectedPowerPolicy {
 /// For gaming/creator, tries Ultimate Performance first (Win 10/11 Pro/Workstation);
 /// if unavailable, falls back to High Performance.
 fn set_windows_power_plan(profile_id: &str) -> Result<String, String> {
-    const POWER_SAVER: &str       = "a1841308-3541-4fab-bc81-f71556f20b4a";
-    const BALANCED: &str          = "381b4222-f694-41f0-9685-ff5bb260df2e";
-    const HIGH_PERF: &str         = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
-    const ULTIMATE_PERF: &str     = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+    const POWER_SAVER: &str = "a1841308-3541-4fab-bc81-f71556f20b4a";
+    const BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    const HIGH_PERF: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    const ULTIMATE_PERF: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
 
     match profile_id {
         "gaming" | "creator" => {
             // Try Ultimate Performance (exists on Pro/Enterprise; run_powercfg fails silently on Home)
             if run_powercfg(&["/setactive", ULTIMATE_PERF]).is_ok() {
-                return Ok(format!("Windows power plan → Ultimate Performance ({ULTIMATE_PERF})"));
+                return Ok(format!(
+                    "Windows power plan → Ultimate Performance ({ULTIMATE_PERF})"
+                ));
             }
             run_powercfg(&["/setactive", HIGH_PERF])?;
-            Ok(format!("Windows power plan → High Performance ({HIGH_PERF})"))
+            Ok(format!(
+                "Windows power plan → High Performance ({HIGH_PERF})"
+            ))
         }
         "balanced" => {
             run_powercfg(&["/setactive", BALANCED])?;
@@ -1048,7 +1095,10 @@ fn run_powercfg(args: &[&str]) -> Result<(), String> {
 #[cfg(windows)]
 fn query_active_power_plan() -> Result<String, String> {
     let out = run_powercfg_output(&["/getactivescheme"])?;
-    let line = out.lines().find(|line| !line.trim().is_empty()).unwrap_or(out.trim());
+    let line = out
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or(out.trim());
     if line.trim().is_empty() {
         Err("powercfg returned no active scheme output".to_string())
     } else {
@@ -1071,7 +1121,10 @@ fn parse_current_ac_power_index(output: &str) -> Option<u32> {
             return None;
         }
         let value = line.split(':').nth(1)?.trim();
-        if let Some(hex) = value.strip_prefix("0x").or_else(|| value.strip_prefix("0X")) {
+        if let Some(hex) = value
+            .strip_prefix("0x")
+            .or_else(|| value.strip_prefix("0X"))
+        {
             u32::from_str_radix(hex, 16).ok()
         } else {
             value.parse::<u32>().ok()
@@ -1116,7 +1169,11 @@ fn list_top_processes(limit: Option<usize>) -> Vec<ProcessInfo> {
             status: format!("{:?}", p.status()),
         })
         .collect();
-    procs.sort_by(|a, b| b.cpu_pct.partial_cmp(&a.cpu_pct).unwrap_or(std::cmp::Ordering::Equal));
+    procs.sort_by(|a, b| {
+        b.cpu_pct
+            .partial_cmp(&a.cpu_pct)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     procs.truncate(n);
     procs
 }
@@ -1124,18 +1181,28 @@ fn list_top_processes(limit: Option<usize>) -> Vec<ProcessInfo> {
 #[tauri::command]
 fn set_tray_status(app: AppHandle, status: TrayStatus) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id("main-tray") {
-        let overlay_label = if status.overlay_enabled { "OSD on" } else { "OSD off" };
+        let overlay_label = if status.overlay_enabled {
+            "OSD on"
+        } else {
+            "OSD off"
+        };
         let tooltip = format!(
             "{}\nMode: {} \u{00B7} {}",
             status.tooltip, status.mode, overlay_label
         );
-        tray.set_tooltip(Some(&tooltip)).map_err(|e| e.to_string())?;
+        tray.set_tooltip(Some(&tooltip))
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
-fn set_tray_icon_data(app: AppHandle, rgba: Vec<u8>, width: u32, height: u32) -> Result<(), String> {
+fn set_tray_icon_data(
+    app: AppHandle,
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id("main-tray") {
         let icon = tauri::image::Image::new_owned(rgba, width, height);
         tray.set_icon(Some(icon)).map_err(|e| e.to_string())?;
@@ -1175,31 +1242,41 @@ fn set_overlay_window(app: AppHandle, enabled: bool, click_through: bool) -> Res
 fn apply_overlay_window(app: AppHandle, enabled: bool, click_through: bool) -> Result<(), String> {
     if enabled {
         if let Some(existing) = app.get_webview_window("osd") {
-            existing.set_background_color(Some(Color(0, 0, 0, 0))).map_err(|err| err.to_string())?;
-            existing.show().map_err(|err| err.to_string())?;
-            existing.set_ignore_cursor_events(click_through).map_err(|err| err.to_string())?;
-        } else {
-            let window = WebviewWindowBuilder::new(&app, "osd", WebviewUrl::App("index.html?overlay=1".into()))
-                .title("Radium PCs OSD")
-                .decorations(false)
-                .transparent(true)
-                .background_color(Color(0, 0, 0, 0))
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .shadow(false)
-                .resizable(false)
-                .visible(false)
-                .inner_size(620.0, 260.0)
-                .position(24.0, 24.0)
-                .on_page_load(|window, payload| {
-                    if matches!(payload.event(), PageLoadEvent::Finished) {
-                        let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
-                        let _ = window.show();
-                    }
-                })
-                .build()
+            existing
+                .set_background_color(Some(Color(0, 0, 0, 0)))
                 .map_err(|err| err.to_string())?;
-            window.set_ignore_cursor_events(click_through).map_err(|err| err.to_string())?;
+            existing.show().map_err(|err| err.to_string())?;
+            existing
+                .set_ignore_cursor_events(click_through)
+                .map_err(|err| err.to_string())?;
+        } else {
+            let window = WebviewWindowBuilder::new(
+                &app,
+                "osd",
+                WebviewUrl::App("index.html?overlay=1".into()),
+            )
+            .title("Radium PCs OSD")
+            .decorations(false)
+            .transparent(true)
+            .background_color(Color(0, 0, 0, 0))
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .shadow(false)
+            .resizable(false)
+            .visible(false)
+            .inner_size(620.0, 260.0)
+            .position(24.0, 24.0)
+            .on_page_load(|window, payload| {
+                if matches!(payload.event(), PageLoadEvent::Finished) {
+                    let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
+                    let _ = window.show();
+                }
+            })
+            .build()
+            .map_err(|err| err.to_string())?;
+            window
+                .set_ignore_cursor_events(click_through)
+                .map_err(|err| err.to_string())?;
         };
     } else if let Some(window) = app.get_webview_window("osd") {
         window.hide().map_err(|err| err.to_string())?;
@@ -1231,7 +1308,7 @@ pub fn run() {
                 .level(LevelFilter::Info)
                 .level_for("wmi", LevelFilter::Warn)
                 .level_for("wmi::result_enumerator", LevelFilter::Error)
-                .build()
+                .build(),
         )
         .on_window_event(|window, event| {
             if window.label() == "main" {
@@ -1360,7 +1437,13 @@ fn create_launch_log() -> Option<std::path::PathBuf> {
     let _ = writeln!(file, "created_at_unix_ms={}", unix_timestamp_ms());
     let _ = writeln!(file, "created_at_clock={}", hardware::timestamp_now().1);
     let _ = writeln!(file, "version={}", env!("CARGO_PKG_VERSION"));
-    let _ = writeln!(file, "exe={}", std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|err| format!("unavailable: {err}")));
+    let _ = writeln!(
+        file,
+        "exe={}",
+        std::env::current_exe()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|err| format!("unavailable: {err}"))
+    );
     let _ = writeln!(file, "args={:?}", std::env::args().collect::<Vec<_>>());
     Some(path)
 }
@@ -1427,18 +1510,72 @@ fn prune_old_files(dir: &std::path::Path, prefix: &str, suffix: &str, keep: usiz
 
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open-dashboard", "Open Companion", true, None::<&str>)?;
-    let toggle_osd = MenuItem::with_id(app, "toggle-osd", "Toggle OSD Overlay", true, None::<&str>)?;
-    let ram_clean = MenuItem::with_id(app, "quick-ram-clean", "Quick RAM Clean", true, None::<&str>)?;
-    let quiet = MenuItem::with_id(app, "profile-quiet", "Power Mode: Quiet", true, None::<&str>)?;
-    let balanced = MenuItem::with_id(app, "profile-balanced", "Power Mode: Balanced", true, None::<&str>)?;
-    let gaming = MenuItem::with_id(app, "profile-gaming", "Power Mode: Gaming", true, None::<&str>)?;
-    let creator = MenuItem::with_id(app, "profile-creator", "Power Mode: Creator", true, None::<&str>)?;
-    let export_diagnostics = MenuItem::with_id(app, "export-diagnostics", "Diagnostics Export", true, None::<&str>)?;
-    let restart_monitoring = MenuItem::with_id(app, "restart-monitoring", "Restart Monitoring Engine", true, None::<&str>)?;
+    let toggle_osd =
+        MenuItem::with_id(app, "toggle-osd", "Toggle OSD Overlay", true, None::<&str>)?;
+    let ram_clean = MenuItem::with_id(
+        app,
+        "quick-ram-clean",
+        "Quick RAM Clean",
+        true,
+        None::<&str>,
+    )?;
+    let quiet = MenuItem::with_id(
+        app,
+        "profile-quiet",
+        "Power Mode: Quiet",
+        true,
+        None::<&str>,
+    )?;
+    let balanced = MenuItem::with_id(
+        app,
+        "profile-balanced",
+        "Power Mode: Balanced",
+        true,
+        None::<&str>,
+    )?;
+    let gaming = MenuItem::with_id(
+        app,
+        "profile-gaming",
+        "Power Mode: Gaming",
+        true,
+        None::<&str>,
+    )?;
+    let creator = MenuItem::with_id(
+        app,
+        "profile-creator",
+        "Power Mode: Creator",
+        true,
+        None::<&str>,
+    )?;
+    let export_diagnostics = MenuItem::with_id(
+        app,
+        "export-diagnostics",
+        "Diagnostics Export",
+        true,
+        None::<&str>,
+    )?;
+    let restart_monitoring = MenuItem::with_id(
+        app,
+        "restart-monitoring",
+        "Restart Monitoring Engine",
+        true,
+        None::<&str>,
+    )?;
     let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&open, &toggle_osd, &ram_clean, &quiet, &balanced, &gaming, &creator, &export_diagnostics, &restart_monitoring, &exit],
+        &[
+            &open,
+            &toggle_osd,
+            &ram_clean,
+            &quiet,
+            &balanced,
+            &gaming,
+            &creator,
+            &export_diagnostics,
+            &restart_monitoring,
+            &exit,
+        ],
     )?;
 
     let icon = app.default_window_icon().cloned();
@@ -1517,7 +1654,9 @@ mod tests {
     fn external_url_validator_allows_known_https_hosts() {
         assert!(validate_external_url("https://radiumpcs.com.au").is_ok());
         assert!(validate_external_url("https://example.com").is_ok());
-        assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases").is_ok());
+        assert!(
+            validate_external_url("https://github.com/theantipopau/pccompanion/releases").is_ok()
+        );
         assert!(validate_external_url("https://www.nvidia.com/Download/index.aspx").is_ok());
     }
 
@@ -1525,8 +1664,17 @@ mod tests {
     fn external_url_validator_rejects_shell_metacharacters_and_unknown_hosts() {
         assert!(validate_external_url("http://radiumpcs.com.au").is_err());
         assert!(validate_external_url("https://evil.example").is_err());
-        assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases^calc.exe").is_err());
-        assert!(validate_external_url("https://evil.example@github.com/theantipopau/pccompanion").is_err());
-        assert!(validate_external_url("https://github.com/theantipopau/pccompanion/releases calc.exe").is_err());
+        assert!(validate_external_url(
+            "https://github.com/theantipopau/pccompanion/releases^calc.exe"
+        )
+        .is_err());
+        assert!(
+            validate_external_url("https://evil.example@github.com/theantipopau/pccompanion")
+                .is_err()
+        );
+        assert!(validate_external_url(
+            "https://github.com/theantipopau/pccompanion/releases calc.exe"
+        )
+        .is_err());
     }
 }

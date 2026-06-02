@@ -1,6 +1,6 @@
 # Radium PCs Companion - Current State
 
-Last reviewed: 2026-06-01
+Last reviewed: 2026-06-02
 
 This is the short handoff brief. Keep long session history in `docs/context_log.md`; keep durable architecture in `docs/architecture.md`; keep validation coverage in `docs/compatibility-matrix.md`.
 
@@ -22,6 +22,9 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - `npm.cmd run build:exe` passed on 2026-06-01 after clarifying that the requested walkthrough build should be Radium-branded, not the neutral demo variant.
 - `npm.cmd run verify:radium-artifact` passed on 2026-06-01 and wrote a SHA-256 artifact manifest under `artifacts/radium/`.
 - `scripts/pre_release_artifact_audit.ps1` also passed against the copied Radium walkthrough EXE and installer.
+- `npm.cmd run build` passed on 2026-06-02 after the CoPilot action-history context refinement.
+- `npm.cmd run build`, `npm.cmd run check:rust`, `cargo test --manifest-path src-tauri/Cargo.toml --lib`, and `npm.cmd run build:sensor-sidecar` passed on 2026-06-02 after the responsiveness/maintenance safety pass.
+- Direct sidecar smoke passed on 2026-06-02 and confirmed the loaded LibreHardwareMonitor library version is `0.9.6+3d331e3370efb858411f19511373eff65a218701`.
 - `cargo test -q` has passed for library tests; full binary test execution may still require elevation on some hosts.
 - `npm.cmd run build:exe` has produced the release executable and NSIS installer in prior validation passes.
 
@@ -34,10 +37,15 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - Storage scan has asynchronous lifecycle commands with progress and cancellation.
 - Cleanup, registry, bloatware, startup, tray, diagnostics, OSD, and performance profile command surfaces are wired.
 - Performance profile writes are limited to supported Windows power/timer controls; firmware/fan-table writes remain blocked.
-- Local CoPilot preview is implemented as an offline-first surface with hardware-aware model recommendations, localhost runtime locking, persisted local runtime settings, typed confidence insight cards, and non-invasive advisory chat.
+- Local CoPilot preview is implemented as an offline-first surface with hardware-aware model recommendations, localhost runtime locking, persisted local runtime settings, typed confidence insight cards, local action-history context, and non-invasive advisory chat.
 - CoPilot and shared panel responsive behavior has been tightened for tablet/mobile widths: long insight labels wrap cleanly, mobile CoPilot controls stretch to tap-friendly rows, and touch/narrow viewports avoid expensive hover transforms.
+- Dense panel/list hover behavior has been further reduced for snappier maintenance and dashboard interaction; progress/RAM bar transitions now settle faster.
+- System Cleaner reuses completed backend scan snapshots for cleanup, keeps review-only targets blocked, and limits Firefox cleanup to per-profile `cache2` contents.
+- RAM Optimizer reports process scan/trim/skip coverage in addition to before/after memory.
+- Registry Cleaner now detects unquoted missing file references with spaces while keeping risky categories review-only.
 - Dashboard now includes a first-screen current-state strip for active profile, telemetry/provider freshness, tray/startup behavior, and local safety posture.
-- Security readiness is tracked in `docs/security-readiness.md`.
+- Security readiness is tracked in `docs/security-readiness.md`; clean-machine walkthrough criteria are tracked in `docs/clean-machine-test.md`.
+- Signing workflow scaffold is available through `npm.cmd run sign:radium`; Windows SDK `signtool.exe` is discoverable, but no signing identity is configured in this workspace yet.
 - Latest Radium-branded walkthrough artifacts:
   - `artifacts/radium/radium-pcs-companion-20260601-203136.exe`
   - `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`
@@ -50,7 +58,8 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - Interactive installer/uninstaller walkthrough still needs a dedicated tester-machine pass.
 - Runtime performance targets exist but still need measured baselines.
 - CoPilot runtime behavior still needs tester coverage across fresh Ollama installs, missing-model states, and systems with no local model runtime.
-- Current pre-release artifacts are unsigned; paid distribution should use Authenticode signing and run `scripts/pre_release_artifact_audit.ps1 -RequireSignature`.
+- Current pre-release artifacts are unsigned; paid distribution should use Authenticode signing and run `npm.cmd run sign:radium` or `scripts/pre_release_artifact_audit.ps1 -RequireSignature`.
+- Stricter lifecycle smoke now fails on leftover background processes; the current workspace needs an elevated tester pass because one release EXE process could not be terminated from this shell (`Access is denied`).
 
 ## Next Best Work
 

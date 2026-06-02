@@ -10,6 +10,7 @@ pub struct RadiumSidecarSample {
     pub available: bool,
     pub driver_available: bool,
     pub status: String,
+    pub library_version: Option<String>,
     pub executable_path: Option<String>,
     pub cpu_temp_c: Option<f32>,
     pub cpu_temp_label: Option<String>,
@@ -25,6 +26,7 @@ struct SidecarJson {
     available: Option<bool>,
     driver_available: Option<bool>,
     status: Option<String>,
+    library_version: Option<String>,
     cpu_temp_c: Option<f32>,
     cpu_temp_label: Option<String>,
     cpu_fan_rpm: Option<u32>,
@@ -148,11 +150,14 @@ pub fn query_sensor_sidecar() -> RadiumSidecarSample {
 
     match serde_json::from_str::<SidecarJson>(&stdout) {
         Ok(parsed) => RadiumSidecarSample {
-            provider: parsed.provider.unwrap_or_else(|| "radium-lhm-pawnio".to_string()),
+            provider: parsed
+                .provider
+                .unwrap_or_else(|| "radium-lhm-pawnio".to_string()),
             executable_path: Some(path_string),
             available: parsed.available.unwrap_or(false),
             driver_available: parsed.driver_available.unwrap_or(false),
             status: parsed.status.unwrap_or_else(|| "unknown".to_string()),
+            library_version: parsed.library_version,
             cpu_temp_c: parsed.cpu_temp_c,
             cpu_temp_label: parsed.cpu_temp_label,
             cpu_fan_rpm: parsed.cpu_fan_rpm,
@@ -202,18 +207,60 @@ fn sidecar_candidate_paths() -> Vec<PathBuf> {
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
             push_candidate_roots(&mut candidates, parent, exe_name, tauri_name, dll_name);
-            push_candidate_roots(&mut candidates, &parent.join("binaries"), exe_name, tauri_name, dll_name);
-            push_candidate_roots(&mut candidates, &parent.join("resources"), exe_name, tauri_name, dll_name);
-            push_candidate_roots(&mut candidates, &parent.join("resources").join("binaries"), exe_name, tauri_name, dll_name);
-            push_candidate_roots(&mut candidates, &parent.join("_up_").join("binaries"), exe_name, tauri_name, dll_name);
+            push_candidate_roots(
+                &mut candidates,
+                &parent.join("binaries"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
+            push_candidate_roots(
+                &mut candidates,
+                &parent.join("resources"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
+            push_candidate_roots(
+                &mut candidates,
+                &parent.join("resources").join("binaries"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
+            push_candidate_roots(
+                &mut candidates,
+                &parent.join("_up_").join("binaries"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
         }
     }
 
     if let Ok(current_dir) = std::env::current_dir() {
         if cfg!(debug_assertions) {
-            push_candidate_roots(&mut candidates, &current_dir.join("target").join("sensor-sidecar"), exe_name, tauri_name, dll_name);
-            push_candidate_roots(&mut candidates, &current_dir.join("src-tauri").join("binaries"), exe_name, tauri_name, dll_name);
-            push_candidate_roots(&mut candidates, &current_dir.join("binaries"), exe_name, tauri_name, dll_name);
+            push_candidate_roots(
+                &mut candidates,
+                &current_dir.join("target").join("sensor-sidecar"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
+            push_candidate_roots(
+                &mut candidates,
+                &current_dir.join("src-tauri").join("binaries"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
+            push_candidate_roots(
+                &mut candidates,
+                &current_dir.join("binaries"),
+                exe_name,
+                tauri_name,
+                dll_name,
+            );
         }
     }
 
@@ -249,7 +296,13 @@ fn command_for_path(path: PathBuf) -> Option<SidecarCommand> {
     }
 }
 
-fn push_candidate_roots(candidates: &mut Vec<PathBuf>, root: &Path, exe_name: &str, tauri_name: &str, dll_name: &str) {
+fn push_candidate_roots(
+    candidates: &mut Vec<PathBuf>,
+    root: &Path,
+    exe_name: &str,
+    tauri_name: &str,
+    dll_name: &str,
+) {
     candidates.push(root.join(dll_name));
     candidates.push(root.join(exe_name));
     candidates.push(root.join(tauri_name));

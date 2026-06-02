@@ -196,6 +196,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                 <span>CPU temp <strong>{sidecarProbe.cpuTempC != null ? `${Math.round(sidecarProbe.cpuTempC)}C` : 'N/A'}</strong></span>
                 <span>CPU fan <strong>{sidecarProbe.cpuFanRpm != null ? `${sidecarProbe.cpuFanRpm} RPM` : 'N/A'}</strong></span>
                 <span>Driver rows <strong>{sidecarProbe.driverAvailable ? 'Visible' : 'Missing'}</strong></span>
+                <span>LHM <strong>{sidecarProbe.libraryVersion ? shortText(sidecarProbe.libraryVersion, 22) : 'N/A'}</strong></span>
               </div>
               {sidecarProbe.notes.length > 0 && (
                 <p title={sidecarProbe.notes.join(' / ')}>{shortText(sidecarProbe.notes.join(' / '), 150)}</p>

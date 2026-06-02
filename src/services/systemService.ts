@@ -174,7 +174,7 @@ export async function cancelStorageCleanupScan(): Promise<StorageScanStatus> {
       cancelled: true,
       progressPct: 0,
       currentStep: 0,
-      totalSteps: 9,
+      totalSteps: 11,
       message: 'Storage scan cancelled',
     }),
   );
@@ -319,6 +319,7 @@ export async function probeSensorSidecar(): Promise<SensorSidecarProbe> {
     available: false,
     driverAvailable: false,
     status: 'browser_preview',
+    libraryVersion: null,
     executablePath: null,
     cpuTempC: null,
     cpuTempLabel: null,

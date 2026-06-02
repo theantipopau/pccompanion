@@ -95,6 +95,9 @@ export type RamCleanupResult = {
   beforeGb: number;
   afterGb: number;
   freedGb: number;
+  processesScanned: number;
+  processesTrimmed: number;
+  processesSkipped: number;
   mode: 'safe' | 'deep';
   message: string;
 };
@@ -363,6 +366,7 @@ export type SensorSidecarProbe = {
   available: boolean;
   driverAvailable: boolean;
   status: string;
+  libraryVersion?: string | null;
   executablePath?: string | null;
   cpuTempC?: number | null;
   cpuTempLabel?: string | null;

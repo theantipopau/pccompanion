@@ -26,6 +26,9 @@ try
     }
 
     Assembly assembly = Assembly.LoadFrom(libraryPath);
+    result.LibraryVersion = assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+        .InformationalVersion ?? assembly.GetName().Version?.ToString();
     Type? computerType = assembly.GetType("LibreHardwareMonitor.Hardware.Computer");
     if (computerType is null)
     {
@@ -275,6 +278,7 @@ sealed class SensorSidecarResult
     public bool Available { get; set; }
     public bool DriverAvailable { get; set; }
     public string Status { get; set; } = "";
+    public string? LibraryVersion { get; set; }
     public float? CpuTempC { get; set; }
     public string? CpuTempLabel { get; set; }
     public uint? CpuFanRpm { get; set; }

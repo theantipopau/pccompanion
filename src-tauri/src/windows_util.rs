@@ -3,7 +3,6 @@
 /// Uses the Windows registry and PowerShell (for AppX queries).  All write
 /// operations are dry-run by default; live execution requires the caller to
 /// pass `dry_run = false` explicitly.
-
 use serde::Serialize;
 
 // ─── Startup Manager ─────────────────────────────────────────────────────────
@@ -67,21 +66,14 @@ pub fn scan_startup_items() -> Vec<StartupItem> {
 
     #[cfg(windows)]
     {
-        use windows::Win32::System::Registry::{
-            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
-        };
+        use windows::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 
-        const RUN_KEY: &str =
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-        const RUN_ONCE_KEY: &str =
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
+        const RUN_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        const RUN_ONCE_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
         const APPROVED_KEY: &str =
             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
-        let hives: &[(&str, _)] = &[
-            ("HKCU", HKEY_CURRENT_USER),
-            ("HKLM", HKEY_LOCAL_MACHINE),
-        ];
+        let hives: &[(&str, _)] = &[("HKCU", HKEY_CURRENT_USER), ("HKLM", HKEY_LOCAL_MACHINE)];
 
         // ── Run key (persistent startup) ──────────────────────────────────
         for &(hive_name, hive) in hives {
@@ -140,15 +132,13 @@ fn scan_startup_folder_items(items: &mut Vec<StartupItem>) {
         (
             "AppData",
             std::env::var("APPDATA").ok().map(|a| {
-                std::path::PathBuf::from(a)
-                    .join(r"Microsoft\Windows\Start Menu\Programs\Startup")
+                std::path::PathBuf::from(a).join(r"Microsoft\Windows\Start Menu\Programs\Startup")
             }),
         ),
         (
             "ProgramData",
             std::env::var("PROGRAMDATA").ok().map(|p| {
-                std::path::PathBuf::from(p)
-                    .join(r"Microsoft\Windows\Start Menu\Programs\StartUp")
+                std::path::PathBuf::from(p).join(r"Microsoft\Windows\Start Menu\Programs\StartUp")
             }),
         ),
     ]
@@ -157,7 +147,9 @@ fn scan_startup_folder_items(items: &mut Vec<StartupItem>) {
     .collect();
 
     for (label, folder) in folders {
-        let Ok(dir) = std::fs::read_dir(&folder) else { continue };
+        let Ok(dir) = std::fs::read_dir(&folder) else {
+            continue;
+        };
         for entry in dir.flatten() {
             let path = entry.path();
             let ext = path
@@ -201,13 +193,12 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
 
     #[cfg(windows)]
     {
+        use windows::core::PCWSTR;
         use windows::Win32::Foundation::ERROR_SUCCESS;
         use windows::Win32::System::Registry::{
-            RegCloseKey, RegOpenKeyExW, RegSetValueExW,
-            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+            RegCloseKey, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
             KEY_SET_VALUE, KEY_WOW64_64KEY, REG_BINARY,
         };
-        use windows::core::PCWSTR;
 
         // Startup folder items: toggling requires moving the file; not wired yet.
         if id.starts_with("STARTUP-FOLDER-") {
@@ -218,7 +209,9 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
         // Disabling a RunOnce entry means deleting it; re-enabling is not possible.
         if id.contains("-ONCE:") {
             if enabled {
-                return format!("[info] {id}: RunOnce entries cannot be re-created through this tool.");
+                return format!(
+                    "[info] {id}: RunOnce entries cannot be re-created through this tool."
+                );
             }
             // Deletion of RunOnce entries is treated as safe — they run at most once anyway.
             let (hive, name) = if let Some(n) = id.strip_prefix("HKCU-ONCE:") {
@@ -231,8 +224,10 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
             const RUN_ONCE_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
             use windows::Win32::System::Registry::{RegDeleteValueW, KEY_WRITE};
             unsafe {
-                let subkey_wide: Vec<u16> =
-                    RUN_ONCE_KEY.encode_utf16().chain(std::iter::once(0)).collect();
+                let subkey_wide: Vec<u16> = RUN_ONCE_KEY
+                    .encode_utf16()
+                    .chain(std::iter::once(0))
+                    .collect();
                 let mut hkey = windows::Win32::System::Registry::HKEY::default();
                 let res = RegOpenKeyExW(
                     hive,
@@ -269,17 +264,23 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
         // The id uses sanitized name; we must store the original value name.
         // For the approved key we write 12 bytes: first byte 0x02=enabled, 0x03=disabled.
         let data: [u8; 12] = if enabled {
-            [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            [
+                0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ]
         } else {
-            [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            [
+                0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ]
         };
 
         const APPROVED_KEY: &str =
             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
         unsafe {
-            let subkey_wide: Vec<u16> =
-                APPROVED_KEY.encode_utf16().chain(std::iter::once(0)).collect();
+            let subkey_wide: Vec<u16> = APPROVED_KEY
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
             let mut hkey = windows::Win32::System::Registry::HKEY::default();
             let res = RegOpenKeyExW(
                 hive,
@@ -292,13 +293,8 @@ pub fn set_startup_item_enabled(id: &str, enabled: bool, dry_run: bool) -> Strin
                 return format!("[error] {id}: cannot open StartupApproved key (admin required?)");
             }
             let name_wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
-            let write_res = RegSetValueExW(
-                hkey,
-                PCWSTR(name_wide.as_ptr()),
-                0,
-                REG_BINARY,
-                Some(&data),
-            );
+            let write_res =
+                RegSetValueExW(hkey, PCWSTR(name_wide.as_ptr()), 0, REG_BINARY, Some(&data));
             let _ = RegCloseKey(hkey);
             if write_res == ERROR_SUCCESS {
                 format!(
@@ -357,7 +353,9 @@ pub fn set_companion_startup_enabled(enabled: bool, start_minimized: bool) -> Re
                 None,
             );
             if create_res != ERROR_SUCCESS {
-                return Err("Unable to open current-user Run key for startup registration.".to_string());
+                return Err(
+                    "Unable to open current-user Run key for startup registration.".to_string(),
+                );
             }
 
             let result = if enabled {
@@ -426,7 +424,9 @@ pub fn scan_registry_issues() -> Vec<RegistryIssue> {
                 severity: "low".to_string(),
                 selected: true,
                 safe: true,
-                description: "Startup entry points to an executable that no longer appears to exist.".to_string(),
+                description:
+                    "Startup entry points to an executable that no longer appears to exist."
+                        .to_string(),
             });
         }
     }
@@ -521,7 +521,11 @@ pub fn list_registry_backups() -> Vec<RegistryBackup> {
             let path = entry.path();
             let manifest_path = if path.is_dir() {
                 path.join("manifest.json")
-            } else if path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("json")) {
+            } else if path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+            {
                 path
             } else {
                 return None;
@@ -582,7 +586,10 @@ pub fn restore_registry_backup(backup_id: String) -> Vec<String> {
 
     for entry in manifest.entries {
         let Some(file) = entry.reg_file else {
-            log.push(format!("[skip] {}: no export file ({})", entry.issue_id, entry.note));
+            log.push(format!(
+                "[skip] {}: no export file ({})",
+                entry.issue_id, entry.note
+            ));
             continue;
         };
 
@@ -596,7 +603,10 @@ pub fn restore_registry_backup(backup_id: String) -> Vec<String> {
 
         #[cfg(not(windows))]
         {
-            log.push(format!("[unavailable] {}: restore requires Windows", entry.issue_id));
+            log.push(format!(
+                "[unavailable] {}: restore requires Windows",
+                entry.issue_id
+            ));
         }
     }
 
@@ -611,8 +621,10 @@ pub fn clean_registry_issues(ids: Vec<String>, backup_id: String, dry_run: bool)
     }
 
     let issues = scan_registry_issues();
-    let issue_map: std::collections::HashMap<_, _> =
-        issues.iter().map(|issue| (issue.id.as_str(), issue)).collect();
+    let issue_map: std::collections::HashMap<_, _> = issues
+        .iter()
+        .map(|issue| (issue.id.as_str(), issue))
+        .collect();
 
     ids.into_iter()
         .map(|id| match issue_map.get(id.as_str()) {
@@ -666,7 +678,10 @@ fn remove_registry_issue(issue: &RegistryIssue) -> String {
             }
             return match delete_registry_value(hive, &issue.key_path, &issue.value_name) {
                 Ok(RegistryDeleteStatus::Removed) => {
-                    format!("[ok] {}: removed stale registry value '{}'.", issue.id, issue.value_name)
+                    format!(
+                        "[ok] {}: removed stale registry value '{}'.",
+                        issue.id, issue.value_name
+                    )
                 }
                 Ok(RegistryDeleteStatus::AlreadyAbsent) => {
                     format!("[ok] {}: registry value was already absent.", issue.id)
@@ -677,15 +692,22 @@ fn remove_registry_issue(issue: &RegistryIssue) -> String {
 
         // Uninstall leftovers and app paths are represented as subkeys and can be removed.
         match delete_registry_tree(hive, &issue.key_path) {
-            Ok(RegistryDeleteStatus::Removed) => format!("[ok] {}: removed stale registry key.", issue.id),
-            Ok(RegistryDeleteStatus::AlreadyAbsent) => format!("[ok] {}: registry key was already absent.", issue.id),
+            Ok(RegistryDeleteStatus::Removed) => {
+                format!("[ok] {}: removed stale registry key.", issue.id)
+            }
+            Ok(RegistryDeleteStatus::AlreadyAbsent) => {
+                format!("[ok] {}: registry key was already absent.", issue.id)
+            }
             Err(err) => format!("[error] {}: {}", issue.id, err),
         }
     }
 
     #[cfg(not(windows))]
     {
-        format!("[unavailable] {}: registry cleanup requires Windows", issue.id)
+        format!(
+            "[unavailable] {}: registry cleanup requires Windows",
+            issue.id
+        )
     }
 }
 
@@ -702,7 +724,10 @@ fn startup_registry_target(item: &StartupItem) -> Option<(String, String)> {
         return None;
     };
 
-    let key_path = if item.location.contains("\\RunOnce") || item.id.starts_with("HKLM-ONCE") || item.id.starts_with("HKCU-ONCE") {
+    let key_path = if item.location.contains("\\RunOnce")
+        || item.id.starts_with("HKLM-ONCE")
+        || item.id.starts_with("HKCU-ONCE")
+    {
         r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
     } else {
         r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -772,28 +797,26 @@ pub fn remove_bloatware(ids: Vec<String>, dry_run: bool) -> Vec<String> {
         items.iter().map(|i| (i.id.as_str(), i)).collect();
 
     ids.into_iter()
-        .map(|id| {
-            match map.get(id.as_str()) {
-                None => format!("[error] {id}: item not found in scan results"),
-                Some(item) => {
-                    if !item.detected {
-                        return format!("[skip] {}: not detected on this system", item.name);
-                    }
-                    if dry_run {
-                        return format!(
-                            "[dry-run] {}: would perform {} action",
-                            item.name, item.action
-                        );
-                    }
-                    match item.action.as_str() {
-                        "appx" => remove_appx_package_for_id(&item.id),
-                        "policy" => apply_policy_tweak(&item.id),
-                        "scheduled-task" => disable_scheduled_task(&item.id),
-                        _ => format!(
-                            "[blocked] {}: live removal not yet implemented for action '{}'",
-                            item.name, item.action
-                        ),
-                    }
+        .map(|id| match map.get(id.as_str()) {
+            None => format!("[error] {id}: item not found in scan results"),
+            Some(item) => {
+                if !item.detected {
+                    return format!("[skip] {}: not detected on this system", item.name);
+                }
+                if dry_run {
+                    return format!(
+                        "[dry-run] {}: would perform {} action",
+                        item.name, item.action
+                    );
+                }
+                match item.action.as_str() {
+                    "appx" => remove_appx_package_for_id(&item.id),
+                    "policy" => apply_policy_tweak(&item.id),
+                    "scheduled-task" => disable_scheduled_task(&item.id),
+                    _ => format!(
+                        "[blocked] {}: live removal not yet implemented for action '{}'",
+                        item.name, item.action
+                    ),
                 }
             }
         })
@@ -838,19 +861,15 @@ fn read_run_key(
     hive: windows::Win32::System::Registry::HKEY,
     subkey: &str,
 ) -> Vec<(String, String)> {
+    use windows::core::PCWSTR;
     use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegEnumValueW, RegOpenKeyExW,
-        KEY_READ, KEY_WOW64_64KEY, REG_EXPAND_SZ, REG_SZ,
+        RegCloseKey, RegEnumValueW, RegOpenKeyExW, KEY_READ, KEY_WOW64_64KEY, REG_EXPAND_SZ, REG_SZ,
     };
-    use windows::core::PCWSTR;
 
     let mut results = Vec::new();
 
-    let subkey_wide: Vec<u16> = subkey
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect();
+    let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
 
     unsafe {
         let mut hkey = windows::Win32::System::Registry::HKEY::default();
@@ -888,15 +907,12 @@ fn read_run_key(
                 break;
             }
             if res == ERROR_SUCCESS {
-                let name =
-                    String::from_utf16_lossy(&name_buf[..name_len as usize]).to_string();
+                let name = String::from_utf16_lossy(&name_buf[..name_len as usize]).to_string();
                 // REG_SZ=1, REG_EXPAND_SZ=2
                 if data_type == REG_SZ.0 || data_type == REG_EXPAND_SZ.0 {
                     let word_count = (data_len as usize / 2).saturating_sub(1);
-                    let words = std::slice::from_raw_parts(
-                        data_buf.as_ptr() as *const u16,
-                        word_count,
-                    );
+                    let words =
+                        std::slice::from_raw_parts(data_buf.as_ptr() as *const u16, word_count);
                     let value = String::from_utf16_lossy(words).to_string();
                     results.push((name, value));
                 }
@@ -916,19 +932,15 @@ fn read_approved_key(
     hive: windows::Win32::System::Registry::HKEY,
     subkey: &str,
 ) -> std::collections::HashMap<String, bool> {
+    use windows::core::PCWSTR;
     use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegEnumValueW, RegOpenKeyExW,
-        KEY_READ, KEY_WOW64_64KEY, REG_BINARY,
+        RegCloseKey, RegEnumValueW, RegOpenKeyExW, KEY_READ, KEY_WOW64_64KEY, REG_BINARY,
     };
-    use windows::core::PCWSTR;
 
     let mut map = std::collections::HashMap::new();
 
-    let subkey_wide: Vec<u16> = subkey
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect();
+    let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
 
     unsafe {
         let mut hkey = windows::Win32::System::Registry::HKEY::default();
@@ -966,8 +978,7 @@ fn read_approved_key(
                 break;
             }
             if res == ERROR_SUCCESS && data_type == REG_BINARY.0 && data_len >= 1 {
-                let name =
-                    String::from_utf16_lossy(&name_buf[..name_len as usize]).to_string();
+                let name = String::from_utf16_lossy(&name_buf[..name_len as usize]).to_string();
                 // byte 0: 0x02 = enabled, 0x03 = disabled
                 let enabled = data_buf[0] != 0x03;
                 map.insert(name, enabled);
@@ -1010,7 +1021,8 @@ fn scan_uninstall_leftovers() -> Vec<RegistryIssue> {
                 severity: "medium".to_string(),
                 selected: true,
                 safe: true,
-                description: "Installed-program metadata references files that no longer exist.".to_string(),
+                description: "Installed-program metadata references files that no longer exist."
+                    .to_string(),
             })
         })
         .collect()
@@ -1042,7 +1054,9 @@ fn scan_app_path_leftovers() -> Vec<RegistryIssue> {
                 severity: "medium".to_string(),
                 selected: false,
                 safe: false,
-                description: "Application execution alias points to a missing file and should be reviewed.".to_string(),
+                description:
+                    "Application execution alias points to a missing file and should be reviewed."
+                        .to_string(),
             })
         })
         .collect()
@@ -1068,7 +1082,8 @@ fn scan_shared_dll_leftovers() -> Vec<RegistryIssue> {
                 severity: "low".to_string(),
                 selected: true,
                 safe: true,
-                description: "Shared DLL reference points to a file that no longer exists.".to_string(),
+                description: "Shared DLL reference points to a file that no longer exists."
+                    .to_string(),
             })
         })
         .collect()
@@ -1099,7 +1114,8 @@ fn scan_help_file_leftovers() -> Vec<RegistryIssue> {
                 severity: "low".to_string(),
                 selected: true,
                 safe: true,
-                description: "Help file registry reference points to a missing .hlp/.chm target.".to_string(),
+                description: "Help file registry reference points to a missing .hlp/.chm target."
+                    .to_string(),
             })
         })
         .collect()
@@ -1146,7 +1162,8 @@ fn scan_font_leftovers() -> Vec<RegistryIssue> {
 fn scan_mui_cache_leftovers() -> Vec<RegistryIssue> {
     use windows::Win32::System::Registry::HKEY_CURRENT_USER;
 
-    const MUI_CACHE: &str = r"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
+    const MUI_CACHE: &str =
+        r"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache";
     enum_string_values(HKEY_CURRENT_USER, MUI_CACHE)
         .into_iter()
         .filter_map(|(value_name, _)| {
@@ -1162,7 +1179,9 @@ fn scan_mui_cache_leftovers() -> Vec<RegistryIssue> {
                 severity: "low".to_string(),
                 selected: true,
                 safe: true,
-                description: "MUI cache entry references an application path that is no longer present.".to_string(),
+                description:
+                    "MUI cache entry references an application path that is no longer present."
+                        .to_string(),
             })
         })
         .collect()
@@ -1204,7 +1223,10 @@ fn scan_com_leftovers() -> Vec<RegistryIssue> {
 
     const CLSID_KEY: &str = "CLSID";
     let mut issues = Vec::new();
-    for clsid in enum_subkeys(HKEY_CLASSES_ROOT, CLSID_KEY).into_iter().take(8_000) {
+    for clsid in enum_subkeys(HKEY_CLASSES_ROOT, CLSID_KEY)
+        .into_iter()
+        .take(8_000)
+    {
         if !clsid.starts_with('{') {
             continue;
         }
@@ -1212,9 +1234,14 @@ fn scan_com_leftovers() -> Vec<RegistryIssue> {
         let server_key = ["InprocServer32", "LocalServer32"]
             .into_iter()
             .map(|server| format!(r"{clsid_key}\{server}"))
-            .find(|key| read_string_value(HKEY_CLASSES_ROOT, key, "").map_or(false, |v| looks_missing_file_reference(&v)));
+            .find(|key| {
+                read_string_value(HKEY_CLASSES_ROOT, key, "")
+                    .map_or(false, |v| looks_missing_file_reference(&v))
+            });
 
-        let Some(server_key) = server_key else { continue };
+        let Some(server_key) = server_key else {
+            continue;
+        };
         issues.push(RegistryIssue {
             id: format!("com-missing-{}", sanitize_id(&clsid)),
             hive: "HKCR".to_string(),
@@ -1236,13 +1263,17 @@ fn scan_typelib_leftovers() -> Vec<RegistryIssue> {
 
     const TYPELIB_KEY: &str = "TypeLib";
     let mut issues = Vec::new();
-    for libid in enum_subkeys(HKEY_CLASSES_ROOT, TYPELIB_KEY).into_iter().take(4_000) {
+    for libid in enum_subkeys(HKEY_CLASSES_ROOT, TYPELIB_KEY)
+        .into_iter()
+        .take(4_000)
+    {
         let lib_key = format!(r"{TYPELIB_KEY}\{libid}");
         for version in enum_subkeys(HKEY_CLASSES_ROOT, &lib_key) {
             let version_key = format!(r"{lib_key}\{version}");
             for platform in ["win32", "win64"] {
                 let platform_key = format!(r"{version_key}\0\{platform}");
-                let value = read_string_value(HKEY_CLASSES_ROOT, &platform_key, "").unwrap_or_default();
+                let value =
+                    read_string_value(HKEY_CLASSES_ROOT, &platform_key, "").unwrap_or_default();
                 if value.trim().is_empty() || !looks_missing_file_reference(&value) {
                     continue;
                 }
@@ -1296,15 +1327,12 @@ fn scan_file_association_leftovers() -> Vec<RegistryIssue> {
 }
 
 #[cfg(windows)]
-fn enum_subkeys(
-    hive: windows::Win32::System::Registry::HKEY,
-    subkey: &str,
-) -> Vec<String> {
+fn enum_subkeys(hive: windows::Win32::System::Registry::HKEY, subkey: &str) -> Vec<String> {
+    use windows::core::{PCWSTR, PWSTR};
     use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
     use windows::Win32::System::Registry::{
         RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, KEY_READ, KEY_WOW64_64KEY,
     };
-    use windows::core::{PCWSTR, PWSTR};
 
     let mut results = Vec::new();
     let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
@@ -1357,15 +1385,18 @@ fn read_string_value(
     subkey: &str,
     value_name: &str,
 ) -> Option<String> {
+    use windows::core::PCWSTR;
     use windows::Win32::Foundation::ERROR_SUCCESS;
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, KEY_READ, KEY_WOW64_64KEY,
-        REG_EXPAND_SZ, REG_SZ, REG_VALUE_TYPE,
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, KEY_READ, KEY_WOW64_64KEY, REG_EXPAND_SZ,
+        REG_SZ, REG_VALUE_TYPE,
     };
-    use windows::core::PCWSTR;
 
     let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
-    let value_wide: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let value_wide: Vec<u16> = value_name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
 
     unsafe {
         let mut hkey = windows::Win32::System::Registry::HKEY::default();
@@ -1390,7 +1421,10 @@ fn read_string_value(
             None,
             Some(&mut data_len),
         );
-        if query_size != ERROR_SUCCESS || !(data_type == REG_SZ || data_type == REG_EXPAND_SZ) || data_len == 0 {
+        if query_size != ERROR_SUCCESS
+            || !(data_type == REG_SZ || data_type == REG_EXPAND_SZ)
+            || data_len == 0
+        {
             let _ = RegCloseKey(hkey);
             return None;
         }
@@ -1410,7 +1444,12 @@ fn read_string_value(
         }
 
         let words = std::slice::from_raw_parts(data.as_ptr() as *const u16, data_len as usize / 2);
-        Some(String::from_utf16_lossy(words).trim_end_matches('\0').trim().to_string())
+        Some(
+            String::from_utf16_lossy(words)
+                .trim_end_matches('\0')
+                .trim()
+                .to_string(),
+        )
     }
 }
 
@@ -1467,7 +1506,8 @@ fn enum_string_values(
                 let name = String::from_utf16_lossy(&name_buf[..name_len as usize]).to_string();
                 let value = if data_type == REG_SZ.0 || data_type == REG_EXPAND_SZ.0 {
                     let word_count = (data_len as usize / 2).saturating_sub(1);
-                    let words = std::slice::from_raw_parts(data_buf.as_ptr() as *const u16, word_count);
+                    let words =
+                        std::slice::from_raw_parts(data_buf.as_ptr() as *const u16, word_count);
                     String::from_utf16_lossy(words).trim().to_string()
                 } else {
                     String::new()
@@ -1503,7 +1543,10 @@ fn delete_registry_value(
     };
 
     let subkey_wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
-    let value_wide: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let value_wide: Vec<u16> = value_name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
 
     unsafe {
         let mut hkey = windows::Win32::System::Registry::HKEY::default();
@@ -1550,7 +1593,10 @@ fn delete_registry_tree(
         } else if res == ERROR_FILE_NOT_FOUND {
             Ok(RegistryDeleteStatus::AlreadyAbsent)
         } else {
-            Err(format!("registry key delete failed with Win32 code {}", res.0))
+            Err(format!(
+                "registry key delete failed with Win32 code {}",
+                res.0
+            ))
         }
     }
 }
@@ -1604,7 +1650,14 @@ fn remove_appx_package_for_id(id: &str) -> String {
     );
     let result = run_hidden_output(
         "powershell",
-        &["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &cmd],
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &cmd,
+        ],
     );
 
     match result {
@@ -1629,7 +1682,8 @@ fn apply_policy_tweak(id: &str) -> String {
         };
 
         if id == "consumer-experience" {
-            let key = wide_null(r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
+            let key =
+                wide_null(r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
             let value = wide_null("SubscribedContent-338388Enabled");
             let data: u32 = 0;
             let bytes = data.to_le_bytes();
@@ -1650,16 +1704,12 @@ fn apply_policy_tweak(id: &str) -> String {
                     return "[error] consumer-experience: unable to open policy key".to_string();
                 }
 
-                let set_res = RegSetValueExW(
-                    hkey,
-                    PCWSTR(value.as_ptr()),
-                    0,
-                    REG_DWORD,
-                    Some(&bytes),
-                );
+                let set_res =
+                    RegSetValueExW(hkey, PCWSTR(value.as_ptr()), 0, REG_DWORD, Some(&bytes));
                 let _ = RegCloseKey(hkey);
                 if set_res == ERROR_SUCCESS {
-                    return "[ok] consumer-experience: disabled recommendation content policy".to_string();
+                    return "[ok] consumer-experience: disabled recommendation content policy"
+                        .to_string();
                 }
                 return "[error] consumer-experience: failed to write policy value".to_string();
             }
@@ -1702,7 +1752,8 @@ fn restore_policy_tweak(id: &str) -> String {
         };
 
         if id == "consumer-experience" {
-            let key = wide_null(r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
+            let key =
+                wide_null(r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager");
             let value = wide_null("SubscribedContent-338388Enabled");
             let data: u32 = 1;
             let bytes = data.to_le_bytes();
@@ -1723,16 +1774,12 @@ fn restore_policy_tweak(id: &str) -> String {
                     return "[error] consumer-experience: unable to open policy key".to_string();
                 }
 
-                let set_res = RegSetValueExW(
-                    hkey,
-                    PCWSTR(value.as_ptr()),
-                    0,
-                    REG_DWORD,
-                    Some(&bytes),
-                );
+                let set_res =
+                    RegSetValueExW(hkey, PCWSTR(value.as_ptr()), 0, REG_DWORD, Some(&bytes));
                 let _ = RegCloseKey(hkey);
                 if set_res == ERROR_SUCCESS {
-                    return "[ok] consumer-experience: recommendation content policy restored".to_string();
+                    return "[ok] consumer-experience: recommendation content policy restored"
+                        .to_string();
                 }
                 return "[error] consumer-experience: failed to write policy value".to_string();
             }
@@ -1824,13 +1871,19 @@ fn estimate_impact(command: &str) -> String {
 fn recommend(name: &str, command: &str, enabled: bool) -> String {
     let n = name.to_lowercase();
     let c = command.to_lowercase();
-    if n.contains("nvidia") || n.contains("amd") || n.contains("intel")
-        || c.contains("nvcplui") || c.contains("nvdisplay")
+    if n.contains("nvidia")
+        || n.contains("amd")
+        || n.contains("intel")
+        || c.contains("nvcplui")
+        || c.contains("nvdisplay")
     {
         return "keep".to_string();
     }
-    if n.contains("steam") || n.contains("discord") || n.contains("epic")
-        || n.contains("origin") || n.contains("battle.net")
+    if n.contains("steam")
+        || n.contains("discord")
+        || n.contains("epic")
+        || n.contains("origin")
+        || n.contains("battle.net")
     {
         return "optional".to_string();
     }
@@ -1846,13 +1899,27 @@ fn recommend(name: &str, command: &str, enabled: bool) -> String {
 
 fn extract_publisher(command: &str) -> String {
     let c = command.to_lowercase();
-    if c.contains("nvidia") { return "NVIDIA".to_string(); }
-    if c.contains("amd") { return "AMD".to_string(); }
-    if c.contains("intel") { return "Intel".to_string(); }
-    if c.contains("steam") { return "Valve".to_string(); }
-    if c.contains("discord") { return "Discord Inc.".to_string(); }
-    if c.contains("epic") { return "Epic Games".to_string(); }
-    if c.contains("microsoft") || c.contains("onedrive") { return "Microsoft".to_string(); }
+    if c.contains("nvidia") {
+        return "NVIDIA".to_string();
+    }
+    if c.contains("amd") {
+        return "AMD".to_string();
+    }
+    if c.contains("intel") {
+        return "Intel".to_string();
+    }
+    if c.contains("steam") {
+        return "Valve".to_string();
+    }
+    if c.contains("discord") {
+        return "Discord Inc.".to_string();
+    }
+    if c.contains("epic") {
+        return "Epic Games".to_string();
+    }
+    if c.contains("microsoft") || c.contains("onedrive") {
+        return "Microsoft".to_string();
+    }
     "Unknown".to_string()
 }
 
@@ -1877,6 +1944,16 @@ fn extract_executable_path(command: &str) -> String {
             .to_string();
     }
 
+    let lower = trimmed.to_ascii_lowercase();
+    for ext in [
+        ".exe", ".dll", ".com", ".bat", ".cmd", ".msi", ".chm", ".hlp", ".wav",
+    ] {
+        if let Some(index) = lower.find(ext) {
+            let end = index + ext.len();
+            return trimmed[..end].trim_matches(',').to_string();
+        }
+    }
+
     trimmed
         .split_whitespace()
         .next()
@@ -1886,7 +1963,14 @@ fn extract_executable_path(command: &str) -> String {
 
 fn expand_simple_env(path: &str) -> String {
     let mut expanded = path.to_string();
-    for key in ["ProgramFiles", "ProgramFiles(x86)", "SystemRoot", "WinDir", "LocalAppData", "AppData"] {
+    for key in [
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "SystemRoot",
+        "WinDir",
+        "LocalAppData",
+        "AppData",
+    ] {
         if let Ok(value) = std::env::var(key) {
             expanded = expanded.replace(&format!("%{key}%"), &value);
         }
@@ -1968,13 +2052,18 @@ fn write_combined_registry_backup(
     body.push_str("; Individual per-key exports are stored beside this file.\r\n\r\n");
 
     for entry in &manifest.entries {
-        let Some(file) = &entry.reg_file else { continue };
+        let Some(file) = &entry.reg_file else {
+            continue;
+        };
         let path = std::path::Path::new(file);
         let text = read_reg_export_text(path)?;
         let mut in_header = true;
         for line in text.lines() {
             let trimmed = line.trim_start_matches('\u{feff}').trim();
-            if in_header && (trimmed.is_empty() || trimmed.eq_ignore_ascii_case("Windows Registry Editor Version 5.00")) {
+            if in_header
+                && (trimmed.is_empty()
+                    || trimmed.eq_ignore_ascii_case("Windows Registry Editor Version 5.00"))
+            {
                 continue;
             }
             in_header = false;
@@ -2034,7 +2123,13 @@ fn import_registry_file(path: &std::path::Path) -> Result<(), String> {
 
 fn sanitize_id(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>()
         .to_lowercase()
 }
@@ -2369,17 +2464,17 @@ pub fn set_timer_resolution(profile_id: &str) -> String {
         extern "system" {
             fn NtSetTimerResolution(
                 desired: u32,
-                set: u8,   // BOOLEAN (1 byte on Windows)
+                set: u8, // BOOLEAN (1 byte on Windows)
                 current: *mut u32,
             ) -> i32; // NTSTATUS
         }
 
         const UNIT: &str = "100 ns";
         let (desired, set, label): (u32, u8, &str) = match profile_id {
-            "gaming" | "creator" => (5_000,  1, "0.5 ms (gaming)"),
-            "balanced"           => (10_000, 1, "1.0 ms (balanced)"),
-            "quiet"              => (0,      0, "system default"),
-            _                    => (10_000, 1, "1.0 ms (fallback)"),
+            "gaming" | "creator" => (5_000, 1, "0.5 ms (gaming)"),
+            "balanced" => (10_000, 1, "1.0 ms (balanced)"),
+            "quiet" => (0, 0, "system default"),
+            _ => (10_000, 1, "1.0 ms (fallback)"),
         };
 
         let mut current: u32 = 0;
@@ -2417,21 +2512,57 @@ pub fn apply_power_mode_tweaks(profile_id: &str) -> String {
         const BOOST_MODE: &str = "PERFBOOSTMODE";
 
         let (min_pct, max_pct, boost): (&str, &str, &str) = match profile_id {
-            "gaming" => ("10", "100", "2"),   // aggressive boost without pinning idle clocks
-            "creator" => ("10", "100", "1"),  // enabled boost, less idle burn
+            "gaming" => ("10", "100", "2"), // aggressive boost without pinning idle clocks
+            "creator" => ("10", "100", "1"), // enabled boost, less idle burn
             "balanced" => ("5", "100", "1"),
-            "quiet" => ("5", "70", "0"),      // disable boost
+            "quiet" => ("5", "70", "0"), // disable boost
             _ => ("5", "100", "1"),
         };
 
         let mut failures = Vec::new();
         let cmds = [
-            ["/setacvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MIN, min_pct],
-            ["/setacvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MAX, max_pct],
-            ["/setacvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, BOOST_MODE, boost],
-            ["/setdcvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MIN, min_pct],
-            ["/setdcvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, PROC_MAX, max_pct],
-            ["/setdcvalueindex", "SCHEME_CURRENT", SUB_PROCESSOR, BOOST_MODE, boost],
+            [
+                "/setacvalueindex",
+                "SCHEME_CURRENT",
+                SUB_PROCESSOR,
+                PROC_MIN,
+                min_pct,
+            ],
+            [
+                "/setacvalueindex",
+                "SCHEME_CURRENT",
+                SUB_PROCESSOR,
+                PROC_MAX,
+                max_pct,
+            ],
+            [
+                "/setacvalueindex",
+                "SCHEME_CURRENT",
+                SUB_PROCESSOR,
+                BOOST_MODE,
+                boost,
+            ],
+            [
+                "/setdcvalueindex",
+                "SCHEME_CURRENT",
+                SUB_PROCESSOR,
+                PROC_MIN,
+                min_pct,
+            ],
+            [
+                "/setdcvalueindex",
+                "SCHEME_CURRENT",
+                SUB_PROCESSOR,
+                PROC_MAX,
+                max_pct,
+            ],
+            [
+                "/setdcvalueindex",
+                "SCHEME_CURRENT",
+                SUB_PROCESSOR,
+                BOOST_MODE,
+                boost,
+            ],
         ];
 
         for args in cmds {
@@ -2490,12 +2621,30 @@ fn run_powercfg_cmd(args: &[&str]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clean_registry_issues, restore_registry_backup, sanitize_id};
+    use super::{
+        clean_registry_issues, extract_executable_path, restore_registry_backup, sanitize_id,
+    };
 
     #[test]
     fn sanitize_id_normalizes_text() {
         assert_eq!(sanitize_id("Hello World.exe"), "hello_world_exe");
         assert_eq!(sanitize_id("GPU-Boost#1"), "gpu-boost_1");
+    }
+
+    #[test]
+    fn executable_path_parser_handles_unquoted_paths_with_spaces() {
+        assert_eq!(
+            extract_executable_path(r"C:\Program Files\Vendor\App\helper.exe --background"),
+            r"C:\Program Files\Vendor\App\helper.exe"
+        );
+        assert_eq!(
+            extract_executable_path(r"C:\Program Files\Vendor\App\plugin.dll,EntryPoint"),
+            r"C:\Program Files\Vendor\App\plugin.dll"
+        );
+        assert_eq!(
+            extract_executable_path(r#""C:\Program Files\Vendor App\helper.exe" --background"#),
+            r"C:\Program Files\Vendor App\helper.exe"
+        );
     }
 
     #[test]

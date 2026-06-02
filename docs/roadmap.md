@@ -114,6 +114,7 @@
 - [x] Radium artifact identity audit (`verify:radium-artifact`) with ProductName/FileDescription checks and SHA-256 manifest generation
 - [ ] Auto-update mechanism (tauri-plugin-updater)
 - [ ] Code signing certificate
+- [x] Signing script scaffold (`npm.cmd run sign:radium`) with no secrets stored in repo
 - [ ] Signed-release audit gate (`scripts/pre_release_artifact_audit.ps1 -RequireSignature`)
 - [ ] Windows Defender / SmartScreen reputation building
 - [ ] Radium PCs OEM pre-install package
@@ -124,7 +125,7 @@
 
 - [x] **Live tray icon** — dynamic 32×32 RGBA metric icon with arc gauge; user picks metric in Settings → Tray behaviour
 - [x] **Sidebar live sensor strip** — persistent CPU/GPU temp + usage chips in sidebar, color-coded by threshold, visible on all pages
-- [x] **Local CoPilot preview** — local-first model recommendations, localhost runtime lock, persisted runtime preferences, typed confidence insight cards, and advisory chat against a local Ollama-compatible runtime
+- [x] **Local CoPilot preview** — local-first model recommendations, localhost runtime lock, persisted runtime preferences, typed confidence insight cards, local action-history context, and advisory chat against a local Ollama-compatible runtime
 - [x] **Gauge circle readability** — dark gauge face, corrected SVG track contrast, explicit light text in center
 - [x] **Registry cleaner UX** — step guide (Scan→Review→Backup→Clean), safety legend, row layout fix, guarantees list
 - [x] **Wire `apply_performance_profile`** to real Win32 power plan calls (`powercfg /setactive <GUID>`)

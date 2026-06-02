@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { brand } from '../lib/branding';
+import { readCompanionActions, subscribeCompanionActions, type CompanionActionRecord } from '../lib/actionHistory';
 import { buildCopilotContextPack, buildCopilotRecommendation, buildNonInvasiveInsights, confidenceLabel } from '../lib/copilot';
 import { runLocalAiSetup } from '../services/systemService';
 
@@ -32,9 +33,10 @@ export function AiCopilotPage() {
   const { sample, systemInfo } = useMonitor();
   const deferredSample = useDeferredValue(sample);
   const deferredSystemInfo = useDeferredValue(systemInfo);
+  const [actions, setActions] = useState<CompanionActionRecord[]>(() => readCompanionActions());
   const recommendation = useMemo(() => buildCopilotRecommendation(deferredSystemInfo, deferredSample), [deferredSample, deferredSystemInfo]);
-  const insights = useMemo(() => buildNonInvasiveInsights(deferredSample), [deferredSample]);
-  const contextPack = useMemo(() => buildCopilotContextPack(deferredSystemInfo, deferredSample, insights), [deferredSample, deferredSystemInfo, insights]);
+  const insights = useMemo(() => buildNonInvasiveInsights(deferredSample, actions), [actions, deferredSample]);
+  const contextPack = useMemo(() => buildCopilotContextPack(deferredSystemInfo, deferredSample, insights, actions), [actions, deferredSample, deferredSystemInfo, insights]);
   const savedSettings = useMemo(() => loadCopilotSettings(), []);
 
   const [runtimeUrl, setRuntimeUrl] = useState(savedSettings?.runtimeUrl ?? 'http://127.0.0.1:11434');
@@ -59,6 +61,8 @@ export function AiCopilotPage() {
   useEffect(() => {
     saveCopilotSettings({ runtimeUrl, modelName, lockToLocalhost, attachContextPack });
   }, [attachContextPack, lockToLocalhost, modelName, runtimeUrl]);
+
+  useEffect(() => subscribeCompanionActions(() => setActions(readCompanionActions())), []);
 
   const hasInstalledModel = (target: string, models = installedModels) => {
     const normalized = normalizeModelTag(target);

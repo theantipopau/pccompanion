@@ -308,7 +308,7 @@ Shipped. `BenchmarkPage.tsx` has a 30-second capture engine, live sensor trust p
 - `src/types/system.ts`
 - `src-tauri/src/lib.rs`
 
-### Slice G: Local AI insights and copilot tab 🚧 PLANNED
+### Slice G: Local AI insights and copilot tab 🚧 IN PROGRESS
 
 Scope:
 
@@ -335,8 +335,9 @@ Status:
 - Localhost-only lock mode and non-invasive advisory defaults are active.
 - CoPilot runtime preferences now persist locally per brand mode.
 - Deterministic insights now emit typed cards with confidence labels, source signals, tone, and a safe suggested action.
+- Recent local Companion action history now feeds CoPilot insight cards and the optional safe context pack.
 - Local runtime requests now have a short timeout and clearer connection / endpoint / missing-model error messages.
-- Remaining work: add Dashboard/Utilities insight-card surfaces, broaden source aggregation beyond the live sample, and validate clean-machine local-runtime setup.
+- Remaining work: add Dashboard/Utilities insight-card surfaces, consolidate diagnostics/benchmark/action-history signals behind a shared analyzer contract, and validate clean-machine local-runtime setup.
 
 Likely files:
 
@@ -387,7 +388,8 @@ Current implementation progress:
 - Local CoPilot enhancement pass (June 1, 2026): runtime URL/model/context preferences now persist locally, deterministic insights render as confidence-typed cards with source signals and safe suggested actions, and local runtime failures are classified more clearly while remaining localhost-first.
 - GUI responsiveness pass (June 1, 2026): CoPilot insight headers/signals now wrap safely, mobile CoPilot controls stretch into tap-friendly rows, chat/prompt textareas are shorter on narrow screens, and touch/narrow surfaces suppress hover transforms that could make the UI feel jumpy.
 - Radium walkthrough installer rebuild (June 1, 2026): after clarifying that the requested demo/walkthrough package should keep Radium branding, `npm.cmd run build:exe` passed and the latest audited artifacts are `artifacts/radium/radium-pcs-companion-20260601-203136.exe` plus `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`. Both artifacts report `ProductName` and `FileDescription` as `Radium PCs Companion`.
-- Product-readiness pass (June 1, 2026): Dashboard now has a current-state strip for active profile, telemetry/provider freshness, tray/startup state, and local safety posture. `scripts/pre_release_artifact_audit.ps1` now fails on wrong Radium metadata, catches accidental neutral `PC Companion` artifacts, writes a SHA-256 manifest, and supports `-RequireSignature` for signed releases. Security posture is documented in `docs/security-readiness.md`.
+- Product-readiness pass (June 1, 2026): Dashboard now has a current-state strip for active profile, telemetry/provider freshness, tray/startup state, and local safety posture. `scripts/pre_release_artifact_audit.ps1` now fails on wrong Radium metadata, catches accidental neutral `PC Companion` artifacts, writes a SHA-256 manifest, and supports `-RequireSignature` for signed releases. Security posture is documented in `docs/security-readiness.md`, with clean-machine QA in `docs/clean-machine-test.md` and signing scaffolded through `npm.cmd run sign:radium`.
+- Signing/lifecycle follow-up (June 1, 2026): `npm.cmd run sign:radium` now locates Windows SDK `signtool.exe` but fails closed until a signing identity is supplied. Lifecycle smoke now fails on lingering app processes; this workspace needs an elevated tester pass because one release EXE process remained access-denied after stop.
 - Companion assistance flow: implemented with local bundle export, prefilled email context, and local action history. No automatic upload.
 - Radium Care checklist: implemented in System Passport as support-friendly ownership readiness, not a firmware/OEM control layer.
 - Restore Centre: implemented for Registry Cleaner backups. It reads existing backup manifests and restores through the same guarded backend command used by Registry Cleaner.

@@ -13,6 +13,15 @@ $tauriBinDir = Join-Path $repoRoot "src-tauri\binaries"
 $sidecarName = "radium-sensor-sidecar-x86_64-pc-windows-msvc.dll"
 $tauriSidecar = Join-Path $tauriBinDir $sidecarName
 $runtimeTarget = Join-Path $tauriBinDir "dotnet-runtime"
+$expectedLibreHardwareMonitorVersion = "0.9.6"
+
+[xml]$projectXml = Get-Content -LiteralPath $project -Raw
+$lhmPackage = $projectXml.Project.ItemGroup.PackageReference |
+  Where-Object { $_.Include -eq "LibreHardwareMonitorLib" } |
+  Select-Object -First 1
+if (!$lhmPackage -or $lhmPackage.Version -ne $expectedLibreHardwareMonitorVersion) {
+  throw "LibreHardwareMonitorLib PackageReference must stay on latest reviewed GitHub release $expectedLibreHardwareMonitorVersion."
+}
 
 if (Test-Path -LiteralPath $publishDir) {
   Remove-Item -LiteralPath $publishDir -Recurse -Force
@@ -118,6 +127,14 @@ $pawnioSource = Join-Path $repoRoot "vendor\PawnIO"
 $pawnioSetup = Join-Path $pawnioSource "PawnIO_setup.exe"
 if (Test-Path -LiteralPath $lhmSource) {
   Copy-Item -LiteralPath $lhmSource -Destination (Join-Path $tauriBinDir "LibreHardwareMonitorLib.dll") -Force
+}
+$stagedLhm = Join-Path $tauriBinDir "LibreHardwareMonitorLib.dll"
+if (!(Test-Path -LiteralPath $stagedLhm)) {
+  throw "LibreHardwareMonitorLib.dll was not staged into src-tauri\binaries."
+}
+$stagedLhmVersion = (Get-Item -LiteralPath $stagedLhm).VersionInfo.FileVersion
+if ($stagedLhmVersion -notlike "$expectedLibreHardwareMonitorVersion*") {
+  throw "Bundled LibreHardwareMonitorLib.dll is $stagedLhmVersion; expected latest reviewed GitHub release $expectedLibreHardwareMonitorVersion."
 }
 if (!(Test-Path -LiteralPath $pawnioSetup)) {
   throw "PawnIO_setup.exe is required at vendor\PawnIO\PawnIO_setup.exe so the NSIS installer can silently install the low-level sensor driver."

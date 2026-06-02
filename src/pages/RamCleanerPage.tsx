@@ -115,6 +115,14 @@ export function RamCleanerPage() {
         <MetricCard icon={MemoryStick} label="Before" value={result ? gb(result.beforeGb) : 'Pending'} detail="Pre-clean usage" tone="amber" progress={result && totalGb > 0 ? Math.round((result.beforeGb / totalGb) * 100) : 0} />
         <MetricCard icon={CheckCircle2} label="After" value={result ? gb(result.afterGb) : 'Pending'} detail="Post-clean usage" tone="green" progress={result && totalGb > 0 ? Math.round((result.afterGb / totalGb) * 100) : 0} />
         <MetricCard icon={Sparkles} label="Freed" value={result ? gb(result.freedGb) : '0 GB'} detail="Safe reclaim only" tone="cyan" progress={result && totalGb > 0 ? Math.round((result.freedGb / totalGb) * 100) : 0} />
+        <MetricCard
+          icon={CheckCircle2}
+          label="Trimmed"
+          value={result ? `${result.processesTrimmed}/${result.processesScanned}` : 'Pending'}
+          detail={result ? `${result.processesSkipped} skipped by Windows access rules` : 'Accessible process coverage'}
+          tone="green"
+          progress={result && result.processesScanned > 0 ? Math.round((result.processesTrimmed / result.processesScanned) * 100) : 0}
+        />
 
         <Panel className="wide optimizer-log">
           <div className="panel-heading">
