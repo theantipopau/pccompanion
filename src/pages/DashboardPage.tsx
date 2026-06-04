@@ -36,7 +36,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   }, [systemInfo?.gpuDriverVersion]);
 
   const history = sample?.history ?? [];
-  const animateCharts = settings.experience.animations;
+  const animateEntrance = settings.experience.animations;
   const performanceScore = useMemo(() => computePerformanceScore(sample), [sample]);
   const gpuProvider = sample?.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI';
   const nominal = sample?.state === 'valid';
@@ -204,16 +204,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               </div>
               <motion.div
                 className="hero-telemetry-ribbon"
-                initial={animateCharts ? { opacity: 0, y: 10 } : false}
-                animate={animateCharts ? { opacity: 1, y: 0 } : false}
+                initial={animateEntrance ? { opacity: 0, y: 10 } : false}
+                animate={animateEntrance ? { opacity: 1, y: 0 } : false}
                 transition={{ type: 'spring', stiffness: 220, damping: 26, mass: 0.64, delay: 0.08 }}
               >
                 {heroSignals.map((signal, index) => (
                   <motion.div
                     key={signal.id}
                     className="hero-telemetry-chip"
-                    initial={animateCharts ? { opacity: 0, y: 8 } : false}
-                    animate={animateCharts ? { opacity: 1, y: 0 } : false}
+                    initial={animateEntrance ? { opacity: 0, y: 8 } : false}
+                    animate={animateEntrance ? { opacity: 1, y: 0 } : false}
                     transition={{ type: 'spring', stiffness: 230, damping: 26, mass: 0.62, delay: 0.1 + index * 0.04 }}
                   >
                     <span>{signal.label}</span>
@@ -376,9 +376,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
               <Tooltip content={<DashboardTooltip />} />
-              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={1.8} dot={false} name="CPU %" />
-              <Area isAnimationActive={animateCharts} animationDuration={340} animationEasing="ease-out" type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={1.8} dot={false} name="GPU %" />
-              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={1.9} dot={false} name="RAM %" />
+              <Area isAnimationActive={false} type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={1.8} dot={false} name="CPU %" />
+              <Area isAnimationActive={false} type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={1.8} dot={false} name="GPU %" />
+              <Line isAnimationActive={false} type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={1.9} dot={false} name="RAM %" />
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
@@ -399,7 +399,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <XAxis dataKey="time" hide />
               <YAxis hide />
               <Tooltip content={<DashboardTooltip />} />
-              <Line isAnimationActive={animateCharts} animationDuration={320} animationEasing="ease-out" type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.05} dot={false} name="Download Mbps" />
+              <Line isAnimationActive={false} type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.05} dot={false} name="Download Mbps" />
             </LineChart>
           </ResponsiveContainer>
         </Panel>

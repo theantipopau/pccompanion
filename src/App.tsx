@@ -221,19 +221,18 @@ function CompanionApp() {
     <>
       <ErrorBoundary>
         <Shell navItems={navItems} activeView={activeView} onNavigate={setActiveView}>
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="sync">
           <motion.main
             key={activeView}
             className="page-transition"
-            initial={settings.experience.animations ? { opacity: 0, x: 18, y: 2, scale: 0.992, filter: 'blur(1.5px)' } : false}
-            animate={settings.experience.animations ? { opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' } : { opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' }}
-            exit={settings.experience.animations ? { opacity: 0, x: -12, y: -1, scale: 0.996, filter: 'blur(1px)' } : { opacity: 0 }}
+            initial={settings.experience.animations ? { opacity: 0, x: 14, y: 1, scale: 0.995 } : false}
+            animate={settings.experience.animations ? { opacity: 1, x: 0, y: 0, scale: 1 } : { opacity: 1, x: 0, y: 0, scale: 1 }}
+            exit={settings.experience.animations ? { opacity: 0, x: -8, y: 0, scale: 0.998 } : { opacity: 0 }}
             transition={{
-              x: { type: 'spring', stiffness: 250, damping: 30, mass: 0.6 },
-              y: { type: 'spring', stiffness: 230, damping: 28, mass: 0.62 },
-              opacity: { duration: settings.experience.animations ? 0.2 : 0.01, ease: [0.2, 0, 0.13, 1] },
-              scale: { duration: settings.experience.animations ? 0.18 : 0.01, ease: [0.2, 0, 0.13, 1] },
-              filter: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.2, 0, 0.13, 1] },
+              x: { type: 'spring', stiffness: 310, damping: 34, mass: 0.55 },
+              y: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.22, 1, 0.36, 1] },
+              opacity: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.22, 1, 0.36, 1] },
+              scale: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.22, 1, 0.36, 1] },
             }}
           >
             <ErrorBoundary>
