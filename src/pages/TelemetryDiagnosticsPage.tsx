@@ -193,10 +193,10 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                 <span>{sidecarProbe.executablePath || 'No sidecar path reported'}</span>
               </div>
               <div className="sidecar-probe-grid">
-                <span>CPU temp <strong>{sidecarProbe.cpuTempC != null ? `${Math.round(sidecarProbe.cpuTempC)}C` : 'N/A'}</strong></span>
-                <span>CPU fan <strong>{sidecarProbe.cpuFanRpm != null ? `${sidecarProbe.cpuFanRpm} RPM` : 'N/A'}</strong></span>
+                <span>CPU temp <strong>{sidecarProbe.cpuTempC != null ? `${Math.round(sidecarProbe.cpuTempC)} C` : 'No temp'}</strong></span>
+                <span>CPU fan <strong>{sidecarProbe.cpuFanRpm != null ? `${sidecarProbe.cpuFanRpm} RPM` : 'No fan'}</strong></span>
                 <span>Driver rows <strong>{sidecarProbe.driverAvailable ? 'Visible' : 'Missing'}</strong></span>
-                <span>LHM <strong>{sidecarProbe.libraryVersion ? shortText(sidecarProbe.libraryVersion, 22) : 'N/A'}</strong></span>
+                <span>LHM <strong>{sidecarProbe.libraryVersion ? shortText(sidecarProbe.libraryVersion, 22) : 'Unavailable'}</strong></span>
               </div>
               {sidecarProbe.notes.length > 0 && (
                 <p title={sidecarProbe.notes.join(' / ')}>{shortText(sidecarProbe.notes.join(' / '), 150)}</p>
@@ -298,7 +298,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                     <span>None detected</span>
                     <span>unknown</span>
                     <span>unknown</span>
-                    <span>N/A</span>
+                    <span>Unavailable</span>
                   </div>
                 )}
                 {snapshot.sensorDiscovery.gpuAdapters.map((adapter, index) => (
@@ -332,7 +332,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                     <span title={attempt.label}>{shortText(attempt.label, 48)}</span>
                     <span title={attempt.rawValue}>{shortText(attempt.rawValue, 32)}</span>
                     <span className={attempt.accepted ? 'state-chip live' : 'state-chip blocked'}>{attempt.accepted ? 'Yes' : 'No'}</span>
-                    <span>{attempt.valueC == null ? 'N/A' : `${attempt.valueC.toFixed(1)} C`}</span>
+                    <span>{attempt.valueC == null ? 'Unavailable' : `${attempt.valueC.toFixed(1)} C`}</span>
                     <span title={attempt.reason}>{shortText(attempt.reason, 80)}</span>
                   </motion.div>
                 ))}

@@ -25,6 +25,14 @@ export type BrandProfile = {
   companyDescription: string;
   supportSubject: string;
   companyLabel: string;
+  contactPanelLabel: string;
+  supportCtaLabel: string;
+  supportTeamName: string;
+  trustBadgeTitle: string;
+  trustBadgeDetail: string;
+  dashboardProofLine: string;
+  dashboardProofTags: [string, string, string];
+  readinessLabel: string;
   onboardingTitle: string;
   onboardingIntro: string;
   onboardingPassport: string;
@@ -61,6 +69,14 @@ function getBrandProfile(currentMode: BrandMode): BrandProfile {
       companyDescription: 'Custom builder demo profile for partner evaluations. Brand details, support channels, and copy can be replaced for each OEM.',
       supportSubject: 'PC Companion Support',
       companyLabel: 'PC Builder',
+      contactPanelLabel: 'Demo Contact',
+      supportCtaLabel: 'Get Help',
+      supportTeamName: 'PC Companion team',
+      trustBadgeTitle: 'Demo ready',
+      trustBadgeDetail: 'Local telemetry preview with support-style reports',
+      dashboardProofLine: 'Local-first hardware care workflow',
+      dashboardProofTags: ['Neutral', 'Private', 'Support-ready'],
+      readinessLabel: 'Care',
       onboardingTitle: 'Welcome to PC Companion',
       onboardingIntro: 'Companion is your local hub for telemetry, support diagnostics, cleanup, and performance profiles.',
       onboardingPassport: 'System Passport and Telemetry Diagnostics keep useful build information close by if you ever need support.',
@@ -99,6 +115,14 @@ function getBrandProfile(currentMode: BrandMode): BrandProfile {
     companyDescription: 'Melbourne-based builders of custom and prebuilt gaming PCs, workstations, and water-cooled systems for Australian customers.',
     supportSubject: 'Radium PCs Companion Support',
     companyLabel: 'Radium PCs',
+    contactPanelLabel: 'Radium PCs Contact',
+    supportCtaLabel: 'Get Support',
+    supportTeamName: 'Radium PCs team',
+    trustBadgeTitle: 'Radium validated',
+    trustBadgeDetail: 'Local-first telemetry and support-ready reports',
+    dashboardProofLine: 'Local-first premium support workflow',
+    dashboardProofTags: ['Validated', 'Private', 'Support-ready'],
+    readinessLabel: 'Support',
     onboardingTitle: 'Welcome to Radium PCs Companion',
     onboardingIntro: 'Thanks for purchasing a Radium PCs custom build. Companion is your local hub for telemetry, support diagnostics, cleanup, and performance profiles.',
     onboardingPassport: 'System Passport and Telemetry Diagnostics keep useful build information close by if you ever need help from the Radium PCs team.',

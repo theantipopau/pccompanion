@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Clock3, Cpu, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, MonitorUp, PhoneCall, Search, Settings, ShieldCheck, Thermometer, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Building2, Clock3, Cpu, Download, ExternalLink, Gauge, Globe2, Layers, Mail, MemoryStick, Minimize2, PhoneCall, RefreshCw, Search, Settings, ShieldCheck, Thermometer, X, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { assets } from '../lib/assets';
 import { brand } from '../lib/branding';
+import { recordCompanionAction } from '../lib/actionHistory';
 import { pct, temp } from '../lib/format';
 import { extractTrayValue } from '../lib/trayIcon';
 import type { NavItem } from '../types/navigation';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
-import { getAppMetadata } from '../services/systemService';
-import type { AppMetadata } from '../types/system';
+import { applyPerformanceProfile, exportDiagnostics, getAppMetadata, optimizeRam, restartMonitoringEngine } from '../services/systemService';
+import { openExternalUrl } from '../services/native';
+import type { AppMetadata, PerformanceProfileId } from '../types/system';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CpuIcon, GpuIcon, RamIcon, ThermalIcon } from './HardwareIcon';
 
@@ -19,6 +21,15 @@ type ShellProps = {
   activeView: string;
   onNavigate: (view: string) => void;
   children: React.ReactNode;
+};
+
+type SearchResult = {
+  id: string;
+  label: string;
+  detail: string;
+  category: 'Page' | 'Action' | 'Support';
+  icon: LucideIcon;
+  run: () => void;
 };
 
 export function Shell({ navItems, activeView, onNavigate, children }: ShellProps) {
@@ -31,11 +42,12 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const businessHours = brand.businessHours;
   const storeAddress = brand.address;
   const supportSubject = brand.supportSubject;
-  const { sample } = useMonitor();
+  const { sample, loading, error, native } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dashboardActive = activeView === 'dashboard';
   const compactShell = settings.experience.compactMode;
   const motionEnabled = settings.experience.animations;
+  const searchListboxId = 'shell-command-palette-results';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -50,10 +62,31 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
       .catch(() => undefined);
     return () => { alive = false; };
   }, []);
+
+  function applyProfileFromCommand(id: PerformanceProfileId) {
+    void applyPerformanceProfile(id)
+      .then((result) => {
+        recordCompanionAction('profile', `${id} profile applied from command palette`, result.validation?.status ?? result.message);
+      })
+      .catch((err) => {
+        recordCompanionAction('profile', `${id} profile apply failed`, err instanceof Error ? err.message : String(err));
+      });
+    updateSettings((current) => ({
+      ...current,
+      experience: {
+        ...current.experience,
+        performanceProfile: id,
+        performanceMode: id === 'gaming' || id === 'creator' ? 'performance' : id === 'quiet' ? 'quiet' : 'balanced',
+      },
+    }));
+  }
+
   const quickActions = useMemo(() => [
     {
       id: 'action-open-system-passport',
       label: 'Open System Passport',
+      detail: 'Build identity, care checklist, and support metadata',
+      category: 'Support' as const,
       icon: Gauge,
       keywords: 'passport serial build oem identity score',
       run: () => onNavigate('passport'),
@@ -61,20 +94,96 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     {
       id: 'action-open-telemetry-diagnostics',
       label: 'Open Telemetry Diagnostics',
+      detail: 'Provider health, confidence, sidecar state, and export',
+      category: 'Support' as const,
       icon: ShieldCheck,
       keywords: 'diagnostics provenance provider confidence support bundle',
       run: () => onNavigate('diagnostics'),
     },
     {
-      id: 'action-open-radium-site',
+      id: 'action-export-diagnostics',
+      label: 'Export diagnostics bundle',
+      detail: 'Prepare a local support snapshot',
+      category: 'Support' as const,
+      icon: Download,
+      keywords: 'export diagnostics support bundle report snapshot',
+      run: () => {
+        void exportDiagnostics()
+          .then((result) => recordCompanionAction('support', 'Diagnostics exported from command palette', result.path))
+          .catch((err) => recordCompanionAction('support', 'Diagnostics export failed from command palette', String(err)));
+      },
+    },
+    {
+      id: 'action-restart-monitoring',
+      label: 'Restart monitoring engine',
+      detail: 'Refresh provider state and tray telemetry',
+      category: 'Action' as const,
+      icon: RefreshCw,
+      keywords: 'restart monitoring engine telemetry provider refresh sensors',
+      run: () => {
+        void restartMonitoringEngine()
+          .then((message) => recordCompanionAction('diagnostics', 'Monitoring engine restart requested', message))
+          .catch((err) => recordCompanionAction('diagnostics', 'Monitoring restart failed', String(err)));
+        updateSettings((current) => ({
+          ...current,
+          monitoring: { ...current.monitoring, launchOnStartup: true },
+        }));
+      },
+    },
+    {
+      id: 'action-quick-ram-clean',
+      label: 'Quick RAM clean',
+      detail: 'Release standby cache without terminating apps',
+      category: 'Action' as const,
+      icon: MemoryStick,
+      keywords: 'ram memory clean optimize standby cache trim',
+      run: () => {
+        void optimizeRam()
+          .then((result) => recordCompanionAction('maintenance', 'Quick RAM clean from command palette', result.message))
+          .catch((err) => recordCompanionAction('maintenance', 'Quick RAM clean failed from command palette', String(err)));
+      },
+    },
+    {
+      id: 'action-profile-quiet',
+      label: 'Apply Quiet profile',
+      detail: 'Lower-noise OS-level tuning intent',
+      category: 'Action' as const,
+      icon: Thermometer,
+      keywords: 'quiet profile silent cool power mode',
+      run: () => applyProfileFromCommand('quiet'),
+    },
+    {
+      id: 'action-profile-balanced',
+      label: 'Apply Balanced profile',
+      detail: 'Daily-use profile with safe defaults',
+      category: 'Action' as const,
+      icon: Gauge,
+      keywords: 'balanced profile normal daily power mode',
+      run: () => applyProfileFromCommand('balanced'),
+    },
+    {
+      id: 'action-profile-gaming',
+      label: 'Apply Gaming profile',
+      detail: 'Performance-focused OS-level tuning intent',
+      category: 'Action' as const,
+      icon: Zap,
+      keywords: 'gaming performance profile boost power mode',
+      run: () => applyProfileFromCommand('gaming'),
+    },
+    {
+      id: 'action-open-brand-site',
       label: `Open ${brand.name} website`,
+      detail: 'Open the configured brand website',
+      category: 'Support' as const,
       icon: Globe2,
       keywords: 'website sales build consultation',
-      run: () => window.open(companyWebsite, '_blank', 'noopener,noreferrer'),
+      run: () => openExternalUrl(companyWebsite),
     },
     {
       id: 'action-email-support',
       label: 'Email Companion support',
+      detail: `Create a mail draft for ${brand.supportTeamName}`,
+      category: 'Support' as const,
       icon: Mail,
       keywords: 'support help issue',
       run: () => window.open(`mailto:${companionEmail}?subject=${encodeURIComponent(supportSubject)}`, '_self'),
@@ -82,31 +191,39 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     {
       id: 'action-open-settings',
       label: 'Go to settings',
+      detail: 'Tray, overlay, startup, and interface preferences',
+      category: 'Page' as const,
       icon: Settings,
       keywords: 'settings preferences',
       run: () => onNavigate('settings'),
     },
-  ], [onNavigate, companyWebsite, companionEmail, supportSubject]);
+  ], [onNavigate, companyWebsite, companionEmail, supportSubject, updateSettings]);
 
   const query = searchQuery.trim().toLowerCase();
-  const searchResults = useMemo(() => {
+  const searchResults = useMemo<SearchResult[]>(() => {
+    const terms = query.split(/\s+/).filter(Boolean);
+    const matches = (haystack: string) => terms.every((term) => haystack.includes(term));
     const pages = navItems
-      .filter(item => !query || item.label.toLowerCase().includes(query))
+      .filter(item => !query || matches(`${item.label} ${item.id} ${item.keywords ?? ''}`.toLowerCase()))
       .map(item => ({
         id: `page-${item.id}`,
         label: item.label,
+        detail: `Open ${item.label}`,
+        category: 'Page' as const,
         icon: item.icon,
         run: () => onNavigate(item.id),
       }));
     const actions = quickActions
-      .filter(action => !query || `${action.label} ${action.keywords}`.toLowerCase().includes(query))
+      .filter(action => !query || matches(`${action.label} ${action.keywords}`.toLowerCase()))
       .map(action => ({
         id: action.id,
         label: action.label,
+        detail: action.detail,
+        category: action.category,
         icon: action.icon,
         run: action.run,
       }));
-    return [...pages, ...actions].slice(0, 9);
+    return [...actions, ...pages].slice(0, 10);
   }, [query, navItems, quickActions, onNavigate]);
 
   const navGroups: Array<{ label: string; ids: string[] }> = [
@@ -127,6 +244,10 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   useEffect(() => {
     setActiveSearchIndex(0);
   }, [searchQuery]);
+
+  useEffect(() => {
+    setActiveSearchIndex((current) => Math.min(current, Math.max(searchResults.length - 1, 0)));
+  }, [searchResults.length]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -158,13 +279,21 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     if (e.key === 'Enter' && searchResults.length > 0) {
       e.preventDefault();
       const selected = searchResults[Math.min(activeSearchIndex, searchResults.length - 1)];
-      selected.run();
-      setSearchQuery('');
-      e.currentTarget.blur();
+      runSearchResult(selected.run);
     }
   }
 
+  function runSearchResult(run: () => void) {
+    run();
+    setSearchQuery('');
+    setSearchFocused(false);
+    searchRef.current?.blur();
+  }
+
   const trayPreview = (() => {
+    if (!settings.monitoring.launchOnStartup) return { Icon: Gauge, label: 'Monitoring paused' };
+    if (error) return { Icon: ShieldCheck, label: 'Sensor error' };
+    if (loading) return { Icon: Gauge, label: 'Starting sensors' };
     const metric = settings.tray.liveIconMetric;
     if (!sample || metric === 'disabled') return { Icon: Gauge, label: 'Tray off' };
     const { value, isTemp } = extractTrayValue(sample, metric);
@@ -174,9 +303,13 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
     }
     return { Icon: Cpu, label: `${pct(value ?? 0)} ${metric.replace('Usage', '').toUpperCase()}` };
   })();
-  const telemetrySummary = sample
-    ? `${sample.state.toUpperCase()} · ${sample.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI'}`
-    : 'INITIALISING · PROVIDER PENDING';
+  const telemetrySummary = !settings.monitoring.launchOnStartup
+    ? 'PAUSED - MONITORING OFF'
+    : error
+    ? `ERROR - ${native ? 'NATIVE' : 'PREVIEW'}`
+    : sample
+    ? `${sample.state.toUpperCase()} - ${sample.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI'}`
+    : 'INITIALISING - PROVIDER PENDING';
 
   async function handleMinimize() {
     try {
@@ -237,49 +370,49 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
           ))}
         </nav>
 
-        {/* Live sensor strip — shown on all pages so temps are always visible */}
+        {/* Live sensor strip - shown on all pages so temps are always visible */}
         <div className="sidebar-metrics">
           <span className="sidebar-metrics-label">Live sensors</span>
           <div className="sidebar-metric-row">
             <ThermalIcon size={13} />
             <span>CPU</span>
             <strong className={tempClass(sample?.cpu.temperature)}>
-              {sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : '—'}
+              {sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : '-'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
             <GpuIcon size={13} />
             <span>GPU</span>
             <strong className={tempClass(sample?.gpu.temperature)}>
-              {sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : '—'}
+              {sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : '-'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
             <CpuIcon size={13} />
             <span>CPU%</span>
             <strong className={usageClass(sample?.cpu.usage)}>
-              {sample ? pct(sample.cpu.usage) : '—'}
+              {sample ? pct(sample.cpu.usage) : '-'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
             <GpuIcon size={13} />
             <span>GPU%</span>
             <strong className={usageClass(sample?.gpu.usage)}>
-              {sample ? pct(sample.gpu.usage) : '—'}
+              {sample ? pct(sample.gpu.usage) : '-'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
             <RamIcon size={13} />
             <span>RAM</span>
             <strong className={usageClass(sample?.memory.usage)}>
-              {sample ? pct(sample.memory.usage) : '—'}
+              {sample ? pct(sample.memory.usage) : '-'}
             </strong>
           </div>
         </div>
         <div className="sidebar-version-strip">
-          <span>v{appMetadata?.version ?? '—'}</span>
+          <span>v{appMetadata?.version ?? '-'}</span>
           {appMetadata?.updateStatus === 'available' && (
-            <button className="sidebar-update-pill" type="button" onClick={() => onNavigate('settings')} title="App update available — open Settings">
+            <button className="sidebar-update-pill" type="button" onClick={() => onNavigate('settings')} title="App update available - open Settings">
               <Zap size={11} />
               Update available
             </button>
@@ -293,14 +426,23 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               <ShieldCheck size={14} />
             </span>
             <span>
-              <strong>Radium validated</strong>
-              <small>Local-first telemetry and support-ready reports</small>
+              <strong>{brand.trustBadgeTitle}</strong>
+              <small>{brand.trustBadgeDetail}</small>
             </span>
           </div>
         </div>
         <div className="sidebar-contact">
-          <span className="sidebar-metrics-label">{brand.companyLabel} Contact</span>
-          <a className="sidebar-contact-link" href={companyWebsite} target="_blank" rel="noreferrer noopener">
+          <span className="sidebar-metrics-label">{brand.contactPanelLabel}</span>
+          <a
+            className="sidebar-contact-link"
+            href={companyWebsite}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(event) => {
+              event.preventDefault();
+              openExternalUrl(companyWebsite);
+            }}
+          >
             <Globe2 size={14} />
             <span>{brand.websiteLabel}</span>
             <ExternalLink size={12} />
@@ -309,22 +451,28 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             <PhoneCall size={14} />
             <span>{phone}</span>
           </a>
-          <a className="sidebar-contact-link" href={`mailto:${salesEmail}`}>
-            <Mail size={14} />
-            <span>{salesEmail}</span>
-          </a>
-          <a className="sidebar-contact-link" href={`mailto:${supportEmail}`}>
-            <Mail size={14} />
-            <span>{supportEmail}</span>
-          </a>
+          {brand.features.advancedSupport && (
+            <>
+              <a className="sidebar-contact-link" href={`mailto:${salesEmail}`}>
+                <Mail size={14} />
+                <span>{salesEmail}</span>
+              </a>
+              <a className="sidebar-contact-link" href={`mailto:${supportEmail}`}>
+                <Mail size={14} />
+                <span>{supportEmail}</span>
+              </a>
+            </>
+          )}
           <a className="sidebar-contact-link" href={`mailto:${companionEmail}?subject=${encodeURIComponent(supportSubject)}`}>
             <Mail size={14} />
             <span>{companionEmail}</span>
           </a>
-          <a className="sidebar-contact-link" href={`mailto:${operationsEmail}`}>
-            <Mail size={14} />
-            <span>{operationsEmail}</span>
-          </a>
+          {brand.features.advancedSupport && (
+            <a className="sidebar-contact-link" href={`mailto:${operationsEmail}`}>
+              <Mail size={14} />
+              <span>{operationsEmail}</span>
+            </a>
+          )}
           <div className="sidebar-contact-static">
             <div className="sidebar-contact-line">
               <Clock3 size={13} />
@@ -357,8 +505,13 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                 onKeyDown={handleSearchKeyDown}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
-                placeholder="Search… ⌃K"
+                placeholder="Search... Ctrl+K"
                 aria-label="Search modules"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={searchFocused}
+                aria-controls={searchListboxId}
+                aria-activedescendant={searchFocused && searchResults.length > 0 ? `${searchListboxId}-${activeSearchIndex}` : undefined}
                 spellCheck={false}
               />
               {searchQuery && (
@@ -367,26 +520,33 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchQuery('')}
                   aria-label="Clear search"
-                >×</button>
+                >
+                  <X size={12} />
+                </button>
               )}
             </div>
             {searchFocused && (
-              <div className="search-results" role="listbox">
+              <div className="search-results" id={searchListboxId} role="listbox">
                 {searchResults.length > 0 ? searchResults.map((item, index) => {
                   const Icon = item.icon;
                   const activeResult = index === activeSearchIndex;
                   return (
                     <button
                       key={item.id}
+                      id={`${searchListboxId}-${index}`}
                       className={activeResult ? 'search-result-item active' : 'search-result-item'}
                       role="option"
                       aria-selected={activeResult}
                       onMouseEnter={() => setActiveSearchIndex(index)}
                       onMouseDown={e => e.preventDefault()}
-                      onClick={() => { item.run(); setSearchQuery(''); }}
+                      onClick={() => runSearchResult(item.run)}
                     >
                       <Icon size={15} />
-                      <span>{item.label}</span>
+                      <span className="search-result-copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                      <em>{item.category}</em>
                     </button>
                   );
                 }) : (
@@ -416,7 +576,7 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               title="Contact Companion support"
             >
               <Mail size={14} />
-              <span>Get Support</span>
+              <span>{brand.supportCtaLabel}</span>
             </a>
             <div className="tray-preview" title="Live tray icon preview">
               <trayPreview.Icon size={15} />

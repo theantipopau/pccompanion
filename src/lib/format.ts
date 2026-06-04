@@ -3,9 +3,9 @@ export function pct(value: number) {
 }
 
 export function temp(value: number | null, unit: 'c' | 'f' = 'c') {
-  if (value == null) return 'N/A';
+  if (value == null) return 'No temp';
   const display = unit === 'f' ? value * 1.8 + 32 : value;
-  return `${Math.round(display)}°${unit.toUpperCase()}`;
+  return `${Math.round(display)} ${unit.toUpperCase()}`;
 }
 
 export function gb(value: number) {

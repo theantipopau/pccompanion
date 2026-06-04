@@ -39,19 +39,19 @@ import type { NavItem } from './types/navigation';
 import type { PerformanceProfileId } from './types/system';
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'thermals', label: 'Thermals', icon: Activity },
-  { id: 'processes', label: 'Processes', icon: Cpu },
-  { id: 'optimizer', label: 'Memory', icon: MemoryStick },
-  { id: 'cleanup', label: 'Bloatware', icon: PackageMinus },
-  { id: 'registry', label: 'Registry', icon: FileWarning },
-  { id: 'startup', label: 'Startup', icon: TimerReset },
-  { id: 'storage', label: 'System Clean', icon: HardDrive },
-  { id: 'profiles', label: 'Profiles', icon: Gauge },
-  { id: 'benchmark', label: 'Benchmark', icon: BarChart3 },
-  { id: 'copilot', label: 'CoPilot', icon: Bot },
-  { id: 'utilities', label: 'Utilities', icon: Wrench },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, keywords: 'home overview health sensors support readiness' },
+  { id: 'thermals', label: 'Thermals', icon: Activity, keywords: 'temperature cooling cpu gpu airflow case sensors' },
+  { id: 'processes', label: 'Processes', icon: Cpu, keywords: 'task manager cpu memory top usage apps' },
+  { id: 'optimizer', label: 'Memory', icon: MemoryStick, keywords: 'ram cleaner trim standby cache optimize' },
+  { id: 'cleanup', label: 'Bloatware', icon: PackageMinus, keywords: 'apps uninstall remove trial software cleanup' },
+  { id: 'registry', label: 'Registry', icon: FileWarning, keywords: 'registry cleaner backup restore startup paths issues' },
+  { id: 'startup', label: 'Startup', icon: TimerReset, keywords: 'boot login autorun startup apps enable disable' },
+  { id: 'storage', label: 'System Clean', icon: HardDrive, keywords: 'disk storage temp files logs reclaim cleanup' },
+  { id: 'profiles', label: 'Profiles', icon: Gauge, keywords: 'performance quiet balanced gaming creator power mode' },
+  { id: 'benchmark', label: 'Benchmark', icon: BarChart3, keywords: 'scores compare results performance capture' },
+  { id: 'copilot', label: 'CoPilot', icon: Bot, keywords: 'ai assistant local model ollama recommendations chat' },
+  { id: 'utilities', label: 'Utilities', icon: Wrench, keywords: 'tools fan rgb updates staged capabilities' },
+  { id: 'settings', label: 'Settings', icon: Settings, keywords: 'preferences about diagnostics passport support updates' },
 ];
 
 export function App() {

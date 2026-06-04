@@ -13,6 +13,7 @@ type Zone = {
   value: number | null;
   detail: string;
   icon: LucideIcon;
+  confidence: 'live' | 'proxy' | 'unavailable';
 };
 
 export function ThermalCaseView() {
@@ -36,6 +37,14 @@ export function ThermalCaseView() {
   const cpuFan = sample?.fans.find((fan) => fan.label.toLowerCase().includes('cpu'));
   const gpuFan = sample?.fans.find((fan) => fan.label.toLowerCase().includes('gpu'));
   const firstFan = sample?.fans.find((fan) => fan.rpm != null || fan.pct != null);
+  const gpuFanLive = sample?.gpu.fanPct != null || gpuFan?.rpm != null;
+  const liveSignalCount = [
+    cpuTemp != null,
+    gpuTemp != null,
+    storageTemp != null,
+    Boolean(firstFan),
+  ].filter(Boolean).length;
+  const confidenceSummary = `${liveSignalCount}/4 thermal signal groups live`;
 
   const zones: Zone[] = [
     {
@@ -44,6 +53,7 @@ export function ThermalCaseView() {
       value: cpuTemp,
       detail: sample ? `${Math.round(sample.cpu.usage)}% CPU load${cpuTemp == null ? ' - package sensor unavailable' : ''}` : 'Awaiting CPU sample',
       icon: Thermometer,
+      confidence: cpuTemp == null ? 'proxy' : 'live',
     },
     {
       id: 'ram',
@@ -51,6 +61,7 @@ export function ThermalCaseView() {
       value: null,
       detail: sample ? `${Math.round(sample.memory.usage)}% memory load - no DIMM temperature sensor` : 'Awaiting memory sample',
       icon: MemoryStick,
+      confidence: 'proxy',
     },
     {
       id: 'gpu',
@@ -58,6 +69,7 @@ export function ThermalCaseView() {
       value: gpuTemp,
       detail: sample ? `${Math.round(sample.gpu.usage)}% GPU load${gpuTemp == null ? ' - temperature pending' : ''}` : 'Awaiting GPU sample',
       icon: MonitorUp,
+      confidence: gpuTemp == null ? 'proxy' : 'live',
     },
     {
       id: 'storage',
@@ -67,6 +79,7 @@ export function ThermalCaseView() {
         ? `${Math.round(primaryStorage.usedPercent)}% used${storageTemp == null ? ' - SMART temp unavailable' : ''}`
         : 'Drive scan pending',
       icon: HardDrive,
+      confidence: storageTemp == null ? 'unavailable' : 'live',
     },
     {
       id: 'psu',
@@ -74,6 +87,7 @@ export function ThermalCaseView() {
       value: null,
       detail: sample?.gpu.powerWatts ? `${sample.gpu.powerWatts.toFixed(0)} W GPU power - no PSU sensor` : 'No PSU or ambient sensor exposed',
       icon: Power,
+      confidence: sample?.gpu.powerWatts ? 'proxy' : 'unavailable',
     },
   ];
 
@@ -95,8 +109,24 @@ export function ThermalCaseView() {
           <div className="case-backdrop-scrim" />
           <span className="case-glow cpu-glow" style={{ opacity: intensity(cpuTemp, maxTemp) }} />
           <span className="case-glow gpu-glow" style={{ opacity: intensity(gpuTemp, maxTemp) }} />
+          <span className="case-glow storage-glow" style={{ opacity: intensity(storageTemp, maxTemp) }} />
+          <div className="case-heat-grid" aria-hidden="true">
+            <span className={`heat-cell heat-${heatBand(cpuTemp)}`} />
+            <span className={`heat-cell heat-${heatBand(gpuTemp)}`} />
+            <span className={`heat-cell heat-${heatBand(storageTemp)}`} />
+          </div>
           <div className="airflow-line intake" />
           <div className="airflow-line exhaust" />
+          <div className="airflow-particles" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="case-confidence-strip" aria-label="Thermal sensor confidence">
+            <span className={cpuTemp == null ? 'thermal-confidence-chip proxy' : 'thermal-confidence-chip live'}>CPU {cpuTemp == null ? 'load proxy' : 'temp live'}</span>
+            <span className={gpuTemp == null ? 'thermal-confidence-chip proxy' : 'thermal-confidence-chip live'}>GPU {gpuTemp == null ? 'load proxy' : 'temp live'}</span>
+            <span className={firstFan ? 'thermal-confidence-chip live' : 'thermal-confidence-chip unavailable'}>Fans {firstFan ? 'live' : 'pending'}</span>
+          </div>
 
           <SensorBadge
             className="sensor-badge-cpu"
@@ -104,6 +134,7 @@ export function ThermalCaseView() {
             label="CPU"
             value={cpuTemp == null ? pct(sample?.cpu.usage ?? 0) : temp(cpuTemp, settings.monitoring.temperatureUnit)}
             detail={cpuTemp == null ? 'Load proxy' : pct(sample?.cpu.usage ?? 0)}
+            confidence={cpuTemp == null ? 'proxy' : 'live'}
             logo={cpuVendorAsset}
             logoAlt={`${cpuName} vendor`}
           />
@@ -113,6 +144,7 @@ export function ThermalCaseView() {
             label="GPU"
             value={temp(gpuTemp, settings.monitoring.temperatureUnit)}
             detail={sample?.gpu.fanPct != null ? `${sample.gpu.fanPct}% fan` : gpuFan?.rpm != null ? `${gpuFan.rpm} RPM` : pct(sample?.gpu.usage ?? 0)}
+            confidence={gpuTemp == null ? 'proxy' : 'live'}
             logo={gpuVendorAsset}
             logoAlt={`${gpuName} vendor`}
           />
@@ -122,6 +154,7 @@ export function ThermalCaseView() {
             label="Top fans"
             value={fanValue(cpuFan ?? firstFan)}
             detail="Exhaust"
+            confidence={(cpuFan ?? firstFan) ? 'live' : 'unavailable'}
           />
           <SensorBadge
             className="sensor-badge-front-fans"
@@ -129,7 +162,14 @@ export function ThermalCaseView() {
             label="Intake"
             value={fanValue(firstFan)}
             detail={sample?.gpu.powerWatts != null ? `${sample.gpu.powerWatts.toFixed(0)} W GPU` : 'Airflow'}
+            confidence={gpuFanLive || firstFan ? 'live' : 'unavailable'}
           />
+        </div>
+
+        <div className="thermal-confidence-summary">
+          <span className="eyebrow">Confidence</span>
+          <strong>{confidenceSummary}</strong>
+          <small>Temperature values use measured sensors only. Load proxies are labelled when a hardware temperature is not exposed.</small>
         </div>
 
         <div className="thermal-legend">
@@ -142,7 +182,9 @@ export function ThermalCaseView() {
                   <strong><Icon size={14} /> {zone.label}</strong>
                   <small>{zone.detail}</small>
                 </div>
-                <b>{temp(zone.value, settings.monitoring.temperatureUnit)}</b>
+                <b>
+                  {zone.value == null ? confidenceLabel(zone.confidence) : temp(zone.value, settings.monitoring.temperatureUnit)}
+                </b>
               </div>
             );
           })}
@@ -158,6 +200,7 @@ function SensorBadge({
   label,
   value,
   detail,
+  confidence,
   logo,
   logoAlt,
 }: {
@@ -166,27 +209,29 @@ function SensorBadge({
   label: string;
   value: string;
   detail: string;
+  confidence: 'live' | 'proxy' | 'unavailable';
   logo?: string | null;
   logoAlt?: string;
 }) {
   return (
-    <div className={`thermal-sensor-badge ${className}`}>
+    <div className={`thermal-sensor-badge ${className} confidence-${confidence}`}>
       <span className="thermal-sensor-icon"><Icon size={14} /></span>
       <div>
         <span>{label}</span>
         <strong>{value}</strong>
         <small>{detail}</small>
       </div>
+      <em>{confidenceLabel(confidence)}</em>
       {logo && <img src={logo} alt={logoAlt ?? `${label} vendor`} />}
     </div>
   );
 }
 
 function fanValue(fan?: { rpm: number | null; pct: number | null }) {
-  if (!fan) return 'N/A';
+  if (!fan) return 'Unavailable';
   if (fan.rpm != null) return `${fan.rpm} RPM`;
   if (fan.pct != null) return `${fan.pct}%`;
-  return 'N/A';
+  return 'Unavailable';
 }
 
 function cleanIdentity(value?: string | null) {
@@ -210,4 +255,10 @@ function heatBand(value: number | null) {
 function intensity(value: number | null, maxTemp: number) {
   if (value == null) return 0.08;
   return Math.min(Math.max(value / maxTemp, 0.18), 0.7);
+}
+
+function confidenceLabel(confidence: 'live' | 'proxy' | 'unavailable') {
+  if (confidence === 'live') return 'Live';
+  if (confidence === 'proxy') return 'Proxy';
+  return 'Unavailable';
 }

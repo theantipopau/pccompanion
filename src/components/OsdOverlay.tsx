@@ -23,7 +23,7 @@ export function OsdOverlay({ forceVisible = false }: OsdOverlayProps) {
       {
         id: 'vramUsage',
         label: 'VRAM',
-        value: sample?.gpu.vramTotalGb ? `${sample.gpu.vramUsedGb.toFixed(1)} GB` : 'N/A',
+        value: sample?.gpu.vramTotalGb ? `${sample.gpu.vramUsedGb.toFixed(1)} GB` : 'No VRAM',
         detail: sample?.gpu.vramTotalGb ? `of ${sample.gpu.vramTotalGb.toFixed(0)} GB` : 'pending',
         icon: MonitorUp,
       },
@@ -42,7 +42,7 @@ export function OsdOverlay({ forceVisible = false }: OsdOverlayProps) {
           ? `${sample.gpu.fanPct}%`
           : sample?.fans[0]?.rpm != null
           ? `${sample.fans[0].rpm} RPM`
-          : 'N/A',
+          : 'No fan',
         detail: sample?.gpu.powerWatts != null ? `${sample.gpu.powerWatts.toFixed(0)} W GPU` : 'cooling',
         icon: Fan,
       },

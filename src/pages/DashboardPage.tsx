@@ -54,7 +54,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const gpuName = normalizeIdentity(sample?.gpu.name) ?? normalizeIdentity(systemInfo?.gpu) ?? 'GPU detecting';
   const boardName = normalizeIdentity(systemInfo?.motherboard);
 
-  /** Abbreviate Intel's WMI-format driver version "31.0.101.5234" → "v101.5234". */
+  /** Abbreviate Intel's WMI-format driver version "31.0.101.5234" to "v101.5234". */
   const formatDriverVersion = (ver: string, vendor: string): string => {
     if (vendor === 'intel') {
       const parts = ver.split('.');
@@ -84,7 +84,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       ? 'Telemetry stable'
       : 'Telemetry partially degraded';
   const telemetrySubline = sample
-    ? `Provider ${gpuProvider} · ${sampleAgeLabel}`
+    ? `Provider ${gpuProvider} - ${sampleAgeLabel}`
     : 'Waiting for first telemetry sample';
   const cpuVendorAsset = vendorLogo(cpuVendor);
   const gpuVendorAsset = oemLogoForText(gpuName) ?? vendorLogo(gpuVendor);
@@ -95,7 +95,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     { key: 'os', label: systemInfo?.windows ?? 'OS detecting' },
     { key: 'provider', label: `${gpuProvider} Provider`, icon: gpuVendorAsset },
     { key: 'lanes', label: `Telemetry ${activeChannels}/4` },
-    { key: 'support', label: `Support ${nominal ? 'Ready' : 'Degraded'} · ${performanceScore.grade}` },
+    { key: 'support', label: `${brand.readinessLabel} ${nominal ? 'Ready' : 'Degraded'} - ${performanceScore.grade}` },
   ];
   const heroSignals = [
     { id: 'cpu', label: 'CPU', value: sample ? pct(sample.cpu.usage) : 'Scan', detail: sample?.cpu.temperature != null ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Temp unavailable' },
@@ -157,7 +157,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       {!native && (
         <div className="notice notice-preview">
-          Browser preview — telemetry is simulated. Run <code>npm run tauri dev</code> to connect to real hardware.
+          Browser preview - telemetry is simulated. Run <code>npm run tauri dev</code> to connect to real hardware.
         </div>
       )}
       {native && error && (
@@ -235,11 +235,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               </div>
               <div className="hero-premium-asset" aria-hidden="true">
                 <img src={brand.splashLogo} alt="" />
-                <span>Local-first premium support workflow</span>
+                <span>{brand.dashboardProofLine}</span>
                 <div className="hero-premium-proof">
-                  <small>Validated</small>
-                  <small>Private</small>
-                  <small>Support-ready</small>
+                  {brand.dashboardProofTags.map((tag) => <small key={tag}>{tag}</small>)}
                 </div>
               </div>
             </div>
@@ -259,8 +257,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           value={loading ? 'Scanning' : sample?.cpu.temperature == null ? pct(sample?.cpu.usage ?? 0) : temp(sample?.cpu.temperature ?? null, settings.monitoring.temperatureUnit)}
           detail={sample
             ? sample.cpu.temperature == null
-              ? `Provider WMI ACPI · ${mhz(sample.cpu.clockMhz)} · package sensor unavailable`
-              : `Provider WMI ACPI · ${mhz(sample.cpu.clockMhz)}`
+              ? `Provider WMI ACPI - ${mhz(sample.cpu.clockMhz)} - package sensor unavailable`
+              : `Provider WMI ACPI - ${mhz(sample.cpu.clockMhz)}`
             : 'Awaiting scan'}
           progress={sample?.cpu.temperature ?? 0}
           tone="cyan"
@@ -274,7 +272,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           componentName={gpuName}
           value={loading ? 'Scanning' : temp(sample?.gpu.temperature ?? null, settings.monitoring.temperatureUnit)}
           detail={sample
-            ? `Provider ${gpuProvider} · ${mhz(sample.gpu.coreClockMhz)} core · VRAM ${gb(sample.gpu.vramUsedGb)} / ${gb(sample.gpu.vramTotalGb)}`
+            ? `Provider ${gpuProvider} - ${mhz(sample.gpu.coreClockMhz)} core - VRAM ${gb(sample.gpu.vramUsedGb)} / ${gb(sample.gpu.vramTotalGb)}`
             : 'Awaiting scan'}
           progress={sample?.gpu.temperature ?? 0}
           tone="green"
@@ -287,7 +285,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           label="Memory"
           componentName={boardName ?? 'Mainboard detecting'}
           value={sample ? `${gb(sample.memory.usedGb)} / ${gb(sample.memory.totalGb)}` : 'Scanning'}
-          detail={sample ? `${pct(sample.memory.usage)} · low-overhead monitor cache` : 'Awaiting scan'}
+          detail={sample ? `${pct(sample.memory.usage)} - low-overhead monitor cache` : 'Awaiting scan'}
           progress={sample?.memory.usage ?? 0}
           tone="amber"
           vendorAssetSrc={boardVendorAsset}
@@ -302,7 +300,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <>
               {mbps(sample.network.upMbps)} up
               {sample.network.adapterName && (
-                <> · <span className="badge badge-dim">{adapterTypeLabel(sample.network.adapterType)}</span> {sample.network.adapterName}</>
+                <> - <span className="badge badge-dim">{adapterTypeLabel(sample.network.adapterType)}</span> {sample.network.adapterName}</>
               )}
             </>
           ) : 'Awaiting scan'}
@@ -501,7 +499,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             {(sample?.fans ?? []).map((fan) => (
               <div className="fan-row" key={fan.label}>
                 <span>{fan.label}</span>
-                <strong>{fan.rpm != null ? `${fan.rpm.toLocaleString()} RPM` : fan.pct != null ? `${fan.pct}%` : 'N/A'}</strong>
+                <strong>{fan.rpm != null ? `${fan.rpm.toLocaleString()} RPM` : fan.pct != null ? `${fan.pct}%` : 'Unavailable'}</strong>
               </div>
             ))}
             {sample?.gpu.powerWatts != null && (
@@ -686,7 +684,7 @@ function DashboardTooltip({ active, payload, label }: { active?: boolean; payloa
         <div className="chart-tooltip-row" key={`${item.name ?? 'series'}-${index}`}>
           <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? '#ff7a00' }} />
           <span>{item.name ?? 'Value'}</span>
-          <span>{typeof item.value === 'number' ? item.value.toFixed(1) : item.value ?? '—'}</span>
+          <span>{typeof item.value === 'number' ? item.value.toFixed(1) : item.value ?? '-'}</span>
         </div>
       ))}
     </div>

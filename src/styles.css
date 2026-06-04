@@ -52,6 +52,22 @@
   --dur-press: 80ms;
 }
 
+html[data-theme='graphite'] {
+  --bg: #080d11;
+  --surface: rgba(18, 25, 31, 0.95);
+  --surface-strong: rgba(22, 31, 38, 0.98);
+  --muted: #a7b5bd;
+  --text: #f4f8fa;
+  --cyan: #45d7c6;
+  --cyan-dim: rgba(69, 215, 198, 0.55);
+  --cyan-glow: rgba(69, 215, 198, 0.14);
+  --green: #8ee6a7;
+  --amber: #e6c267;
+  --red: #ff7474;
+  --vendor-accent: rgba(69, 215, 198, 0.42);
+  --vendor-fog: rgba(69, 215, 198, 0.11);
+}
+
 *,
 *::before,
 *::after {
@@ -97,6 +113,23 @@ body::before {
 body::after {
   background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.04) 45%, transparent 80%);
   opacity: 0.22;
+}
+
+html[data-theme='graphite'] body {
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(69, 215, 198, 0.008) 39px, rgba(69, 215, 198, 0.008) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(69, 215, 198, 0.005) 39px, rgba(69, 215, 198, 0.005) 40px),
+    linear-gradient(140deg, rgba(69, 215, 198, 0.07), transparent 28%),
+    radial-gradient(circle at 90% 8%, rgba(142, 230, 167, 0.045), transparent 30%),
+    radial-gradient(circle at 50% 95%, rgba(69, 215, 198, 0.02), transparent 40%),
+    #080d11;
+}
+
+html[data-theme='graphite'] body::before {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(69, 215, 198, 0.075), transparent 32%),
+    radial-gradient(circle at 82% 20%, rgba(142, 230, 167, 0.05), transparent 32%),
+    radial-gradient(circle at 52% 90%, rgba(69, 215, 198, 0.035), transparent 42%);
 }
 
 html.overlay-window-root,
@@ -517,6 +550,88 @@ textarea:focus-visible {
   line-height: 1.32;
 }
 
+html[data-theme='graphite'] .sidebar {
+  background: linear-gradient(180deg, rgba(8, 13, 17, 0.99) 0%, rgba(10, 16, 21, 0.97) 100%);
+  scrollbar-color: rgba(69, 215, 198, 0.28) transparent;
+}
+
+html[data-theme='graphite'] .sidebar::-webkit-scrollbar-thumb {
+  background: rgba(69, 215, 198, 0.3);
+}
+
+html[data-theme='graphite'] .brand-lockup {
+  border-color: rgba(69, 215, 198, 0.3);
+  background:
+    radial-gradient(circle at 16% 50%, rgba(69, 215, 198, 0.18), transparent 34%),
+    linear-gradient(130deg, rgba(69, 215, 198, 0.12) 0%, rgba(69, 215, 198, 0.035) 62%);
+  box-shadow: 0 0 28px rgba(69, 215, 198, 0.13), 0 2px 8px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(69, 215, 198, 0.2);
+}
+
+html[data-theme='graphite'] .brand-icon-frame {
+  border-color: rgba(69, 215, 198, 0.2);
+}
+
+html[data-theme='graphite'] .nav-item:hover {
+  border-color: rgba(69, 215, 198, 0.16);
+  background: rgba(69, 215, 198, 0.07);
+}
+
+html[data-theme='graphite'] .nav-item.active {
+  border-color: rgba(69, 215, 198, 0.32);
+  background: rgba(69, 215, 198, 0.11);
+  box-shadow: inset 0 0 14px rgba(69, 215, 198, 0.08), -2px 0 10px rgba(69, 215, 198, 0.12);
+}
+
+html[data-theme='graphite'] .sidebar-metrics {
+  border-color: rgba(69, 215, 198, 0.18);
+  background:
+    linear-gradient(180deg, rgba(69, 215, 198, 0.055), rgba(69, 215, 198, 0.02)),
+    rgba(255, 255, 255, 0.018);
+  box-shadow: inset 0 1px 0 rgba(69, 215, 198, 0.13), inset 0 0 20px rgba(69, 215, 198, 0.022), 0 0 0 1px rgba(69, 215, 198, 0.035);
+}
+
+html[data-theme='graphite'] .sidebar-brand-promo {
+  border-color: rgba(69, 215, 198, 0.2);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.055), transparent 34%),
+    radial-gradient(circle at 86% 18%, rgba(69, 215, 198, 0.13), transparent 40%),
+    rgba(69, 215, 198, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 24px rgba(69, 215, 198, 0.035);
+}
+
+html[data-theme='graphite'] .sidebar-brand-promo::before {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 255, 255, 0.035) 18px 19px),
+    linear-gradient(120deg, transparent 0%, rgba(69, 215, 198, 0.075) 48%, transparent 84%);
+}
+
+html[data-theme='graphite'] .sidebar-brand-promo img,
+html[data-theme='graphite'] .brand-wordmark {
+  filter: drop-shadow(0 0 12px rgba(69, 215, 198, 0.16));
+}
+
+html[data-theme='graphite'] .topbar {
+  border-bottom-color: rgba(69, 215, 198, 0.12);
+  box-shadow: 0 1px 0 rgba(69, 215, 198, 0.08), 0 2px 14px rgba(0, 0, 0, 0.22);
+}
+
+html[data-theme='graphite'] .topbar-support-link,
+html[data-theme='graphite'] .sidebar-update-pill {
+  border-color: rgba(69, 215, 198, 0.32);
+  background: rgba(69, 215, 198, 0.08);
+  color: #b9eee7;
+}
+
+html[data-theme='graphite'] .tray-preview::before {
+  border-left-color: rgba(69, 215, 198, 0.34);
+}
+
+html[data-theme='graphite'] .search-result-item.active em,
+html[data-theme='graphite'] .search-result-item:hover em,
+html[data-theme='graphite'] .thermal-confidence-summary {
+  border-color: rgba(69, 215, 198, 0.2);
+}
+
 .metric-cool { color: var(--green); }
 .metric-warm { color: var(--amber); }
 .metric-hot  { color: var(--red); }
@@ -763,11 +878,13 @@ textarea:focus-visible {
 }
 
 .search-result-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 11px;
+  min-height: 46px;
+  padding: 8px 10px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -797,6 +914,50 @@ textarea:focus-visible {
 }
 
 .search-result-item:hover svg {
+  color: var(--cyan);
+}
+
+.search-result-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-result-copy strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-copy small {
+  overflow: hidden;
+  color: #93a1af;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-item em {
+  align-self: center;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #9fb0bd;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.search-result-item.active em,
+.search-result-item:hover em {
+  border-color: rgba(255, 122, 0, 0.22);
   color: var(--cyan);
 }
 
@@ -5698,6 +5859,46 @@ textarea:focus-visible {
   background: rgba(245, 200, 107, 0.22);
 }
 
+.storage-glow {
+  left: 54%;
+  top: 58%;
+  background: rgba(112, 199, 255, 0.18);
+}
+
+.case-heat-grid {
+  position: absolute;
+  inset: 16px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 0.85fr 1.1fr 0.9fr;
+  gap: 10px;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.heat-cell {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 8px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.025));
+  opacity: 0.3;
+}
+
+.heat-cell.heat-cool {
+  border-color: rgba(132, 240, 140, 0.16);
+  background: linear-gradient(180deg, rgba(132, 240, 140, 0.08), transparent 66%);
+}
+
+.heat-cell.heat-warm {
+  border-color: rgba(245, 200, 107, 0.2);
+  background: linear-gradient(180deg, rgba(245, 200, 107, 0.11), transparent 64%);
+}
+
+.heat-cell.heat-hot {
+  border-color: rgba(255, 109, 109, 0.24);
+  background: linear-gradient(180deg, rgba(255, 109, 109, 0.14), transparent 62%);
+}
+
 .heat-cool {
   box-shadow: 0 0 22px rgba(255, 122, 0, 0.18);
 }
@@ -5731,11 +5932,82 @@ textarea:focus-visible {
   animation: spin 5.5s linear infinite;
 }
 
+.airflow-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.airflow-particles span {
+  position: absolute;
+  right: 16%;
+  width: 46px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(112, 199, 255, 0.72), transparent);
+  animation: airflow-particle 3.2s ease-in-out infinite;
+}
+
+.airflow-particles span:nth-child(1) {
+  top: 31%;
+}
+
+.airflow-particles span:nth-child(2) {
+  top: 48%;
+  animation-delay: 0.55s;
+}
+
+.airflow-particles span:nth-child(3) {
+  top: 65%;
+  animation-delay: 1.1s;
+}
+
+.case-confidence-strip {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.thermal-confidence-chip {
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(4, 8, 13, 0.64);
+  color: #b7c6d3;
+  font-size: 9.5px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+.thermal-confidence-chip.live {
+  border-color: rgba(132, 240, 140, 0.2);
+  color: #bdf6c7;
+}
+
+.thermal-confidence-chip.proxy {
+  border-color: rgba(245, 200, 107, 0.22);
+  color: #f6daa0;
+}
+
+.thermal-confidence-chip.unavailable {
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #9aa7b2;
+}
+
 .thermal-sensor-badge {
   position: absolute;
   z-index: 5;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   min-width: 126px;
@@ -5746,6 +6018,18 @@ textarea:focus-visible {
   background: rgba(7, 12, 19, 0.78);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(12px);
+}
+
+.thermal-sensor-badge.confidence-live {
+  border-color: rgba(132, 240, 140, 0.24);
+}
+
+.thermal-sensor-badge.confidence-proxy {
+  border-color: rgba(245, 200, 107, 0.24);
+}
+
+.thermal-sensor-badge.confidence-unavailable {
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .thermal-sensor-icon {
@@ -5763,6 +6047,29 @@ textarea:focus-visible {
   width: 30px;
   max-height: 20px;
   object-fit: contain;
+}
+
+.thermal-sensor-badge em {
+  align-self: center;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: #aeb9c5;
+  font-size: 8.5px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.thermal-sensor-badge.confidence-live em {
+  border-color: rgba(132, 240, 140, 0.2);
+  color: #bdf6c7;
+}
+
+.thermal-sensor-badge.confidence-proxy em {
+  border-color: rgba(245, 200, 107, 0.22);
+  color: #f6daa0;
 }
 
 .thermal-sensor-badge span,
@@ -5854,6 +6161,22 @@ textarea:focus-visible {
   }
 }
 
+@keyframes airflow-particle {
+  0%, 100% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  24%,
+  70% {
+    opacity: 0.85;
+  }
+
+  50% {
+    transform: translateX(-120px);
+  }
+}
+
 .thermal-side {
   display: grid;
   gap: 12px;
@@ -5869,6 +6192,28 @@ textarea:focus-visible {
 .startup-list {
   display: grid;
   gap: 12px;
+}
+
+.thermal-confidence-summary {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 122, 0, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 52%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.thermal-confidence-summary strong {
+  color: #eef7ff;
+  font-size: 13px;
+}
+
+.thermal-confidence-summary small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .thermal-row {

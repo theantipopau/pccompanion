@@ -70,7 +70,7 @@ export function ThermalsPage() {
             vendorAssetSrc={oemLogoForText(cpuName) ?? vendorLogo(cpuVendor)}
             vendorAssetAlt={`${cpuName} logo`}
             value={cpuTempAvailable ? temp(cpuTemp, settings.monitoring.temperatureUnit) : sample ? pct(sample.cpu.usage) : 'Scanning'}
-            detail={sample ? `${cpuTempAvailable ? pct(sample.cpu.usage) : 'Package temperature requires provider'} · ${mhz(sample.cpu.clockMhz)}` : 'Awaiting CPU sample'}
+            detail={sample ? `${cpuTempAvailable ? pct(sample.cpu.usage) : 'Package temperature requires provider'} - ${mhz(sample.cpu.clockMhz)}` : 'Awaiting CPU sample'}
             progress={cpuTempAvailable ? cpuTemp ?? 0 : sample?.cpu.usage ?? 0}
           />
           <MetricCard
@@ -87,7 +87,7 @@ export function ThermalsPage() {
           <MetricCard
             icon={Fan}
             label="Cooling response"
-            value={sample?.fans[0]?.rpm ? `${sample.fans[0].rpm} RPM` : sample?.gpu.fanPct != null ? `${sample.gpu.fanPct}% GPU` : 'N/A'}
+            value={sample?.fans[0]?.rpm ? `${sample.fans[0].rpm} RPM` : sample?.gpu.fanPct != null ? `${sample.gpu.fanPct}% GPU` : 'Unavailable'}
             detail={sample ? (fanChannelCount > 0 ? `${fanChannelCount} fan channel${fanChannelCount === 1 ? '' : 's'} detected` : 'No board fan controller exposed yet') : 'Awaiting scan'}
             progress={sample?.fans[0]?.rpm ? Math.min(sample.fans[0].rpm / 18, 100) : sample?.gpu.fanPct ?? 0}
             tone="amber"

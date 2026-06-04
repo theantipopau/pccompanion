@@ -49,7 +49,7 @@ function scoreThermals(sample: HardwareSample): ScorePillar {
     label: 'Thermal envelope',
     score,
     weight: 0.34,
-    detail: `CPU ${cpu == null ? 'n/a' : `${Math.round(cpu)}C`} · GPU ${gpu == null ? 'n/a' : `${Math.round(gpu)}C`}`,
+    detail: `CPU ${cpu == null ? 'no temp' : `${Math.round(cpu)} C`} - GPU ${gpu == null ? 'no temp' : `${Math.round(gpu)} C`}`,
   };
 }
 

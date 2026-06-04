@@ -26,11 +26,11 @@ type SettingsTab = 'general' | 'games' | 'passport' | 'diagnostics' | 'about';
 
 const SETTINGS_TAB_ORDER: SettingsTab[] = ['general', 'passport', 'games', 'diagnostics', 'about'];
 
-const radiumWebsite = brand.website;
+const brandWebsite = brand.website;
 const companionEmail = brand.companionEmail;
 const supportEmail = brand.supportEmail;
-const radiumPhone = brand.phone;
-const radiumAddress = brand.address;
+const brandPhone = brand.phone;
+const brandAddress = brand.address;
 
 export function SettingsPage({ initialTab = 'general' }: { initialTab?: SettingsTab }) {
   const { sample, systemInfo, native } = useMonitor();
@@ -521,7 +521,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
   const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
   const subject = encodeURIComponent(`${brand.productName} Assistance`);
   const supportBody = encodeURIComponent([
-    `Hi ${brand.name} team,`,
+    `Hi ${brand.supportTeamName},`,
     '',
     `I need assistance with ${brand.productName}.`,
     '',
@@ -600,9 +600,9 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
           </button>
           <a className="primary-button" href={`mailto:${companionEmail}?subject=${subject}&body=${supportBody}`}>
             <Mail size={16} />
-            <span>Need Assistance with the Companion?</span>
+            <span>{brand.supportCtaLabel}</span>
           </a>
-          <button className="secondary-button" type="button" onClick={() => openExternalUrl(radiumWebsite)}>
+          <button className="secondary-button" type="button" onClick={() => openExternalUrl(brandWebsite)}>
             <ExternalLink size={16} />
             <span>Visit {brand.name}</span>
           </button>
@@ -626,10 +626,21 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
           </div>
           <p className="subtle">{brand.companyDescription}</p>
           <div className="about-contact-list">
-            <a href={`tel:${radiumPhone.replace(/\s+/g, '')}`}><PhoneCall size={15} /><span>{radiumPhone}</span></a>
+            <a href={`tel:${brandPhone.replace(/\s+/g, '')}`}><PhoneCall size={15} /><span>{brandPhone}</span></a>
             <a href={`mailto:${supportEmail}`}><Mail size={15} /><span>{supportEmail}</span></a>
-            <a href={radiumWebsite} target="_blank" rel="noreferrer noopener"><ExternalLink size={15} /><span>{brand.website.replace(/^https?:\/\//, '')}</span></a>
-            <span><MapPin size={15} /><span>{radiumAddress}</span></span>
+            <a
+              href={brandWebsite}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={(event) => {
+                event.preventDefault();
+                openExternalUrl(brandWebsite);
+              }}
+            >
+              <ExternalLink size={15} />
+              <span>{brand.website.replace(/^https?:\/\//, '')}</span>
+            </a>
+            <span><MapPin size={15} /><span>{brandAddress}</span></span>
           </div>
         </Panel>
 
@@ -645,7 +656,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
             <li><ShieldCheck size={16} /> Open Telemetry Diagnostics before emailing support.</li>
             <li><ShieldCheck size={16} /> Export a diagnostics bundle if sensors, startup, or cleanup actions misbehave.</li>
             <li><ShieldCheck size={16} /> Include your order/build context and what you were doing when the issue appeared.</li>
-            <li><ShieldCheck size={16} /> Use Companion assistance for app issues, or post-sale support for hardware/service requests.</li>
+            <li><ShieldCheck size={16} /> Use {brand.productName} assistance for app issues, diagnostics review, or hardware/service handoff.</li>
           </ul>
         </Panel>
 
