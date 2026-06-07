@@ -23,8 +23,9 @@ type DashboardPageProps = {
 };
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
-  const { systemInfo, sample, loading, error, native } = useMonitor();
+  const { systemInfo, sample: rawSample, displaySample, presentation, loading, error, native } = useMonitor();
   const { settings } = useSettings();
+  const sample = displaySample ?? rawSample;
   // undefined = check pending/not started, null = check failed or N/A, object = result
   const [driverUpdateInfo, setDriverUpdateInfo] = useState<DriverUpdateInfo | null | undefined>(undefined);
 
@@ -38,11 +39,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const history = sample?.history ?? [];
   const animateEntrance = settings.experience.animations;
   const performanceScore = useMemo(() => computePerformanceScore(sample), [sample]);
-  const gpuProvider = sample?.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI';
-  const nominal = sample?.state === 'valid';
-  const sampleAgeMs = sample ? Math.max(0, Date.now() - sample.timestamp) : null;
-  const sampleAgeLabel = sampleAgeMs == null ? 'Awaiting feed' : sampleAgeMs < 2000 ? 'Live now' : `${Math.round(sampleAgeMs / 1000)}s ago`;
-  const activeChannels = [sample?.cpu.temperature != null, sample?.gpu.temperature != null, !!sample, !!sample].filter(Boolean).length;
+  const gpuProvider = presentation.provider !== 'Pending' ? presentation.provider : sample?.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI';
+  const nominal = presentation.isLive;
+  const sampleAgeLabel = presentation.ageLabel;
+  const activeChannels = presentation.activeChannels;
   const normalizeIdentity = (value?: string | null) => {
     if (!value) return null;
     const trimmed = value.trim();
@@ -78,14 +78,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const deviceName = boardName
     || normalizeIdentity(systemInfo?.windows)
     || 'System identity pending';
-  const telemetryHeadline = loading || !sample
-    ? 'Telemetry querying'
-    : nominal
-      ? 'Telemetry stable'
-      : 'Telemetry partially degraded';
-  const telemetrySubline = sample
-    ? `Provider ${gpuProvider} - ${sampleAgeLabel}`
-    : 'Waiting for first telemetry sample';
+  const telemetryHeadline = presentation.headline;
+  const telemetrySubline = presentation.detail;
   const cpuVendorAsset = vendorLogo(cpuVendor);
   const gpuVendorAsset = oemLogoForText(gpuName) ?? vendorLogo(gpuVendor);
   const boardVendorAsset = oemLogoForText(boardName ?? '');
@@ -95,7 +89,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     { key: 'os', label: systemInfo?.windows ?? 'OS detecting' },
     { key: 'provider', label: `${gpuProvider} Provider`, icon: gpuVendorAsset },
     { key: 'lanes', label: `Telemetry ${activeChannels}/4` },
-    { key: 'support', label: `${brand.readinessLabel} ${nominal ? 'Ready' : 'Degraded'} - ${performanceScore.grade}` },
+    { key: 'support', label: `${brand.readinessLabel} ${presentation.isUsable ? 'Ready' : 'Pending'} - ${performanceScore.grade}` },
   ];
   const heroSignals = [
     { id: 'cpu', label: 'CPU', value: sample ? pct(sample.cpu.usage) : 'Scan', detail: sample?.cpu.temperature != null ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Temp unavailable' },
@@ -111,12 +105,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     updateAvailable: driverUpdateInfo?.updateAvailable === true,
     latestDriver: driverUpdateInfo?.latestVersion,
     driverUrl: driverUpdateInfo?.downloadUrl,
-    telemetryReady: nominal,
-  }), [sample, driverUpdateInfo, performanceScore.value, storageMaxUsed, nominal]);
+    telemetryReady: presentation.isUsable,
+  }), [sample, driverUpdateInfo, performanceScore.value, storageMaxUsed, presentation.isUsable]);
   const statusItems = useMemo(() => buildDashboardStatusItems({
     activeProfile: settings.experience.performanceProfile,
     gpuProvider,
-    telemetryState: sample?.state ?? (loading ? 'initializing' : 'unavailable'),
+    telemetryLabel: presentation.label,
+    telemetryOk: presentation.isLive,
     sampleAgeLabel,
     trayMetric: settings.tray.liveIconMetric,
     startWithWindows: settings.tray.startWithWindows,
@@ -126,10 +121,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     native,
   }), [
     gpuProvider,
-    loading,
     native,
-    sample?.state,
     sampleAgeLabel,
+    presentation.isLive,
+    presentation.label,
     settings.experience.performanceProfile,
     settings.overlay.enabled,
     settings.tray.liveIconMetric,
@@ -145,7 +140,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         description="Overview of your system's performance."
         action={(
           <div className="dashboard-header-actions">
-            <StatePill state={sample?.state ?? (loading ? 'inactive' : 'unavailable')} />
+            <StatePill state={presentation.state} label={presentation.label} />
             <span className="badge badge-dim">GPU provider {gpuProvider}</span>
             <button className="secondary-button" onClick={() => onNavigate?.('diagnostics')}>
               <ShieldCheck size={16} />
@@ -198,7 +193,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <p className="hero-status-line">{telemetryHeadline}</p>
               <p>{telemetrySubline}</p>
               <div className="hero-runtime-meta">
-                <span><ShieldCheck size={13} /> State: {(sample?.state ?? 'inactive').toUpperCase()}</span>
+                <span><ShieldCheck size={13} /> State: {presentation.label}</span>
                 <span><MonitorUp size={13} /> Provider: {gpuProvider}</span>
                 <span><Gauge size={13} /> Lanes: {activeChannels}/4</span>
               </div>
@@ -322,7 +317,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="score-mini-metrics">
               <span>Provider {gpuProvider}</span>
               <span>Telemetry {activeChannels}/4</span>
-              <span>{nominal ? 'Runtime nominal' : 'Degraded runtime'}</span>
+              <span>{presentation.isLive ? 'Runtime nominal' : presentation.label}</span>
             </div>
             <div className="dashboard-care-actions">
               {careActions.map((action) => {
@@ -536,7 +531,8 @@ type DashboardStatusItem = {
 function buildDashboardStatusItems({
   activeProfile,
   gpuProvider,
-  telemetryState,
+  telemetryLabel,
+  telemetryOk,
   sampleAgeLabel,
   trayMetric,
   startWithWindows,
@@ -547,7 +543,8 @@ function buildDashboardStatusItems({
 }: {
   activeProfile: string;
   gpuProvider: string;
-  telemetryState: string;
+  telemetryLabel: string;
+  telemetryOk: boolean;
   sampleAgeLabel: string;
   trayMetric: string;
   startWithWindows: boolean;
@@ -560,8 +557,6 @@ function buildDashboardStatusItems({
   const trayLabel = trayMetric === 'disabled'
     ? 'Static icon'
     : `${trayMetric.replace(/([A-Z])/g, ' $1').replace(/^./, (value) => value.toUpperCase())}`;
-  const telemetryOk = telemetryState === 'valid';
-
   return [
     {
       id: 'profile',
@@ -574,7 +569,7 @@ function buildDashboardStatusItems({
     {
       id: 'telemetry',
       label: 'Telemetry',
-      value: telemetryOk ? 'Live' : telemetryState,
+      value: telemetryOk ? 'Live' : telemetryLabel,
       detail: `${gpuProvider} provider - ${sampleAgeLabel}`,
       icon: Gauge,
       tone: telemetryOk ? 'green' : 'amber',

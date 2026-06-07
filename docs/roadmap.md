@@ -63,6 +63,8 @@
 - [x] **Process Monitor page** — top 40 processes by CPU/memory, live auto-refresh every 3s, sort by CPU/memory/name, mini CPU bar per process
 - [x] Sidebar brand-lockup: icon only (wordmark stays on dashboard homepage)
 - [x] Browser-mode status indicator in sidebar (amber dot + "Browser preview / Run: npm run desktop")
+- [x] Shared telemetry presentation state for shell/dashboard/passport/settings/OSD so raw provider churn is damped before it reaches normal UI copy.
+- [x] Runnable telemetry presentation reducer tests through `npm.cmd run test:telemetry-presentation`.
 
 ---
 
@@ -95,6 +97,8 @@
 - [ ] CPU park/unpark control
 - [x] Timer resolution optimisation — `NtSetTimerResolution` via ntdll (Gaming/Creator → 0.5 ms, Balanced → 1.0 ms, Quiet → system default)
 - [x] Processor power tuning via `powercfg` subgroup values (`PROCTHROTTLEMIN`, `PROCTHROTTLEMAX`, `PERFBOOSTMODE`) on both AC/DC, per profile intent
+- [x] OmenCore optimizer feature assessment completed; safe overlap stays in Performance Profiles, broad service/network/policy tweaks deferred.
+- [ ] Read-only Windows optimizer diagnostics for active plan, HAGS/Game Mode, TRIM, and selected policy state.
 
 ---
 

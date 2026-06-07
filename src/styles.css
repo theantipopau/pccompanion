@@ -305,8 +305,7 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 12px;
   text-align: left;
-  transform: translateZ(0);
-  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .nav-item span {
@@ -318,11 +317,10 @@ textarea:focus-visible {
   border-color: rgba(255, 122, 0, 0.16);
   background: rgba(255, 122, 0, 0.07);
   color: #d8e8f2;
-  transform: translateX(1px);
 }
 
 .nav-item:active {
-  transform: translateX(0) scale(0.992);
+  background: rgba(255, 122, 0, 0.1);
 }
 
 .nav-item.active {
@@ -3449,6 +3447,22 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   font-weight: 800;
 }
 
+.state-valid,
+.state-live {
+  color: var(--green);
+  background: rgba(132, 240, 140, 0.08);
+  border-color: rgba(132, 240, 140, 0.2);
+}
+
+.state-initializing,
+.state-initialising,
+.state-recovering,
+.state-inactive {
+  color: var(--cyan);
+  background: rgba(85, 214, 255, 0.08);
+  border-color: rgba(85, 214, 255, 0.2);
+}
+
 .state-unavailable,
 .state-stale,
 .state-degraded {
@@ -4984,6 +4998,13 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .osd-grip svg {
   opacity: 0.45;
   flex-shrink: 0;
+}
+
+.osd-grip small {
+  margin-left: auto;
+  color: var(--amber);
+  font-size: 9px;
+  letter-spacing: 0.08em;
 }
 
 .osd-metrics {

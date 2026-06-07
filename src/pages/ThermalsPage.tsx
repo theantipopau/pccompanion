@@ -23,8 +23,9 @@ function firstKnownVendor(candidates: Vendor[]) {
 }
 
 export function ThermalsPage() {
-  const { systemInfo, sample } = useMonitor();
+  const { systemInfo, sample: rawSample, displaySample } = useMonitor();
   const { settings } = useSettings();
+  const sample = displaySample ?? rawSample;
   const cpuName = cleanIdentity(systemInfo?.cpu) ?? 'CPU package';
   const gpuName = cleanIdentity(sample?.gpu.name) ?? cleanIdentity(systemInfo?.gpu) ?? 'Graphics card';
   const cpuVendor = firstKnownVendor([

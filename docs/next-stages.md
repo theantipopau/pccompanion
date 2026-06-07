@@ -26,6 +26,9 @@ As of May 2026 the following is live and shipped:
 - **Dashboard next actions**: the Radium Performance Score panel now suggests owner-friendly next steps such as checking sensor provider health, freeing storage, updating GPU drivers, reviewing profiles, or opening the System Passport.
 - **Companion support routing**: app-level support CTAs now target `companion@radiumpcs.com.au`, while general Radium support remains listed for hardware/service requests.
 - **First-run setup**: onboarding now lets owners choose tray metric, default profile, and Windows startup preference before entering the dashboard.
+- **Telemetry presentation smoothing**: high-visibility UI now consumes a shared presentation model with live/stabilising/recovering/stale/limited labels, while diagnostics keep raw backend state for support evidence.
+- **Telemetry presentation tests**: reducer coverage now runs through `npm.cmd run test:telemetry-presentation`; quality gate includes the command.
+- **OmenCore optimizer assessment**: reviewed local OmenCore optimizer code and kept Radium on the existing guarded Performance Profiles path; broad service/network/policy registry writes remain deferred.
 
 Staged items still pending:
 
@@ -35,6 +38,7 @@ Staged items still pending:
 - Local AI insights and an optional local LLM copilot tab. No cloud dependency by default.
 - Session summaries, build certificate export, richer notification policy, and OEM report/PDF export.
 - RGB and vendor extras. These remain intentionally blocked until reversible adapters are proven.
+- Read-only optimizer diagnostics, such as active power plan, HAGS/Game Mode, TRIM, and selected policy state, before any new optimizer writes.
 
 ## Recommended Next Stages
 

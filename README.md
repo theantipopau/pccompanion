@@ -260,17 +260,18 @@ Recommended tester flow:
 
 ## Validation Snapshot
 
-Latest local validation in this workspace (2026-06-02):
+Latest local validation in this workspace (2026-06-07):
 
 | Check | Result |
 |---|---|
+| `npm.cmd run test:telemetry-presentation` | Passed (21 tests) |
+| `npm.cmd run quality:gate` | Passed |
 | `npm.cmd run build` | Passed |
 | `npm.cmd run check:rust` | Passed |
 | `cargo check --manifest-path src-tauri\Cargo.toml` | Passed |
 | `cargo test --manifest-path src-tauri\Cargo.toml --lib` | Passed (11 tests) |
 | `npm.cmd run build:sensor-sidecar` | Passed; LHM `0.9.6` version verified |
 | `npm.cmd run build:exe` | Passed |
-| `npm.cmd run build:exe:demo` | Passed |
 | `npm.cmd run verify:radium-artifact` | Passed; manifest written to `artifacts/radium/` |
 | `npm.cmd run verify:demo-brand-leak` | Passed |
 | `npm.cmd run verify:demo-dev-config-restore` | Passed |

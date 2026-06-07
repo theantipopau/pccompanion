@@ -8,7 +8,7 @@ export type ProcessInfo = {
   status: string;
 };
 
-export type MetricState = 'valid' | 'inactive' | 'unavailable' | 'stale' | 'degraded';
+export type MetricState = 'valid' | 'initializing' | 'inactive' | 'unavailable' | 'stale' | 'degraded';
 
 export type Vendor = 'intel' | 'amd' | 'nvidia' | 'unknown';
 

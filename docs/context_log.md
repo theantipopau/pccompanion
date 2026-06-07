@@ -1883,3 +1883,35 @@ src/
 - Upgraded the command-search empty state with the Radium mark and quick hint chips so even no-result moments feel branded and intentional.
 - Added subtle layered panel treatments to the sidebar promo, hero support tile, and tray telemetry preview to make the interface feel more like a polished PC companion surface.
 - Validation note: frontend build was not rerun for this visual pass because the environment rejected the escalated build command due to the current usage-limit gate.
+
+# Phase: Telemetry Presentation And Smoothness Pass (2026-06-07)
+
+- Audited the README, current-state, roadmap, next-stages, security, architecture, telemetry-engine, clean-machine, and central monitor/UI source files before editing.
+- Added `src/lib/telemetryPresentation.ts`, a shared frontend presentation reducer that requires repeated valid samples before showing Live, keeps the last confirmed sample visible during short provider interruptions, and distinguishes stabilising, recovering, stale, limited, and paused states.
+- Added a colocated TypeScript reducer spec in `src/lib/telemetryPresentation.spec.ts` so the main scenarios are type-checked with the frontend build.
+- Updated `MonitorContext` to expose `presentation` and `displaySample` while preserving raw `sample` for diagnostics and support evidence.
+- Routed the shell, dashboard, thermals, OSD, System Passport, RAM, process, benchmark, settings, and CoPilot surfaces through the stabilized display sample where appropriate.
+- Reduced motion jitter by removing nav transform hover/tap behavior and shortening numeric easing for telemetry meters/gauges.
+- Reviewed local OmenCore optimizer code under `F:\OmenCore\omencore\src\OmenCoreApp\Services\SystemOptimizer` and documented the integration decision in `docs/omencore-optimizer-assessment.md`.
+- Validation: `npm.cmd run build`, `npm.cmd run check:rust`, `cargo test --manifest-path src-tauri/Cargo.toml --lib`, `npm.cmd run test:url-policy`, `npm.cmd run verify:demo-dev-config-restore`, and `npm.cmd run verify:demo-brand-leak` passed after the frontend telemetry/UI changes.
+
+# Phase: Telemetry Presentation Review And Test Wiring (2026-06-07)
+
+- Reviewed the telemetry presentation diff for raw-vs-displayed separation and corrected Benchmark and CoPilot to keep using raw `sample` evidence instead of retained `displaySample`.
+- Expanded `src/lib/telemetryPresentation.ts` with provider identity tracking, timestamp/provenance fields, duplicate/backwards timestamp handling, provider-change restabilisation, and explicit transition reasons.
+- Added a bounded one-second presentation clock in `MonitorContext` so displayed sample age advances and stale state can appear even when no new hardware sample arrives.
+- Converted `src/lib/telemetryPresentation.spec.ts` from compile-only scenario exports into a runnable Node test suite and added `npm.cmd run test:telemetry-presentation`; `quality:gate` now runs it before build/native checks.
+- Added a read-only raw-vs-displayed telemetry inspector to Telemetry Diagnostics and a compact non-live state label on the OSD grip.
+- Validation added in this review: `npm.cmd run test:telemetry-presentation` passed with 21 tests, and `npm.cmd run build` passed after the review fixes.
+- Manual native runtime validation remains required for cold launch, monitoring restart, safe provider interruption, sleep/resume, OSD, and tray behaviour.
+
+# Phase: Release Artifact Rebuild And Push Prep (2026-06-07)
+
+- Ran final release validation before packaging: `npm.cmd run check:desktop`, `npm.cmd run quality:gate`, and `npm.cmd run verify:demo-brand-leak` passed.
+- Rebuilt Radium release outputs through `npm.cmd run package:portable`, which ran `build:sensor-sidecar`, frontend build, release Rust build, and NSIS packaging.
+- Fresh local artifacts were copied to `artifacts/radium/`:
+  - `radium-pcs-companion-20260607-102415.exe`
+  - `radium-pcs-companion-setup-20260607-102415.exe`
+  - `radium-pcs-companion-portable-20260607-102415.zip`
+- `scripts/pre_release_artifact_audit.ps1` passed against the copied EXE and installer and wrote `artifacts/radium/radium-artifact-manifest-20260607-102442.json`.
+- Artifacts remain ignored local release outputs; source/docs/test changes are the intended Git commit payload.

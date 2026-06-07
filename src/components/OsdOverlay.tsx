@@ -11,9 +11,10 @@ type OsdOverlayProps = {
 };
 
 export function OsdOverlay({ forceVisible = false }: OsdOverlayProps) {
-  const { sample } = useMonitor();
+  const { sample: rawSample, displaySample, presentation } = useMonitor();
   const { settings, updateSettings } = useSettings();
   const dragRef = useRef<HTMLDivElement>(null);
+  const sample = displaySample ?? rawSample;
 
   const metrics = useMemo(
     () => [
@@ -82,6 +83,7 @@ export function OsdOverlay({ forceVisible = false }: OsdOverlayProps) {
       <div className="osd-grip" title="Drag overlay">
         <Move size={13} />
         <span>{brand.shortName} OSD</span>
+        {!presentation.isLive && <small>{presentation.label}</small>}
       </div>
       <div className="osd-metrics">
         {metrics.map((metric) => {

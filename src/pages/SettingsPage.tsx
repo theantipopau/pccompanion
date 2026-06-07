@@ -33,8 +33,9 @@ const brandPhone = brand.phone;
 const brandAddress = brand.address;
 
 export function SettingsPage({ initialTab = 'general' }: { initialTab?: SettingsTab }) {
-  const { sample, systemInfo, native } = useMonitor();
+  const { sample: rawSample, displaySample, presentation, systemInfo, native } = useMonitor();
   const { settings, updateSettings, resetSettings } = useSettings();
+  const sample = displaySample ?? rawSample;
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [appMetadata, setAppMetadata] = useState<AppMetadata | null>(null);
@@ -239,7 +240,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
               <strong>{systemInfo?.motherboard ?? 'Mainboard pending'}</strong>
             </span>
             <span className="settings-identity-pill no-image">
-              <strong>{sample ? `Runtime ${sample.state.toUpperCase()}` : 'Runtime initialising'}</strong>
+              <strong>Runtime {presentation.label}</strong>
             </span>
           </div>
         </Panel>
@@ -513,7 +514,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
 }
 
 function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
-  const { systemInfo, sample } = useMonitor();
+  const { systemInfo, sample, presentation } = useMonitor();
   const [supportBundlePath, setSupportBundlePath] = useState('');
   const [supportBusy, setSupportBusy] = useState(false);
   const [actions, setActions] = useState<CompanionActionRecord[]>(() => readCompanionActions());
@@ -529,7 +530,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
     `App version: ${appMetadata?.version ?? '0.1.0-pre'}`,
     `System: ${systemInfo?.cpu ?? 'CPU pending'} / ${systemInfo?.gpu ?? 'GPU pending'}`,
     `Motherboard: ${systemInfo?.motherboard ?? 'Pending'}`,
-    `Telemetry: ${sample?.state ?? 'pending'}`,
+    `Telemetry: ${presentation.label} (raw ${sample?.state ?? 'pending'})`,
     '',
     'Recent Companion actions:',
     summarizeCompanionActions(6),

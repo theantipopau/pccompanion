@@ -1,12 +1,13 @@
 # Clean-Machine Install Test
 
-Last reviewed: 2026-06-01
+Last reviewed: 2026-06-07
 
 Use this checklist on a fresh Windows 11 machine or VM before any marketed release. Record the tester machine, Windows build, artifact path, and pass/fail notes in `docs/compatibility-matrix.md` after the run.
 
 ## Artifact Under Test
 
-- Installer: `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`
+- Installer: `artifacts/radium/radium-pcs-companion-setup-20260607-102415.exe`
+- Portable ZIP: `artifacts/radium/radium-pcs-companion-portable-20260607-102415.zip`
 - Expected product name: `Radium PCs Companion`
 - Expected publisher: `Radium PCs`
 - Expected install mode: per-machine

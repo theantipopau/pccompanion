@@ -10,8 +10,9 @@ import { getHardwareCapabilities } from '../services/systemService';
 import type { HardwareCapability, Vendor } from '../types/system';
 
 export function SystemPassportPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const { systemInfo, sample, native } = useMonitor();
+  const { systemInfo, sample: rawSample, displaySample, presentation, native } = useMonitor();
   const [capabilities, setCapabilities] = useState<HardwareCapability[]>([]);
+  const sample = displaySample ?? rawSample;
   const score = computePerformanceScore(sample);
   const liveCapabilities = capabilities.filter((capability) => capability.state === 'live').length;
   const normalizeIdentity = (value?: string | null) => {
@@ -40,14 +41,14 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
     .toString(16)
     .toUpperCase()
     .slice(0, 8)}`;
-  const validationState = sample?.state === 'valid' ? 'Validated runtime profile' : sample?.state === 'degraded' ? 'Partial telemetry profile' : 'Telemetry baseline pending';
+  const validationState = presentation.isLive ? 'Validated runtime profile' : presentation.isUsable ? 'Recent telemetry profile' : 'Telemetry baseline pending';
   const storageMaxUsed = sample?.storage.reduce((max, drive) => Math.max(max, drive.usedPercent), 0) ?? 0;
   const gpuProvider = sample?.gpu.provider?.toUpperCase() ?? 'Pending';
   const careItems: Array<{ label: string; status: 'live' | 'partial' | 'unsupported'; detail: string }> = [
     {
       label: 'Runtime telemetry',
-      status: sample?.state === 'valid' ? 'live' : sample ? 'partial' : 'unsupported',
-      detail: sample ? `${sample.state.toUpperCase()} provider path with ${sample.history.length} recent samples` : 'Waiting for first hardware sample',
+      status: presentation.isLive ? 'live' : presentation.isUsable ? 'partial' : 'unsupported',
+      detail: sample ? `${presentation.label} provider path with ${sample.history.length} recent samples` : 'Waiting for first hardware sample',
     },
     {
       label: 'CPU package sensor',
@@ -180,7 +181,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             <PassportField label="Passport ID" value={passportId} />
             <PassportField label="Validation state" value={validationState} />
             <PassportField label="Telemetry confidence" value={`${liveCapabilities} live capability lanes`} />
-            <PassportField label="Support tier" value={sample?.state === 'valid' ? 'Premium Care' : 'Guided Support'} />
+            <PassportField label="Support tier" value={presentation.isLive ? 'Premium Care' : 'Guided Support'} />
             <PassportField label="Firmware summary" value={systemInfo?.bios ?? 'Firmware metadata pending'} />
             <PassportField label="Build identity" value={`${systemInfo?.windows ?? 'Windows'} · ${score.grade} profile`} />
           </div>

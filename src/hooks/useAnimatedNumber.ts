@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-export function useAnimatedNumber(value: number, duration = 260) {
+export function useAnimatedNumber(value: number, duration = 160) {
   const [displayValue, setDisplayValue] = useState(value);
   const currentRef = useRef(value);
 
@@ -21,7 +21,7 @@ export function useAnimatedNumber(value: number, duration = 260) {
     let frame = 0;
     const start = performance.now();
     const delta = value - from;
-    const clampedDuration = Math.max(120, Math.min(duration, 520));
+    const clampedDuration = Math.max(80, Math.min(duration, 260));
 
     function animate(now: number) {
       const progress = Math.min((now - start) / clampedDuration, 1);

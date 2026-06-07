@@ -1,6 +1,6 @@
 # Radium PCs Companion Security Readiness
 
-Last reviewed: 2026-06-01
+Last reviewed: 2026-06-07
 
 This note tracks the app posture needed for a marketed or sold Windows desktop product. It complements `docs/current-state.md` and the release scripts.
 
@@ -13,6 +13,9 @@ This note tracks the app posture needed for a marketed or sold Windows desktop p
 - Registry cleaning requires a backup path and uses guarded restore flow.
 - Local CoPilot uses localhost-first runtime locking, advisory responses only, and no direct native mutation path.
 - Sidecar loading is pinned to bundled install/resource paths instead of trusting arbitrary current-directory or environment locations.
+- Raw telemetry state is retained for diagnostics, while user-facing telemetry state is stabilised in the frontend so transient provider churn does not produce misleading status changes.
+- Benchmark capture, CoPilot context, diagnostics exports, and provider diagnostics should continue to use raw telemetry evidence. The retained display sample is for presentation-only surfaces and is visible as such in Telemetry Diagnostics.
+- OmenCore optimizer review is documented in `docs/omencore-optimizer-assessment.md`; broad service, network, visual, and policy registry writes remain out of scope until a Radium-owned preflight/backup/revert/verification model exists for each setting.
 
 ## Release Checks
 
@@ -72,3 +75,5 @@ The signing script signs the release EXE and NSIS installer, then runs `scripts/
 - Real hardware matrix remains incomplete for NVIDIA, AMD, Intel Arc, and hybrid GPU systems.
 - CPU package temperature and board/fan sensors may require privileged provider paths on some systems.
 - Local CoPilot setup needs clean-machine validation across no-runtime, runtime/no-model, and installed-model cases.
+- Any future optimizer writes beyond the existing Performance Profiles subset need explicit admin/elevation UX, durable restore evidence, and clean-machine validation.
+- Native runtime validation still needs manual cold-launch, monitoring-restart, provider-interruption, sleep/resume, OSD, and tray checks after the telemetry presentation review.

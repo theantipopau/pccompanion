@@ -17,8 +17,9 @@ type Zone = {
 };
 
 export function ThermalCaseView() {
-  const { sample, systemInfo } = useMonitor();
+  const { sample: rawSample, displaySample, systemInfo } = useMonitor();
   const { settings } = useSettings();
+  const sample = displaySample ?? rawSample;
   const storageTemp = sample?.storage.find((drive) => drive.temperature != null)?.temperature ?? null;
   const primaryStorage = sample?.storage[0];
   const cpuTemp = sample?.cpu.temperature ?? null;

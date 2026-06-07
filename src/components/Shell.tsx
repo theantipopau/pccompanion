@@ -42,8 +42,9 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const businessHours = brand.businessHours;
   const storeAddress = brand.address;
   const supportSubject = brand.supportSubject;
-  const { sample, loading, error, native } = useMonitor();
+  const { sample: rawSample, displaySample, presentation, loading, error, native } = useMonitor();
   const { settings, updateSettings } = useSettings();
+  const sample = displaySample ?? rawSample;
   const dashboardActive = activeView === 'dashboard';
   const compactShell = settings.experience.compactMode;
   const motionEnabled = settings.experience.animations;
@@ -292,8 +293,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
 
   const trayPreview = (() => {
     if (!settings.monitoring.launchOnStartup) return { Icon: Gauge, label: 'Monitoring paused' };
-    if (error) return { Icon: ShieldCheck, label: 'Sensor error' };
-    if (loading) return { Icon: Gauge, label: 'Starting sensors' };
+    if (error && !presentation.isUsable) return { Icon: ShieldCheck, label: 'Sensor retry' };
+    if (loading && !sample) return { Icon: Gauge, label: 'Starting sensors' };
     const metric = settings.tray.liveIconMetric;
     if (!sample || metric === 'disabled') return { Icon: Gauge, label: 'Tray off' };
     const { value, isTemp } = extractTrayValue(sample, metric);
@@ -305,10 +306,10 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   })();
   const telemetrySummary = !settings.monitoring.launchOnStartup
     ? 'PAUSED - MONITORING OFF'
+    : presentation.isUsable
+    ? `${presentation.label.toUpperCase()} - ${presentation.provider}`
     : error
-    ? `ERROR - ${native ? 'NATIVE' : 'PREVIEW'}`
-    : sample
-    ? `${sample.state.toUpperCase()} - ${sample.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI'}`
+    ? `RETRYING - ${native ? 'NATIVE' : 'PREVIEW'}`
     : 'INITIALISING - PROVIDER PENDING';
 
   async function handleMinimize() {
@@ -350,8 +351,6 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                     onClick={() => onNavigate(item.id)}
                     aria-current={active ? 'page' : undefined}
                     title={item.label}
-                    whileHover={motionEnabled ? { x: active ? 0 : 2 } : undefined}
-                    whileTap={motionEnabled ? { scale: 0.975 } : undefined}
                     transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
                   >
                     <Icon size={16} />

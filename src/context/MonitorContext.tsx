@@ -6,10 +6,17 @@ import { temp, pct } from '../lib/format';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
 import { renderTrayIconRgba, extractTrayValue } from '../lib/trayIcon';
+import {
+  createTelemetryPresentationInitialState,
+  updateTelemetryPresentation,
+  type TelemetryPresentationSnapshot,
+} from '../lib/telemetryPresentation';
 
 type MonitorContextValue = {
   systemInfo: SystemInfo | null;
   sample: HardwareSample | null;
+  displaySample: HardwareSample | null;
+  presentation: TelemetryPresentationSnapshot;
   loading: boolean;
   error: string | null;
   /** True when running inside the Tauri desktop app. False in browser preview mode. */
@@ -22,14 +29,30 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [sample, setSample] = useState<HardwareSample | null>(null);
+  const [presentation, setPresentation] = useState<TelemetryPresentationSnapshot>(() => createTelemetryPresentationInitialState());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const historyRef = useRef<MetricPoint[]>([]);
+  const sampleRef = useRef<HardwareSample | null>(null);
+  const presentationRef = useRef<TelemetryPresentationSnapshot | null>(null);
+  const loadingRef = useRef(loading);
+  const errorRef = useRef<string | null>(error);
   const visibleRef = useRef(document.visibilityState === 'visible');
   const trayIconRef = useRef<{ lastUpdate: number }>({ lastUpdate: 0 });
   const consecutiveErrorsRef = useRef(0);
   const systemInfoRef = useRef<SystemInfo | null>(null);
   const identitySyncRef = useRef<{ lastUpdate: number; signature: string }>({ lastUpdate: 0, signature: '' });
+  if (!presentationRef.current) presentationRef.current = presentation;
+
+  function publishPresentation(
+    input: Parameters<typeof updateTelemetryPresentation>[1],
+    nowMs = Date.now(),
+  ) {
+    const next = updateTelemetryPresentation(presentationRef.current ?? presentation, input, nowMs);
+    presentationRef.current = next;
+    setPresentation(next);
+    return next;
+  }
 
   useEffect(() => {
     getSystemInfo()
@@ -43,6 +66,14 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     systemInfoRef.current = systemInfo;
   }, [systemInfo]);
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  useEffect(() => {
+    errorRef.current = error;
+  }, [error]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -59,6 +90,12 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
     if (!settings.monitoring.launchOnStartup) {
       setLoading(false);
       setError(null);
+      publishPresentation({
+        sample: sampleRef.current,
+        loading: false,
+        error: null,
+        monitoringEnabled: false,
+      });
       return () => undefined;
     }
 
@@ -68,9 +105,16 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
         next.history = next.history.slice(-settings.monitoring.historyLimit);
         historyRef.current = next.history;
         if (!disposed) {
+          sampleRef.current = next;
           setSample(next);
           setLoading(false);
           setError(null);
+          const presented = publishPresentation({
+            sample: next,
+            loading: false,
+            error: null,
+            monitoringEnabled: true,
+          });
           consecutiveErrorsRef.current = 0;
           const now = Date.now();
           const identitySignature = [
@@ -124,7 +168,7 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
 
             const modeLabel = settings.experience.performanceMode.toUpperCase();
             void setTrayStatus({
-              tooltip: `${brand.productName}\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} - NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} - Telemetry ${next.state}\nMode ${modeLabel} - Tray ${trayLabel}\nDouble-click: Open - Menu: OSD, RAM clean, modes`,
+              tooltip: `${brand.productName}\nCPU ${temp(next.cpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.cpu.usage)}\nGPU ${temp(next.gpu.temperature, settings.monitoring.temperatureUnit)} - ${pct(next.gpu.usage)}\nRAM ${pct(next.memory.usage)} - NET ${next.network.downMbps.toFixed(0)} Mbps\nProvider ${provider} - Telemetry ${presented.label} (${next.state})\nMode ${modeLabel} - Tray ${trayLabel}\nDouble-click: Open - Menu: OSD, RAM clean, modes`,
               mode: settings.experience.performanceMode,
               overlayEnabled: settings.overlay.enabled,
             });
@@ -142,7 +186,14 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
         if (!disposed) {
           consecutiveErrorsRef.current += 1;
           setLoading(false);
-          setError(String(err));
+          const message = String(err);
+          setError(message);
+          publishPresentation({
+            sample: sampleRef.current,
+            loading: false,
+            error: message,
+            monitoringEnabled: true,
+          });
         }
       } finally {
         const base = visibleRef.current || settings.overlay.enabled
@@ -173,7 +224,30 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
     settings.experience.performanceMode,
   ]);
 
-  const value = useMemo(() => ({ systemInfo, sample, loading, error, native: isNative() }), [systemInfo, sample, loading, error]);
+  useEffect(() => {
+    if (!settings.monitoring.launchOnStartup) return undefined;
+    const timer = window.setInterval(() => {
+      const current = presentationRef.current;
+      if (!current?.displaySample) return;
+      publishPresentation({
+        sample: null,
+        loading: loadingRef.current,
+        error: errorRef.current,
+        monitoringEnabled: true,
+      });
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [settings.monitoring.launchOnStartup]);
+
+  const value = useMemo(() => ({
+    systemInfo,
+    sample,
+    displaySample: presentation.displaySample,
+    presentation,
+    loading,
+    error,
+    native: isNative(),
+  }), [systemInfo, sample, presentation, loading, error]);
 
   return <MonitorContext.Provider value={value}>{children}</MonitorContext.Provider>;
 }

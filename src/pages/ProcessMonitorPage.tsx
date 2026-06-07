@@ -9,7 +9,8 @@ import type { ProcessInfo } from '../types/system';
 type SortKey = 'cpuPct' | 'memMb' | 'name';
 
 export function ProcessMonitorPage() {
-  const { sample } = useMonitor();
+  const { sample: rawSample, displaySample } = useMonitor();
+  const sample = displaySample ?? rawSample;
   const [procs, setProcs] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('cpuPct');

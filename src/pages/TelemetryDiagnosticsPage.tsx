@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { brand } from '../lib/branding';
 import { Skeleton } from '../components/Skeleton';
+import { useMonitor } from '../hooks/useMonitor';
 import { recordCompanionAction } from '../lib/actionHistory';
 import { exportDiagnostics, getTelemetryDiagnostics, probeSensorSidecar } from '../services/systemService';
 import type { DiagnosticsExport, SensorSidecarProbe, TelemetryDiagnosticsSnapshot } from '../types/system';
@@ -29,6 +30,7 @@ const capabilityStates: Array<'live' | 'partial' | 'degraded' | 'staged' | 'unsu
 ];
 
 export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { sample, displaySample, presentation } = useMonitor();
   const [snapshot, setSnapshot] = useState<TelemetryDiagnosticsSnapshot | null>(null);
   const [exportResult, setExportResult] = useState<DiagnosticsExport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -161,6 +163,30 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
             <StatCard label="Sensors" value={`${sensorCounts.live}`} detail={`${sensorCounts.partial} partial / ${sensorCounts.staged} staged`} icon={Waves} />
             <StatCard label="Capabilities" value={`${snapshot?.capabilities.length ?? 0}`} detail={`${snapshot?.supportSnapshot.length ?? 0} support notes`} icon={ClipboardList} />
             <StatCard label="Confidence" value={confidenceBandSummary(snapshot)} detail="High / medium / low" icon={Sparkles} />
+          </div>
+        </Panel>
+
+        <Panel className="diagnostics-panel wide">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Presentation diagnostics</span>
+              <h2>Raw vs displayed telemetry</h2>
+            </div>
+            <BadgeInfo size={18} />
+          </div>
+          <div className="export-summary-grid">
+            <DiagnosticField label="Raw state" value={sample?.state ?? 'pending'} />
+            <DiagnosticField label="Presentation state" value={`${presentation.label} / ${presentation.state}`} />
+            <DiagnosticField label="Provider" value={presentation.provider} />
+            <DiagnosticField label="Reason" value={presentation.reason} />
+            <DiagnosticField label="Raw sample timestamp" value={formatTimestamp(sample?.timestamp ?? null)} />
+            <DiagnosticField label="Last valid timestamp" value={formatTimestamp(presentation.lastValidSampleTimestamp)} />
+            <DiagnosticField label="Displayed timestamp" value={formatTimestamp(displaySample?.timestamp ?? null)} />
+            <DiagnosticField label="Displayed age" value={presentation.sampleAgeMs == null ? 'Awaiting feed' : `${presentation.ageLabel} (${presentation.sampleAgeMs} ms)`} />
+            <DiagnosticField label="Valid / invalid streak" value={`${presentation.validSampleCount} / ${presentation.invalidSampleCount}`} />
+            <DiagnosticField label="Retained display sample" value={presentation.displaySampleRetained ? 'Yes' : 'No'} />
+            <DiagnosticField label="Live threshold" value={`${presentation.liveAfterValidSamples} valid samples`} />
+            <DiagnosticField label="Stale threshold" value={`${presentation.staleAfterMs} ms`} />
           </div>
         </Panel>
 
@@ -552,6 +578,15 @@ function StatCard({ label, value, detail, icon: Icon }: { label: string; value: 
   );
 }
 
+function DiagnosticField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong title={value}>{shortText(value, 96)}</strong>
+    </div>
+  );
+}
+
 function stateClass(state: string): string {
   if (state === 'live') return 'state-chip live';
   if (state === 'partial' || state === 'staged') return 'state-chip partial';
@@ -584,6 +619,11 @@ function shortPath(value: string): string {
   const parts = normalized.split('\\').filter(Boolean);
   if (parts.length <= 3) return shortText(value, 92);
   return shortText(`...\\${parts.slice(-3).join('\\')}`, 92);
+}
+
+function formatTimestamp(value: number | null): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return 'Unavailable';
+  return new Date(value).toLocaleString();
 }
 
 function confidenceClass(confidence: string): string {

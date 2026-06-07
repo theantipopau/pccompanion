@@ -10,7 +10,8 @@ import { optimizeRam } from '../services/systemService';
 import type { RamCleanupResult } from '../types/system';
 
 export function RamCleanerPage() {
-  const { sample, systemInfo } = useMonitor();
+  const { sample: rawSample, displaySample, systemInfo } = useMonitor();
+  const sample = displaySample ?? rawSample;
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RamCleanupResult | null>(null);
 

@@ -1,6 +1,6 @@
 # Radium PCs Companion - Current State
 
-Last reviewed: 2026-06-02
+Last reviewed: 2026-06-07
 
 This is the short handoff brief. Keep long session history in `docs/context_log.md`; keep durable architecture in `docs/architecture.md`; keep validation coverage in `docs/compatibility-matrix.md`.
 
@@ -24,6 +24,8 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - `scripts/pre_release_artifact_audit.ps1` also passed against the copied Radium walkthrough EXE and installer.
 - `npm.cmd run build` passed on 2026-06-02 after the CoPilot action-history context refinement.
 - `npm.cmd run build`, `npm.cmd run check:rust`, `cargo test --manifest-path src-tauri/Cargo.toml --lib`, and `npm.cmd run build:sensor-sidecar` passed on 2026-06-02 after the responsiveness/maintenance safety pass.
+- `npm.cmd run build`, `npm.cmd run check:rust`, `cargo test --manifest-path src-tauri/Cargo.toml --lib`, `npm.cmd run test:url-policy`, `npm.cmd run verify:demo-dev-config-restore`, and `npm.cmd run verify:demo-brand-leak` passed on 2026-06-07 after the telemetry presentation and UI smoothness pass.
+- `npm.cmd run test:telemetry-presentation` was added and passed on 2026-06-07 with 21 reducer tests covering startup, recovery, stale, provider-change, timestamp, unsupported-sensor, and sleep/resume-like transitions.
 - Direct sidecar smoke passed on 2026-06-02 and confirmed the loaded LibreHardwareMonitor library version is `0.9.6+3d331e3370efb858411f19511373eff65a218701`.
 - `cargo test -q` has passed for library tests; full binary test execution may still require elevation on some hosts.
 - `npm.cmd run build:exe` has produced the release executable and NSIS installer in prior validation passes.
@@ -44,11 +46,15 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - RAM Optimizer reports process scan/trim/skip coverage in addition to before/after memory.
 - Registry Cleaner now detects unquoted missing file references with spaces while keeping risky categories review-only.
 - Dashboard now includes a first-screen current-state strip for active profile, telemetry/provider freshness, tray/startup behavior, and local safety posture.
+- Dashboard, shell, OSD, thermals, support, and passport surfaces now use a shared telemetry presentation model so startup, one-off degraded ticks, and stale readings do not cause abrupt UI label/value churn. Raw backend telemetry state remains visible in diagnostics and support context.
+- Benchmark capture and CoPilot context continue to consume raw telemetry, not retained presentation samples. Telemetry Diagnostics now includes a read-only raw-vs-displayed presentation inspector for native runtime validation.
+- OmenCore optimizer functionality has been assessed in `docs/omencore-optimizer-assessment.md`; direct code import and broad Windows policy/service/network tweaks are deferred in favor of Radium's existing guarded Performance Profiles subset.
 - Security readiness is tracked in `docs/security-readiness.md`; clean-machine walkthrough criteria are tracked in `docs/clean-machine-test.md`.
 - Signing workflow scaffold is available through `npm.cmd run sign:radium`; Windows SDK `signtool.exe` is discoverable, but no signing identity is configured in this workspace yet.
 - Latest Radium-branded walkthrough artifacts:
-  - `artifacts/radium/radium-pcs-companion-20260601-203136.exe`
-  - `artifacts/radium/radium-pcs-companion-setup-20260601-203136.exe`
+  - `artifacts/radium/radium-pcs-companion-20260607-102415.exe`
+  - `artifacts/radium/radium-pcs-companion-setup-20260607-102415.exe`
+  - `artifacts/radium/radium-pcs-companion-portable-20260607-102415.zip`
 
 ## Main Release Risks
 
@@ -69,3 +75,5 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 4. Keep documentation synced by updating this file first, then moving dated detail into `context_log.md`.
 5. Continue small GUI fit/polish passes only where they reduce clipping, cramped grids, or support-readiness ambiguity.
 6. Exercise the local CoPilot workflow on a clean machine: runtime install, model pull, model discovery, chat request, and offline failure states.
+7. Add measured idle/render jitter baselines once a clean tester machine is available.
+8. Manually validate native cold launch, monitoring restart, safe provider interruption, sleep/resume, OSD, and tray presentation labels on tester hardware.
