@@ -37,13 +37,19 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
   const [probeBusy, setProbeBusy] = useState(false);
   const [sidecarProbe, setSidecarProbe] = useState<SensorSidecarProbe | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null);
 
   async function refreshDiagnostics() {
     setBusy(true);
+    setOperationError(null);
     try {
       const data = await getTelemetryDiagnostics();
       setSnapshot(data);
       setValidation(validateSnapshot(data));
+      setLastRefreshAt(new Date().toLocaleTimeString());
+    } catch (err) {
+      setOperationError(`Diagnostics refresh failed: ${errorMessage(err)}`);
     } finally {
       setBusy(false);
     }
@@ -51,10 +57,15 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
 
   async function handleExport() {
     setBusy(true);
+    setOperationError(null);
     try {
       const result = await exportDiagnostics();
       setExportResult(result);
       recordCompanionAction('support', 'Diagnostics bundle exported', result.path);
+    } catch (err) {
+      const message = errorMessage(err);
+      setOperationError(`Diagnostics export failed: ${message}`);
+      recordCompanionAction('support', 'Diagnostics bundle export failed', message);
     } finally {
       setBusy(false);
     }
@@ -62,11 +73,16 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
 
   async function handleSidecarProbe() {
     setProbeBusy(true);
+    setOperationError(null);
     try {
       const result = await probeSensorSidecar();
       setSidecarProbe(result);
       recordCompanionAction('diagnostics', 'Sensor sidecar probe', result.status);
       await refreshDiagnostics();
+    } catch (err) {
+      const message = errorMessage(err);
+      setOperationError(`Sidecar probe failed: ${message}`);
+      recordCompanionAction('diagnostics', 'Sensor sidecar probe failed', message);
     } finally {
       setProbeBusy(false);
     }
@@ -78,7 +94,8 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
       void getTelemetryDiagnostics().then((data) => {
         setSnapshot(data);
         setValidation(validateSnapshot(data));
-      }).catch(() => undefined);
+        setLastRefreshAt(new Date().toLocaleTimeString());
+      }).catch((err) => setOperationError(`Background diagnostics refresh failed: ${errorMessage(err)}`));
     }, 10_000);
     return () => window.clearInterval(timer);
   }, []);
@@ -140,6 +157,17 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
             <p>Provider state, capability coverage, and sensor trust.</p>
           </div>
           {actions}
+        </div>
+      )}
+      {operationError && (
+        <div className="notice notice-error diagnostics-operation-status" role="status">
+          <span>{operationError}</span>
+          <button type="button" className="secondary-button compact-button" onClick={() => setOperationError(null)}>Dismiss</button>
+        </div>
+      )}
+      {lastRefreshAt && !operationError && (
+        <div className="diagnostics-operation-status diagnostics-refresh-status" role="status">
+          Diagnostics refreshed at {lastRefreshAt}
         </div>
       )}
 
@@ -643,6 +671,12 @@ function confidenceBandSummary(snapshot: TelemetryDiagnosticsSnapshot | null): s
   const medium = counts.medium ?? 0;
   const low = counts.low ?? 0;
   return `${high}/${medium}/${low}`;
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return 'Unknown error';
 }
 
 function validateSnapshot(snapshot: TelemetryDiagnosticsSnapshot): ValidationResult {

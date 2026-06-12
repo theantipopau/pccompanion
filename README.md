@@ -260,24 +260,26 @@ Recommended tester flow:
 
 ## Validation Snapshot
 
-Latest local validation in this workspace (2026-06-07):
+Latest local validation in this workspace (2026-06-12):
 
 | Check | Result |
 |---|---|
 | `npm.cmd run test:telemetry-presentation` | Passed (21 tests) |
-| `npm.cmd run quality:gate` | Passed |
 | `npm.cmd run build` | Passed |
 | `npm.cmd run check:rust` | Passed |
-| `cargo check --manifest-path src-tauri\Cargo.toml` | Passed |
-| `cargo test --manifest-path src-tauri\Cargo.toml --lib` | Passed (11 tests) |
+| `npm.cmd run test:url-policy` | Passed (2 tests) |
 | `npm.cmd run build:sensor-sidecar` | Passed; LHM `0.9.6` version verified |
-| `npm.cmd run build:exe` | Passed |
-| `npm.cmd run verify:radium-artifact` | Passed; manifest written to `artifacts/radium/` |
-| `npm.cmd run verify:demo-brand-leak` | Passed |
-| `npm.cmd run verify:demo-dev-config-restore` | Passed |
-| `npm.cmd run test:url-policy` | Passed |
+| `npm.cmd run build:exe` | Passed; fresh NSIS installer produced |
+| `npm.cmd run verify:radium-artifact` | Passed; manifest written to `artifacts/radium/radium-artifact-manifest-20260612-170629.json` |
 
-Note: in the sandboxed environment, NuGet access may be blocked while publishing the sensor sidecar. The build script falls back to the existing staged Release sidecar output and still produces the final NSIS installer.
+Fresh artifact details:
+
+| Artifact | SHA-256 |
+|---|---|
+| `src-tauri/target/release/radium_pcs_companion.exe` | `92EF12FE9E37BD9A0EC3DFE137BBA1912DB8C3D7BF9FE806403D34CB60D26C7B` |
+| `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe` | `001EEAF0E495A7CE963591F9381D83DA4F470B1DC17D22791149049E1A7B8624` |
+
+Note: artifacts are currently unsigned in this workspace. Use `npm.cmd run sign:radium` with a configured Authenticode identity before paid or broad public distribution.
 
 ## Hardware Validation
 
@@ -353,7 +355,7 @@ See [docs/next-stages.md](docs/next-stages.md) for the working implementation pl
 |---|---|
 | `npm run dev` | Browser preview with mock data |
 | `npm run desktop` | Tauri desktop app (Radium-branded) |
-| `npm run desktop:demo` | Tauri desktop app (neutral demo variant) |
+| `npm run dev:desktop:demo` | Tauri desktop app (neutral demo variant) |
 | `npm run build` | Frontend production build |
 | `npm run build:exe` | Full Tauri build and NSIS installer (Radium-branded) |
 | `npm run build:exe:demo` | Full Tauri build and NSIS installer (neutral demo variant) |

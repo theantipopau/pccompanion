@@ -1,6 +1,6 @@
 # Radium PCs Companion - Current State
 
-Last reviewed: 2026-06-07
+Last reviewed: 2026-06-12
 
 This is the short handoff brief. Keep long session history in `docs/context_log.md`; keep durable architecture in `docs/architecture.md`; keep validation coverage in `docs/compatibility-matrix.md`.
 
@@ -26,6 +26,9 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - `npm.cmd run build`, `npm.cmd run check:rust`, `cargo test --manifest-path src-tauri/Cargo.toml --lib`, and `npm.cmd run build:sensor-sidecar` passed on 2026-06-02 after the responsiveness/maintenance safety pass.
 - `npm.cmd run build`, `npm.cmd run check:rust`, `cargo test --manifest-path src-tauri/Cargo.toml --lib`, `npm.cmd run test:url-policy`, `npm.cmd run verify:demo-dev-config-restore`, and `npm.cmd run verify:demo-brand-leak` passed on 2026-06-07 after the telemetry presentation and UI smoothness pass.
 - `npm.cmd run test:telemetry-presentation` was added and passed on 2026-06-07 with 21 reducer tests covering startup, recovery, stale, provider-change, timestamp, unsupported-sensor, and sleep/resume-like transitions.
+- `npm.cmd run test:telemetry-presentation`, `npm.cmd run build`, `npm.cmd run check:rust`, and `npm.cmd run test:url-policy` passed on 2026-06-12 after the Diagnostics support-status polish pass.
+- `npm.cmd run build:exe` passed on 2026-06-12 and produced `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`.
+- `npm.cmd run verify:radium-artifact` passed on 2026-06-12 and wrote `artifacts/radium/radium-artifact-manifest-20260612-170629.json`.
 - Direct sidecar smoke passed on 2026-06-02 and confirmed the loaded LibreHardwareMonitor library version is `0.9.6+3d331e3370efb858411f19511373eff65a218701`.
 - `cargo test -q` has passed for library tests; full binary test execution may still require elevation on some hosts.
 - `npm.cmd run build:exe` has produced the release executable and NSIS installer in prior validation passes.
@@ -48,13 +51,14 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - Dashboard now includes a first-screen current-state strip for active profile, telemetry/provider freshness, tray/startup behavior, and local safety posture.
 - Dashboard, shell, OSD, thermals, support, and passport surfaces now use a shared telemetry presentation model so startup, one-off degraded ticks, and stale readings do not cause abrupt UI label/value churn. Raw backend telemetry state remains visible in diagnostics and support context.
 - Benchmark capture and CoPilot context continue to consume raw telemetry, not retained presentation samples. Telemetry Diagnostics now includes a read-only raw-vs-displayed presentation inspector for native runtime validation.
+- Telemetry Diagnostics now shows visible refresh/export/probe failures, records failed export/probe actions in local history, and displays the last successful diagnostics refresh time.
 - OmenCore optimizer functionality has been assessed in `docs/omencore-optimizer-assessment.md`; direct code import and broad Windows policy/service/network tweaks are deferred in favor of Radium's existing guarded Performance Profiles subset.
 - Security readiness is tracked in `docs/security-readiness.md`; clean-machine walkthrough criteria are tracked in `docs/clean-machine-test.md`.
 - Signing workflow scaffold is available through `npm.cmd run sign:radium`; Windows SDK `signtool.exe` is discoverable, but no signing identity is configured in this workspace yet.
-- Latest Radium-branded walkthrough artifacts:
-  - `artifacts/radium/radium-pcs-companion-20260607-102415.exe`
-  - `artifacts/radium/radium-pcs-companion-setup-20260607-102415.exe`
-  - `artifacts/radium/radium-pcs-companion-portable-20260607-102415.zip`
+- Latest Radium-branded audited build outputs:
+  - `src-tauri/target/release/radium_pcs_companion.exe`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
+  - `artifacts/radium/radium-artifact-manifest-20260612-170629.json`
 
 ## Main Release Risks
 
