@@ -993,11 +993,169 @@ fn query_gpu_static(ctx: &WmiContext) -> (String, f32) {
     match best {
         Some(vc) => {
             let name = clean_identity_value(vc.Name).unwrap_or_else(|| "GPU unavailable".to_string());
-            // AdapterRAM is u32 but can wrap for >4 GB VRAM — treat as rough estimate.
-            let vram_gb = vc.AdapterRAM.map(|r| r as f32 / 1_073_741_824.0).unwrap_or(0.0);
+            // AdapterRAM is u32 and wraps for GPUs with >= 4 GB VRAM (confirmed on an
+            // AMD Radeon RX 9070 XT, which has 16 GB but reports as 4.00 GB here).
+            // Prefer the registry QWORD that driver INFs write under the display
+            // class key, which is the same source GPU-Z/LibreHardwareMonitor use.
+            let wmi_vram_gb = vc.AdapterRAM.map(|r| r as f32 / 1_073_741_824.0).unwrap_or(0.0);
+            #[cfg(windows)]
+            let registry_vram_gb = query_gpu_vram_registry_gb(&name);
+            #[cfg(not(windows))]
+            let registry_vram_gb: Option<f32> = None;
+            let vram_gb = registry_vram_gb.unwrap_or(wmi_vram_gb);
             (name, vram_gb)
         }
         None => ("GPU unavailable".to_string(), 0.0),
+    }
+}
+
+/// Reads `HardwareInformation.qwMemorySize` from the display adapter's device
+/// class registry key, matched by `DriverDesc` against `adapter_name`. This
+/// avoids the `Win32_VideoController.AdapterRAM` 32-bit wraparound that under-
+/// reports VRAM on GPUs with 4 GB or more (confirmed on an AMD Radeon RX 9070
+/// XT, a 16 GB card that `AdapterRAM` reports as ~4 GB).
+#[cfg(windows)]
+fn query_gpu_vram_registry_gb(adapter_name: &str) -> Option<f32> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY,
+    };
+
+    const DISPLAY_CLASS_KEY: &str =
+        r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+
+    let class_key_wide: Vec<u16> = DISPLAY_CLASS_KEY.encode_utf16().chain(std::iter::once(0)).collect();
+    let target = adapter_name.to_lowercase();
+
+    unsafe {
+        let mut class_hkey = HKEY::default();
+        if RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            PCWSTR(class_key_wide.as_ptr()),
+            0,
+            KEY_READ | KEY_WOW64_64KEY,
+            &mut class_hkey,
+        ) != ERROR_SUCCESS
+        {
+            return None;
+        }
+
+        let mut found_gb: Option<f32> = None;
+        let mut index = 0u32;
+        loop {
+            let mut name_buf = [0u16; 16];
+            let mut name_len = name_buf.len() as u32;
+            let res = RegEnumKeyExW(
+                class_hkey,
+                index,
+                windows::core::PWSTR(name_buf.as_mut_ptr()),
+                &mut name_len,
+                None,
+                windows::core::PWSTR::null(),
+                None,
+                None,
+            );
+            if res != ERROR_SUCCESS {
+                break;
+            }
+            index += 1;
+
+            let subkey_name = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+            let subkey_wide: Vec<u16> = subkey_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+            let mut sub_hkey = HKEY::default();
+            if RegOpenKeyExW(
+                class_hkey,
+                PCWSTR(subkey_wide.as_ptr()),
+                0,
+                KEY_READ | KEY_WOW64_64KEY,
+                &mut sub_hkey,
+            ) != ERROR_SUCCESS
+            {
+                continue;
+            }
+
+            let driver_desc = read_registry_string(sub_hkey, "DriverDesc");
+            let matches_target = driver_desc
+                .as_deref()
+                .map(|desc| {
+                    let desc_lower = desc.to_lowercase();
+                    desc_lower == target || desc_lower.contains(&target) || target.contains(&desc_lower)
+                })
+                .unwrap_or(false);
+
+            if matches_target {
+                if let Some(bytes) = read_registry_qword(sub_hkey, "HardwareInformation.qwMemorySize") {
+                    found_gb = Some(bytes as f32 / 1_073_741_824.0);
+                }
+            }
+
+            let _ = RegCloseKey(sub_hkey);
+            if found_gb.is_some() {
+                break;
+            }
+        }
+
+        let _ = RegCloseKey(class_hkey);
+        found_gb
+    }
+}
+
+/// Read a `REG_SZ` value from an open key handle.
+#[cfg(windows)]
+fn read_registry_string(hkey: windows::Win32::System::Registry::HKEY, value_name: &str) -> Option<String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::RegQueryValueExW;
+
+    let name_wide: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut data_buf = [0u8; 512];
+    let mut data_len = data_buf.len() as u32;
+
+    unsafe {
+        let res = RegQueryValueExW(
+            hkey,
+            PCWSTR(name_wide.as_ptr()),
+            None,
+            None,
+            Some(data_buf.as_mut_ptr()),
+            Some(&mut data_len),
+        );
+        if res != ERROR_SUCCESS || data_len < 2 {
+            return None;
+        }
+        let units = data_len as usize / 2;
+        let wide = std::slice::from_raw_parts(data_buf.as_ptr() as *const u16, units);
+        let s = String::from_utf16_lossy(wide);
+        Some(s.trim_end_matches('\0').to_string())
+    }
+}
+
+/// Read a `REG_QWORD` (8-byte little-endian) value from an open key handle.
+#[cfg(windows)]
+fn read_registry_qword(hkey: windows::Win32::System::Registry::HKEY, value_name: &str) -> Option<u64> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::RegQueryValueExW;
+
+    let name_wide: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut data_buf = [0u8; 8];
+    let mut data_len = data_buf.len() as u32;
+
+    unsafe {
+        let res = RegQueryValueExW(
+            hkey,
+            PCWSTR(name_wide.as_ptr()),
+            None,
+            None,
+            Some(data_buf.as_mut_ptr()),
+            Some(&mut data_len),
+        );
+        if res != ERROR_SUCCESS || data_len != 8 {
+            return None;
+        }
+        Some(u64::from_le_bytes(data_buf))
     }
 }
 

@@ -13,6 +13,9 @@ This is the living audit and improvement backlog for Radium PCs Companion. It ca
 - Validation: `npm.cmd run build` passed, `npm.cmd run test:telemetry-presentation` passed 21/21, `cargo check --manifest-path src-tauri/Cargo.toml` passed clean, `cargo test --manifest-path src-tauri/Cargo.toml --lib` passed 11/11 (includes `external_url_validator` tests).
 - Committed the validated batch to `main` rather than continuing to stack new work on an uncommitted working tree.
 - Updated `docs/architecture.md` (module list and IPC table were missing `amd_provider.rs`, `nvml_provider.rs`, `sidecar_provider.rs`, `rgb_provider.rs`, `driver_update.rs` and several registered commands), `docs/roadmap.md` (hardware alerts, RGB Phase 1, and HTML diagnostics export were still shown as unchecked), `docs/current-state.md`, and `docs/security-readiness.md` to match actual code state.
+- Ran the first real AMD desktop validation pass (Ryzen 7 9800X3D + Radeon RX 9070 XT) via a temporary backend probe test, since the full Tauri dev binary's `requireAdministrator` manifest could not get a UAC approval through in this session. Findings recorded in `docs/compatibility-matrix.md`.
+- **Found and fixed a real VRAM-reporting bug**: `Win32_VideoController.AdapterRAM` is a 32-bit field that wraps for GPUs with 4 GB or more VRAM — it reported the 16 GB Radeon RX 9070 XT as 4.00 GB. `wmi_provider.rs` now reads `HardwareInformation.qwMemorySize` from the display adapter's registry class key as the authoritative source, confirmed corrected to 15.92 GB on this hardware.
+- **Found a real AMD GPU telemetry gap (not yet fixed)**: `AmdAdlContext::init()` in `amd_provider.rs` returns `None` on this RDNA4 card because no adapter responds to the legacy ADL2 Overdrive5 API used to pick the active adapter. AMD discrete GPU temperature/usage/clocks/fan/power on current-generation cards silently fall back to the weaker WMI path instead of ADL. Needs migration to Overdrive6/Overdrive8/ADLX — added to Priority 4 below.
 
 ### 2026-06-26
 
@@ -329,7 +332,9 @@ Goal: validate and harden NVML, AMD ADL, and Intel fallback paths.
 Work:
 
 - Validate NVIDIA telemetry on desktop hardware.
-- Validate AMD discrete telemetry on desktop hardware.
+- Validate AMD discrete telemetry on desktop hardware. Done 2026-06-27 on a Radeon RX 9070 XT — see `docs/compatibility-matrix.md` AMD Desktop Findings.
+- **AMD ADL2 Overdrive5 does not initialize on current-generation RDNA3/RDNA4 cards** (confirmed: `AmdAdlContext::init()` returns `None` on a Radeon RX 9070 XT). `amd_provider.rs` needs an Overdrive6/Overdrive8/ADLX code path, or at minimum a documented/diagnostics-visible explanation, before AMD discrete GPU temp/usage/clock/fan/power telemetry can be trusted on new hardware. Until fixed, these cards silently get WMI-only quality instead of ADL quality.
+- Fixed 2026-06-27: `Win32_VideoController.AdapterRAM` 32-bit wraparound under-reported VRAM on GPUs >= 4 GB; `wmi_provider.rs` now prefers the registry `HardwareInformation.qwMemorySize` QWORD.
 - Keep Intel Arc IGCL bindings staged until native readings are real.
 - Add provider timing/errors to diagnostics export.
 
@@ -496,7 +501,8 @@ Work:
 ### Now
 
 - Validate on NVIDIA desktop.
-- Validate on AMD desktop.
+- AMD desktop validated 2026-06-27 (backend probe only; full UI/tray/OSD/installer pass still pending elevated access on that machine).
+- Migrate `amd_provider.rs` off ADL2 Overdrive5 (confirmed non-functional on RDNA4) to Overdrive6/Overdrive8/ADLX, or surface the fallback explicitly in diagnostics instead of silently degrading to WMI-only quality.
 - Complete signing path.
 - Convert largest PNG assets or add optimized variants.
 
@@ -504,6 +510,7 @@ Work:
 
 - Add SMART/NVMe read-only telemetry.
 - Validate RGB Phase 1 OpenRGB discovery against a real OpenRGB SDK server.
+- Re-check WMI GPU usage-percent accuracy on an AMD desktop under actual GPU load (the 2026-06-27 pass only observed it idle at 0.0%, which is inconclusive).
 
 ### Later
 
