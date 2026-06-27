@@ -4,9 +4,22 @@ import type { CompanionSettings } from '../types/system';
 import { brand } from '../lib/branding';
 
 const SETTINGS_KEY = `${brand.mode}-companion-settings`;
-const SETTINGS_STORAGE_VERSION = 2;
+const SETTINGS_STORAGE_VERSION = 4;
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);
+
+const emptyBuildIdentity = {
+  serial: '',
+  buildDate: '',
+  customerBuildProfile: '',
+  motherboard: '',
+  gpu: '',
+  ramConfig: '',
+  storageConfig: '',
+  qcSeal: '',
+  warrantyTier: '',
+  supportTier: '',
+};
 
 const defaultSettings: CompanionSettings = {
   theme: brand.mode === 'demo' ? 'graphite' : 'radium-dark',
@@ -36,12 +49,23 @@ const defaultSettings: CompanionSettings = {
     historyLimit: 60,
     temperatureUnit: 'c',
   },
+  alerts: {
+    enabled: true,
+    sustainedSamples: 4,
+    cooldownMs: 900000,
+    cpuTempC: 88,
+    gpuTempC: 84,
+    ramUsagePct: 92,
+    storageUsedPct: 90,
+  },
   experience: {
+    interfaceMode: 'owner',
     compactMode: false,
     animations: true,
     performanceProfile: 'balanced',
     performanceMode: 'balanced',
   },
+  buildIdentity: emptyBuildIdentity,
   gameMode: {
     automationEnabled: false,
     mappings: [],
@@ -79,6 +103,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.dataset.compact = String(settings.experience.compactMode);
+    document.documentElement.dataset.interfaceMode = settings.experience.interfaceMode;
   }, [settings]);
 
   const value = useMemo<SettingsContextValue>(
@@ -100,7 +125,9 @@ function mergeSettings(base: CompanionSettings, partial: Partial<CompanionSettin
     tray: { ...base.tray, ...partial.tray },
     overlay: { ...base.overlay, ...partial.overlay, position: { ...base.overlay.position, ...partial.overlay?.position } },
     monitoring: { ...base.monitoring, ...partial.monitoring },
+    alerts: { ...base.alerts, ...partial.alerts },
     experience: { ...base.experience, ...partial.experience },
+    buildIdentity: { ...base.buildIdentity, ...partial.buildIdentity },
     gameMode: { ...base.gameMode, ...partial.gameMode, mappings: partial.gameMode?.mappings ?? base.gameMode.mappings },
   };
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Activity, BarChart3, Gauge, HardDrive, LayoutDashboard, MemoryStick, PackageMinus, Settings, Sparkles, TimerReset, Wrench, FileWarning, Cpu, Bot } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { Shell } from './components/Shell';
@@ -7,18 +7,6 @@ import { SplashScreen } from './components/SplashScreen';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { OsdOverlay } from './components/OsdOverlay';
 import { DashboardPage } from './pages/DashboardPage';
-import { RamCleanerPage } from './pages/RamCleanerPage';
-import { BloatwarePage } from './pages/BloatwarePage';
-import { UtilitiesPage } from './pages/UtilitiesPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { ThermalsPage } from './pages/ThermalsPage';
-import { StartupManagerPage } from './pages/StartupManagerPage';
-import { StorageCleanerPage } from './pages/StorageCleanerPage';
-import { RegistryCleanerPage } from './pages/RegistryCleanerPage';
-import { PerformanceProfilesPage } from './pages/PerformanceProfilesPage';
-import { ProcessMonitorPage } from './pages/ProcessMonitorPage';
-import { BenchmarkPage } from './pages/BenchmarkPage';
-import { AiCopilotPage } from './pages/AiCopilotPage';
 import { MonitorProvider } from './context/MonitorContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { useSettings } from './hooks/useSettings';
@@ -37,6 +25,37 @@ import {
 } from './services/systemService';
 import type { NavItem } from './types/navigation';
 import type { PerformanceProfileId } from './types/system';
+
+const RamCleanerPage = lazy(() => import('./pages/RamCleanerPage').then((module) => ({ default: module.RamCleanerPage })));
+const BloatwarePage = lazy(() => import('./pages/BloatwarePage').then((module) => ({ default: module.BloatwarePage })));
+const UtilitiesPage = lazy(() => import('./pages/UtilitiesPage').then((module) => ({ default: module.UtilitiesPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const ThermalsPage = lazy(() => import('./pages/ThermalsPage').then((module) => ({ default: module.ThermalsPage })));
+const StartupManagerPage = lazy(() => import('./pages/StartupManagerPage').then((module) => ({ default: module.StartupManagerPage })));
+const StorageCleanerPage = lazy(() => import('./pages/StorageCleanerPage').then((module) => ({ default: module.StorageCleanerPage })));
+const RegistryCleanerPage = lazy(() => import('./pages/RegistryCleanerPage').then((module) => ({ default: module.RegistryCleanerPage })));
+const PerformanceProfilesPage = lazy(() => import('./pages/PerformanceProfilesPage').then((module) => ({ default: module.PerformanceProfilesPage })));
+const ProcessMonitorPage = lazy(() => import('./pages/ProcessMonitorPage').then((module) => ({ default: module.ProcessMonitorPage })));
+const BenchmarkPage = lazy(() => import('./pages/BenchmarkPage').then((module) => ({ default: module.BenchmarkPage })));
+const AiCopilotPage = lazy(() => import('./pages/AiCopilotPage').then((module) => ({ default: module.AiCopilotPage })));
+
+const routePrefetchers: Record<string, () => Promise<unknown>> = {
+  optimizer: () => import('./pages/RamCleanerPage'),
+  processes: () => import('./pages/ProcessMonitorPage'),
+  cleanup: () => import('./pages/BloatwarePage'),
+  thermals: () => import('./pages/ThermalsPage'),
+  monitoring: () => import('./pages/ThermalsPage'),
+  startup: () => import('./pages/StartupManagerPage'),
+  registry: () => import('./pages/RegistryCleanerPage'),
+  storage: () => import('./pages/StorageCleanerPage'),
+  profiles: () => import('./pages/PerformanceProfilesPage'),
+  benchmark: () => import('./pages/BenchmarkPage'),
+  utilities: () => import('./pages/UtilitiesPage'),
+  copilot: () => import('./pages/AiCopilotPage'),
+  diagnostics: () => import('./pages/SettingsPage'),
+  passport: () => import('./pages/SettingsPage'),
+  settings: () => import('./pages/SettingsPage'),
+};
 
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, keywords: 'home overview health sensors support readiness' },
@@ -92,6 +111,10 @@ function CompanionApp() {
   const [activeView, setActiveView] = useState('dashboard');
   const [splashVisible, setSplashVisible] = useState(true);
   const { settings, updateSettings } = useSettings();
+
+  function prefetchView(view: string) {
+    void routePrefetchers[view]?.();
+  }
 
   const applyTrayProfile = (id: PerformanceProfileId) => {
     void applyPerformanceProfile(id).then((result) => {
@@ -220,7 +243,7 @@ function CompanionApp() {
   return (
     <>
       <ErrorBoundary>
-        <Shell navItems={navItems} activeView={activeView} onNavigate={setActiveView}>
+        <Shell navItems={navItems} activeView={activeView} onNavigate={setActiveView} onPrefetchView={prefetchView}>
         <AnimatePresence mode="sync">
           <motion.main
             key={activeView}
@@ -236,7 +259,9 @@ function CompanionApp() {
             }}
           >
             <ErrorBoundary>
-              {page}
+              <Suspense fallback={<div className="page page-loading"><div className="notice notice-preview">Loading page...</div></div>}>
+                {page}
+              </Suspense>
             </ErrorBoundary>
           </motion.main>
         </AnimatePresence>

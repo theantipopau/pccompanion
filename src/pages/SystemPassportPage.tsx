@@ -1,19 +1,31 @@
-import { Award, BadgeCheck, CircuitBoard, Cpu, FileClock, HardDrive, MonitorUp, ShieldCheck } from 'lucide-react';
+import { Award, BadgeCheck, CircuitBoard, ClipboardCopy, Cpu, FileClock, HardDrive, MonitorUp, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
 import { oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
+import { recordCompanionAction } from '../lib/actionHistory';
 import { computePerformanceScore } from '../lib/performanceScore';
 import { getHardwareCapabilities } from '../services/systemService';
 import type { HardwareCapability, Vendor } from '../types/system';
 
 export function SystemPassportPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { systemInfo, sample: rawSample, displaySample, presentation, native } = useMonitor();
+  const { settings } = useSettings();
   const [capabilities, setCapabilities] = useState<HardwareCapability[]>([]);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const sample = displaySample ?? rawSample;
   const score = computePerformanceScore(sample);
+  const buildIdentity = settings.buildIdentity;
+  const provisionedBuildFields = Object.values(buildIdentity).filter((value) => value.trim()).length;
+  const buildRecordLabel = provisionedBuildFields > 0 ? `${provisionedBuildFields}/10 fields provisioned` : 'not provisioned';
+  const provisionedValue = (value?: string | null) => {
+    const trimmed = value?.trim();
+    return trimmed || 'not provisioned';
+  };
+  const preferredValue = (provisioned: string, detected: string) => provisioned.trim() || detected;
   const liveCapabilities = capabilities.filter((capability) => capability.state === 'live').length;
   const normalizeIdentity = (value?: string | null) => {
     const trimmed = value?.trim();
@@ -23,6 +35,10 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
   const cpuName = normalizeIdentity(systemInfo?.cpu) ?? 'Pending detection';
   const gpuName = normalizeIdentity(sample?.gpu.name) ?? normalizeIdentity(systemInfo?.gpu) ?? 'Pending detection';
   const boardName = normalizeIdentity(systemInfo?.motherboard) ?? 'Pending detection';
+  const passportGpuName = preferredValue(buildIdentity.gpu, gpuName);
+  const passportBoardName = preferredValue(buildIdentity.motherboard, boardName);
+  const passportStorage = preferredValue(buildIdentity.storageConfig, systemInfo?.storage?.join(' | ') ?? 'Pending detection');
+  const passportRam = preferredValue(buildIdentity.ramConfig, systemInfo ? `${systemInfo.ram} at ${systemInfo.ramSpeed}` : 'Pending detection');
   const gpuVendor: Vendor = sample?.gpu.vendor && sample.gpu.vendor !== 'unknown'
     ? sample.gpu.vendor
     : vendorFromProvider(sample?.gpu.provider) !== 'unknown'
@@ -33,7 +49,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
   const cpuVendor = systemInfo?.cpuVendor && systemInfo.cpuVendor !== 'unknown' ? systemInfo.cpuVendor : vendorFromText(cpuName);
   const cpuLogo = vendorLogo(cpuVendor);
   const gpuLogo = oemLogoForText(gpuName) || vendorLogo(gpuVendor);
-  const boardLogo = oemLogoForText(boardName);
+  const boardLogo = oemLogoForText(passportBoardName);
   const passportIdSeed = `${cpuName}|${gpuName}|${systemInfo?.bios ?? 'bios'}`;
   const passportId = `RDM-${passportIdSeed
     .split('')
@@ -71,6 +87,39 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
       detail: native ? 'Diagnostics export is available locally' : 'Desktop app required for native diagnostics export',
     },
   ];
+  const supportContext = [
+    `${brand.productName} support context`,
+    `Created: ${new Date().toLocaleString()}`,
+    `Passport ID: ${provisionedValue(buildIdentity.serial) !== 'not provisioned' ? provisionedValue(buildIdentity.serial) : passportId}`,
+    `Build date: ${provisionedValue(buildIdentity.buildDate)}`,
+    `Customer profile: ${provisionedValue(buildIdentity.customerBuildProfile)}`,
+    `Motherboard: ${passportBoardName}`,
+    `CPU: ${cpuName}`,
+    `GPU: ${passportGpuName}`,
+    `RAM: ${passportRam}`,
+    `Storage: ${passportStorage}`,
+    `QC seal: ${provisionedValue(buildIdentity.qcSeal)}`,
+    `Warranty tier: ${provisionedValue(buildIdentity.warrantyTier)}`,
+    `Support tier: ${provisionedValue(buildIdentity.supportTier) !== 'not provisioned' ? provisionedValue(buildIdentity.supportTier) : (presentation.isLive ? 'Premium Care' : 'Guided Support')}`,
+    `Telemetry: ${presentation.label} (${presentation.state})`,
+    `Provider: ${gpuProvider}`,
+    `Score: ${score.value} / ${score.grade}`,
+    `Capabilities: ${liveCapabilities} live lanes`,
+    `Storage headroom: ${sample?.storage.length ? `highest used drive ${Math.round(storageMaxUsed)}%` : 'inventory pending'}`,
+  ].join('\n');
+
+  async function copySupportContext() {
+    try {
+      await navigator.clipboard.writeText(supportContext);
+      setCopyState('copied');
+      recordCompanionAction('support', 'Copied Passport support context', `${buildRecordLabel} - ${presentation.label}`);
+      window.setTimeout(() => setCopyState('idle'), 2200);
+    } catch {
+      setCopyState('failed');
+      window.setTimeout(() => setCopyState('idle'), 2600);
+    }
+  }
+
   const scoreChip = (
     <div className="passport-score-chip" title={brand.dashboardHeroTitle}>
       <span>{brand.shortName} Score</span>
@@ -126,7 +175,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
           <div className="passport-hero-top">
             <div>
               <span className="eyebrow">Identity status</span>
-              <h2>Ownership profile calibrated</h2>
+              <h2>{provisionedBuildFields > 0 ? 'Ownership profile provisioned' : 'Ownership profile calibrated'}</h2>
               <p>{score.summary}</p>
             </div>
             <div className="passport-grade-badge">Grade {score.grade}</div>
@@ -151,19 +200,21 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             <BadgeCheck size={18} />
           </div>
           <div className="passport-vendor-strip" aria-label="OEM identity assets">
-            {cpuLogo && <img src={cpuLogo} alt="CPU vendor" />}
-            {gpuLogo && <img src={gpuLogo} alt="GPU vendor" />}
-            {boardLogo && <img src={boardLogo} alt="Mainboard OEM" />}
+            {cpuLogo && <img src={cpuLogo} alt="CPU vendor" loading="lazy" decoding="async" />}
+            {gpuLogo && <img src={gpuLogo} alt="GPU vendor" loading="lazy" decoding="async" />}
+            {boardLogo && <img src={boardLogo} alt="Mainboard OEM" loading="lazy" decoding="async" />}
           </div>
           <dl className="passport-dl">
             <dt><Cpu size={15} /> CPU</dt>
             <dd>{cpuName}</dd>
             <dt><MonitorUp size={15} /> GPU</dt>
-            <dd>{gpuName}</dd>
+            <dd>{passportGpuName}</dd>
             <dt><CircuitBoard size={15} /> Motherboard</dt>
-            <dd>{boardName}</dd>
+            <dd>{passportBoardName}</dd>
+            <dt><Cpu size={15} /> RAM</dt>
+            <dd>{passportRam}</dd>
             <dt><HardDrive size={15} /> Storage</dt>
-            <dd>{systemInfo?.storage?.join(' | ') ?? 'Pending detection'}</dd>
+            <dd>{passportStorage}</dd>
             <dt><FileClock size={15} /> BIOS</dt>
             <dd>{systemInfo?.bios ?? 'Pending detection'}</dd>
           </dl>
@@ -178,13 +229,29 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             <Award size={18} />
           </div>
           <div className="passport-metadata-grid">
-            <PassportField label="Passport ID" value={passportId} />
-            <PassportField label="Validation state" value={validationState} />
-            <PassportField label="Telemetry confidence" value={`${liveCapabilities} live capability lanes`} />
-            <PassportField label="Support tier" value={presentation.isLive ? 'Premium Care' : 'Guided Support'} />
+            <PassportField label="Passport ID" value={provisionedValue(buildIdentity.serial) !== 'not provisioned' ? provisionedValue(buildIdentity.serial) : passportId} />
+            <PassportField label="Build date" value={provisionedValue(buildIdentity.buildDate)} />
+            <PassportField label="Customer profile" value={provisionedValue(buildIdentity.customerBuildProfile)} />
+            <PassportField label="QC seal" value={provisionedValue(buildIdentity.qcSeal)} />
+            <PassportField label="Warranty tier" value={provisionedValue(buildIdentity.warrantyTier)} />
+            <PassportField label="Support tier" value={provisionedValue(buildIdentity.supportTier) !== 'not provisioned' ? provisionedValue(buildIdentity.supportTier) : (presentation.isLive ? 'Premium Care' : 'Guided Support')} />
             <PassportField label="Firmware summary" value={systemInfo?.bios ?? 'Firmware metadata pending'} />
-            <PassportField label="Build identity" value={`${systemInfo?.windows ?? 'Windows'} · ${score.grade} profile`} />
+            <PassportField label="Build identity" value={`${buildRecordLabel} - ${systemInfo?.windows ?? 'Windows'} - ${score.grade} profile`} />
           </div>
+        </Panel>
+
+        <Panel className="passport-panel wide passport-support-context">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Support handoff</span>
+              <h2>Build context</h2>
+            </div>
+            <button className="secondary-button" type="button" onClick={copySupportContext}>
+              <ClipboardCopy size={15} />
+              <span>{copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy context'}</span>
+            </button>
+          </div>
+          <pre>{supportContext}</pre>
         </Panel>
 
         <Panel className="passport-panel wide">
@@ -201,7 +268,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
                 key={capability.id}
                 label={capability.label}
                 status={capability.state === 'live' ? 'live' : capability.state === 'unsupported' ? 'unsupported' : 'partial'}
-                detail={`${capability.detail}${capability.writeSafe ? ' · write-safe' : ' · read-only'}`}
+                detail={`${capability.detail}${capability.writeSafe ? ' - write-safe' : ' - read-only'}`}
               />
             )) : (
               <MatrixRow label="Capability registry" status="partial" detail="Awaiting backend capability snapshot" />

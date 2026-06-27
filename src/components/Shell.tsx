@@ -20,6 +20,7 @@ type ShellProps = {
   navItems: NavItem[];
   activeView: string;
   onNavigate: (view: string) => void;
+  onPrefetchView?: (view: string) => void;
   children: React.ReactNode;
 };
 
@@ -32,7 +33,7 @@ type SearchResult = {
   run: () => void;
 };
 
-export function Shell({ navItems, activeView, onNavigate, children }: ShellProps) {
+export function Shell({ navItems, activeView, onNavigate, onPrefetchView, children }: ShellProps) {
   const companyWebsite = brand.website;
   const phone = brand.phone;
   const salesEmail = brand.salesEmail;
@@ -47,6 +48,10 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   const sample = displaySample ?? rawSample;
   const dashboardActive = activeView === 'dashboard';
   const compactShell = settings.experience.compactMode;
+  const interfaceMode = settings.experience.interfaceMode ?? 'owner';
+  const technicianMode = interfaceMode === 'technician';
+  const shellClass = ['app-shell', compactShell ? 'compact-shell' : '', technicianMode ? 'technician-shell' : 'owner-shell'].filter(Boolean).join(' ');
+  const sidebarClass = ['sidebar', compactShell ? 'compact' : '', technicianMode ? 'technician' : 'owner'].filter(Boolean).join(' ');
   const motionEnabled = settings.experience.animations;
   const searchListboxId = 'shell-command-palette-results';
 
@@ -326,8 +331,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
   }
 
   return (
-    <div className={compactShell ? 'app-shell compact-shell' : 'app-shell'}>
-      <aside className={compactShell ? 'sidebar compact' : 'sidebar'} aria-label="Primary">
+    <div className={shellClass}>
+      <aside className={sidebarClass} aria-label="Primary">
         <div className="brand-lockup">
           <span className="brand-icon-frame">
             <img className="brand-icon" src={brand.splashIcon} alt={brand.name} />
@@ -349,6 +354,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
                     key={item.id}
                     className={active ? 'nav-item active' : 'nav-item'}
                     onClick={() => onNavigate(item.id)}
+                    onMouseEnter={() => onPrefetchView?.(item.id)}
+                    onFocus={() => onPrefetchView?.(item.id)}
                     aria-current={active ? 'page' : undefined}
                     title={item.label}
                     transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
@@ -369,8 +376,9 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
           ))}
         </nav>
 
-        {/* Live sensor strip - shown on all pages so temps are always visible */}
-        <div className="sidebar-metrics">
+        {technicianMode && (
+          <div className="sidebar-metrics">
+            {/* Live sensor strip - shown on all pages so temps are always visible */}
           <span className="sidebar-metrics-label">Live sensors</span>
           <div className="sidebar-metric-row">
             <ThermalIcon size={13} />
@@ -407,7 +415,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               {sample ? pct(sample.memory.usage) : '-'}
             </strong>
           </div>
-        </div>
+          </div>
+        )}
         <div className="sidebar-version-strip">
           <span>v{appMetadata?.version ?? '-'}</span>
           {appMetadata?.updateStatus === 'available' && (
@@ -417,8 +426,25 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
             </button>
           )}
         </div>
-        <div className="sidebar-brand-promo" aria-label={brand.shellPromoAlt}>
-          <img src={brand.splashLogo} alt={brand.productName} />
+        {!technicianMode && (
+          <div className="sidebar-owner-summary">
+            <span className="sidebar-metrics-label">Daily view</span>
+            <div className="sidebar-owner-status">
+              <ShieldCheck size={15} />
+              <span>
+                <strong>{presentation.isUsable ? `${brand.readinessLabel} ready` : 'Sensors starting'}</strong>
+                <small>{presentation.detail}</small>
+              </span>
+            </div>
+            <button className="sidebar-owner-link" type="button" onClick={() => onNavigate('diagnostics')}>
+              Open diagnostics
+            </button>
+          </div>
+        )}
+        {technicianMode && (
+          <>
+            <div className="sidebar-brand-promo" aria-label={brand.shellPromoAlt}>
+          <img src={brand.splashLogo} alt={brand.productName} loading="lazy" decoding="async" />
           <p>{brand.sidebarPromoBody}</p>
           <div className="sidebar-premium-badge">
             <span className="premium-badge-mark">
@@ -429,8 +455,8 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               <small>{brand.trustBadgeDetail}</small>
             </span>
           </div>
-        </div>
-        <div className="sidebar-contact">
+            </div>
+            <div className="sidebar-contact">
           <span className="sidebar-metrics-label">{brand.contactPanelLabel}</span>
           <a
             className="sidebar-contact-link"
@@ -482,7 +508,9 @@ export function Shell({ navItems, activeView, onNavigate, children }: ShellProps
               <span>{storeAddress}</span>
             </div>
           </div>
-        </div>
+            </div>
+          </>
+        )}
       </aside>
       <section className="workspace">
         <header className={dashboardActive ? 'topbar dashboard-topbar' : 'topbar'} data-tauri-drag-region>

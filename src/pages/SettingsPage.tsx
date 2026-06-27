@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, Bell, ClipboardList, Download, ExternalLink, Gamepad2, Gauge, Info, Mail, MapPin, MonitorDot, Palette, PhoneCall, Plus, Power, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Archive, Bell, ClipboardList, Download, ExternalLink, FileInput, Gamepad2, Gauge, Info, Mail, MapPin, MonitorDot, Palette, PhoneCall, Plus, Power, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
@@ -7,11 +7,12 @@ import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
 import { assets, oemLogoForText, vendorLogo } from '../lib/assets';
 import { clearCompanionActions, readCompanionActions, recordCompanionAction, subscribeCompanionActions, summarizeCompanionActions, type CompanionActionRecord } from '../lib/actionHistory';
+import { exportLocalSupportReport } from '../lib/supportReport';
 import { openExternalUrl } from '../services/native';
-import { exportDiagnostics, getAppMetadata, listRegistryBackups, listTopProcesses, restoreRegistryBackup, setStartupMode } from '../services/systemService';
+import { createDiagnosticsExportContext, exportDiagnostics, getAppMetadata, listRegistryBackups, listTopProcesses, restoreRegistryBackup, setStartupMode } from '../services/systemService';
 import { SystemPassportPage } from './SystemPassportPage';
 import { TelemetryDiagnosticsPage } from './TelemetryDiagnosticsPage';
-import type { AppMetadata, GameProfileMapping, OverlayPreset, PerformanceMode, PerformanceProfileId, ProcessInfo, RegistryBackup, TrayMetric } from '../types/system';
+import type { AppMetadata, GameProfileMapping, InterfaceMode, OverlayPreset, PerformanceMode, PerformanceProfileId, ProcessInfo, RadiumBuildIdentity, RegistryBackup, TrayMetric } from '../types/system';
 
 const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
   { id: 'compact-bar',    label: 'Compact bar' },
@@ -21,6 +22,21 @@ const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
   { id: 'cinematic',      label: 'Cinematic - big numbers' },
   { id: 'benchmark',      label: 'Benchmark - dense grid' },
 ];
+
+const buildIdentityFields: Array<{ key: keyof RadiumBuildIdentity; label: string; placeholder: string; type?: string }> = [
+  { key: 'serial', label: 'Serial', placeholder: 'RDM-2026-0001' },
+  { key: 'buildDate', label: 'Build date', placeholder: '2026-06-25', type: 'date' },
+  { key: 'customerBuildProfile', label: 'Build profile', placeholder: 'Radium Aurora X3 - creator/gaming' },
+  { key: 'motherboard', label: 'Motherboard', placeholder: 'ASUS ROG Strix B650E-F' },
+  { key: 'gpu', label: 'GPU', placeholder: 'NVIDIA GeForce RTX 4080 SUPER' },
+  { key: 'ramConfig', label: 'RAM config', placeholder: '64 GB DDR5-6000 CL30' },
+  { key: 'storageConfig', label: 'Storage config', placeholder: '2 TB NVMe Gen4 + 4 TB SSD' },
+  { key: 'qcSeal', label: 'QC seal', placeholder: 'QC-MH-2026-0625' },
+  { key: 'warrantyTier', label: 'Warranty tier', placeholder: '3 year Radium warranty' },
+  { key: 'supportTier', label: 'Support tier', placeholder: 'Premium Care' },
+];
+
+const buildIdentityKeys = buildIdentityFields.map((field) => field.key);
 
 type SettingsTab = 'general' | 'games' | 'passport' | 'diagnostics' | 'about';
 
@@ -197,6 +213,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
 
       {activeTab === 'passport' && (
         <section id={tabPanelId('passport')} role="tabpanel" aria-labelledby={tabButtonId('passport')}>
+          <BuildIdentitySettings />
           <SystemPassportPage embedded />
         </section>
       )}
@@ -410,6 +427,19 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
             </div>
             <Palette size={19} />
           </div>
+          <label className="control-row">
+            <span>Interface mode</span>
+            <select
+              value={settings.experience.interfaceMode}
+              onChange={(event) => updateSettings((current) => ({
+                ...current,
+                experience: { ...current.experience, interfaceMode: event.target.value as InterfaceMode },
+              }))}
+            >
+              <option value="owner">Owner - calm daily view</option>
+              <option value="technician">Technician - dense support view</option>
+            </select>
+          </label>
           <Toggle
             label="Smooth animations"
             checked={settings.experience.animations}
@@ -513,9 +543,158 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
   );
 }
 
+function BuildIdentitySettings() {
+  const { settings, updateSettings } = useSettings();
+  const seedInputRef = useRef<HTMLInputElement | null>(null);
+  const [seedStatus, setSeedStatus] = useState('');
+  const populatedCount = Object.values(settings.buildIdentity).filter((value) => value.trim()).length;
+
+  function updateBuildIdentityField(key: keyof RadiumBuildIdentity, value: string) {
+    updateSettings((current) => ({
+      ...current,
+      buildIdentity: { ...current.buildIdentity, [key]: value },
+    }));
+  }
+
+  function exportBuildSeed() {
+    const payload = {
+      schema: 'radium-build-identity-v1',
+      exportedAt: new Date().toISOString(),
+      buildIdentity: settings.buildIdentity,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const serial = settings.buildIdentity.serial.trim() || 'template';
+    link.href = url;
+    link.download = 'radium-build-identity-' + serial.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase() + '.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setSeedStatus('Build identity seed exported locally.');
+    recordCompanionAction('settings', 'Exported build identity seed', populatedCount + '/10 fields provisioned');
+  }
+
+  async function importBuildSeed(file: File | null) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const imported = parseBuildIdentitySeed(parsed);
+      const importedCount = Object.values(imported).filter((value) => value.trim()).length;
+      if (importedCount === 0) {
+        setSeedStatus('No recognised build identity fields found in seed file.');
+        recordCompanionAction('settings', 'Build identity seed rejected', file.name);
+        return;
+      }
+      updateSettings((current) => ({
+        ...current,
+        buildIdentity: { ...current.buildIdentity, ...imported },
+      }));
+      setSeedStatus(importedCount + '/10 build identity fields imported from ' + file.name + '.');
+      recordCompanionAction('settings', 'Imported build identity seed', importedCount + '/10 fields from ' + file.name);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setSeedStatus('Seed import failed: ' + message);
+      recordCompanionAction('settings', 'Build identity seed import failed', message);
+    } finally {
+      if (seedInputRef.current) seedInputRef.current.value = '';
+    }
+  }
+
+  return (
+    <Panel className="settings-panel build-identity-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Radium provisioning</span>
+          <h2>Build identity record</h2>
+        </div>
+        <ClipboardList size={19} />
+      </div>
+      <p className="build-identity-note">Local-only metadata for support and System Passport. Empty fields are shown as not provisioned.</p>
+      <div className="build-identity-actions">
+        <input
+          ref={seedInputRef}
+          className="build-identity-file-input"
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => void importBuildSeed(event.target.files?.[0] ?? null)}
+        />
+        <button className="secondary-button" type="button" onClick={() => seedInputRef.current?.click()}>
+          <FileInput size={15} />
+          <span>Import seed</span>
+        </button>
+        <button className="secondary-button" type="button" onClick={exportBuildSeed}>
+          <Download size={15} />
+          <span>Export seed</span>
+        </button>
+        {seedStatus && <span className="build-identity-seed-status" role="status">{seedStatus}</span>}
+      </div>
+      <div className="build-identity-grid">
+        {buildIdentityFields.map((field) => (
+          <label className="control-row build-identity-field" key={field.key}>
+            <span>{field.label}</span>
+            <input
+              type={field.type ?? 'text'}
+              value={settings.buildIdentity[field.key]}
+              placeholder={field.placeholder}
+              onChange={(event) => updateBuildIdentityField(field.key, event.target.value)}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="build-identity-footer">
+        <span>{populatedCount}/10 fields provisioned</span>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => updateSettings((current) => ({
+            ...current,
+            buildIdentity: {
+              serial: '',
+              buildDate: '',
+              customerBuildProfile: '',
+              motherboard: '',
+              gpu: '',
+              ramConfig: '',
+              storageConfig: '',
+              qcSeal: '',
+              warrantyTier: '',
+              supportTier: '',
+            },
+          }))}
+        >
+          <Trash2 size={15} />
+          <span>Clear record</span>
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+function parseBuildIdentitySeed(value: unknown): Partial<RadiumBuildIdentity> {
+  const root = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const candidate = root.buildIdentity && typeof root.buildIdentity === 'object'
+    ? root.buildIdentity as Record<string, unknown>
+    : root.radiumBuildIdentity && typeof root.radiumBuildIdentity === 'object'
+      ? root.radiumBuildIdentity as Record<string, unknown>
+      : root;
+  const result: Partial<RadiumBuildIdentity> = {};
+  for (const key of buildIdentityKeys) {
+    const raw = candidate[key];
+    if (typeof raw === 'string' || typeof raw === 'number') {
+      result[key] = String(raw).trim();
+    }
+  }
+  return result;
+}
+
 function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
   const { systemInfo, sample, presentation } = useMonitor();
+  const { settings } = useSettings();
   const [supportBundlePath, setSupportBundlePath] = useState('');
+  const [supportReportPath, setSupportReportPath] = useState('');
   const [supportBusy, setSupportBusy] = useState(false);
   const [actions, setActions] = useState<CompanionActionRecord[]>(() => readCompanionActions());
   const [registryBackups, setRegistryBackups] = useState<RegistryBackup[]>([]);
@@ -555,7 +734,12 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
   async function handleSupportBundle() {
     setSupportBusy(true);
     try {
-      const result = await exportDiagnostics();
+      const result = await exportDiagnostics(createDiagnosticsExportContext({
+        settings,
+        systemInfo,
+        sample,
+        presentationLabel: presentation.label,
+      }));
       setSupportBundlePath(result.path);
       recordCompanionAction('support', 'Support bundle prepared', result.path);
     } catch (err) {
@@ -563,6 +747,20 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
     } finally {
       setSupportBusy(false);
     }
+  }
+
+  function handleSupportReport() {
+    const result = exportLocalSupportReport({
+      settings,
+      systemInfo,
+      sample,
+      presentationLabel: presentation.label,
+      presentationState: presentation.state,
+      recentActions: actions,
+      appVersion: appMetadata?.version ?? '0.1.0-pre',
+    });
+    setSupportReportPath(result.filename);
+    recordCompanionAction('support', 'OEM support report exported', result.filename);
   }
 
   async function handleRestoreBackup(backup: RegistryBackup) {
@@ -599,6 +797,10 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
             <Download size={16} />
             <span>{supportBusy ? 'Preparing bundle' : 'Prepare support bundle'}</span>
           </button>
+          <button className="secondary-button" type="button" onClick={handleSupportReport}>
+            <ClipboardList size={16} />
+            <span>Generate OEM report</span>
+          </button>
           <a className="primary-button" href={`mailto:${companionEmail}?subject=${subject}&body=${supportBody}`}>
             <Mail size={16} />
             <span>{brand.supportCtaLabel}</span>
@@ -608,10 +810,16 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
             <span>Visit {brand.name}</span>
           </button>
         </div>
-        {supportBundlePath && (
+        {(supportBundlePath || supportReportPath) && (
           <div className="support-bundle-path">
-            <span>Latest support bundle</span>
-            <strong title={supportBundlePath}>{supportBundlePath}</strong>
+            {supportBundlePath && <>
+              <span>Latest support bundle</span>
+              <strong title={supportBundlePath}>{supportBundlePath}</strong>
+            </>}
+            {supportReportPath && <>
+              <span>Latest OEM report</span>
+              <strong title={supportReportPath}>{supportReportPath}</strong>
+            </>}
           </div>
         )}
       </Panel>

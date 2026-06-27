@@ -120,6 +120,21 @@ export type OverlayPreset = 'compact-bar' | 'corner-widget' | 'vertical-list' | 
 
 export type PerformanceMode = 'balanced' | 'performance' | 'quiet';
 
+export type InterfaceMode = 'owner' | 'technician';
+
+export type RadiumBuildIdentity = {
+  serial: string;
+  buildDate: string;
+  customerBuildProfile: string;
+  motherboard: string;
+  gpu: string;
+  ramConfig: string;
+  storageConfig: string;
+  qcSeal: string;
+  warrantyTier: string;
+  supportTier: string;
+};
+
 export type GameProfileMapping = {
   id: string;
   label: string;
@@ -129,6 +144,16 @@ export type GameProfileMapping = {
   restoreProfile: PerformanceProfileId;
   enabled: boolean;
   automationEnabled: boolean;
+};
+
+export type HardwareAlertSettings = {
+  enabled: boolean;
+  sustainedSamples: number;
+  cooldownMs: number;
+  cpuTempC: number;
+  gpuTempC: number;
+  ramUsagePct: number;
+  storageUsedPct: number;
 };
 
 export type CompanionSettings = {
@@ -159,12 +184,15 @@ export type CompanionSettings = {
     historyLimit: number;
     temperatureUnit: 'c' | 'f';
   };
+  alerts: HardwareAlertSettings;
   experience: {
+    interfaceMode: InterfaceMode;
     compactMode: boolean;
     animations: boolean;
     performanceProfile: PerformanceProfileId;
     performanceMode: PerformanceMode;
   };
+  buildIdentity: RadiumBuildIdentity;
   gameMode: {
     automationEnabled: boolean;
     mappings: GameProfileMapping[];
@@ -255,6 +283,41 @@ export type HardwareCapability = {
   state: CapabilityState;
   detail: string;
   writeSafe: boolean;
+};
+
+export type RgbZoneSummary = {
+  name: string;
+  zoneType: number;
+  ledCount: number;
+  flags: number | null;
+};
+
+export type RgbControllerSummary = {
+  index: number;
+  name: string;
+  vendor: string;
+  description: string;
+  version: string;
+  serial: string;
+  location: string;
+  controllerType: number;
+  activeMode: number;
+  modes: string[];
+  zones: RgbZoneSummary[];
+  ledCount: number;
+  colors: string[];
+};
+
+export type RgbDiscovery = {
+  provider: string;
+  endpoint: string;
+  state: 'live' | 'partial' | 'degraded' | 'unavailable';
+  protocolVersion: number | null;
+  controllerCount: number;
+  controllers: RgbControllerSummary[];
+  message: string;
+  writeSafe: boolean;
+  warnings: string[];
 };
 
 export type ProviderState = 'loaded' | 'staged' | 'degraded' | 'unavailable';
@@ -348,6 +411,45 @@ export type TelemetryDiagnosticsSnapshot = {
   sensorDiscovery: SensorDiscoveryReport;
   hardwareIdentity: SystemInfo;
   sample: HardwareSample;
+};
+
+export type DiagnosticsExportContext = {
+  providedAt: string;
+  buildIdentity: RadiumBuildIdentity;
+  interfaceMode: InterfaceMode;
+  performanceProfile: PerformanceProfileId;
+  performanceMode: PerformanceMode;
+  monitoring: {
+    enabled: boolean;
+    refreshMs: number;
+    backgroundRefreshMs: number;
+    historyLimit: number;
+    temperatureUnit: 'c' | 'f';
+  };
+  alerts: HardwareAlertSettings;
+  overlay: {
+    enabled: boolean;
+    preset: OverlayPreset;
+    metrics: CompanionSettings['overlay']['metrics'];
+  };
+  tray: {
+    minimizeToTray: boolean;
+    minimizeOnMinimize: boolean;
+    showLiveTooltip: boolean;
+    liveIconMetric: TrayMetric;
+  };
+  hardwareIdentity: SystemInfo | null;
+  telemetry: {
+    presentationLabel: string;
+    rawSampleState: MetricState | 'pending';
+    sampleTimestamp: number | null;
+  };
+  recentActions: Array<{
+    timestamp: string;
+    category: string;
+    label: string;
+    detail: string;
+  }>;
 };
 
 export type DiagnosticsExport = {

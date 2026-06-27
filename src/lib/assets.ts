@@ -1,11 +1,8 @@
 import type { Vendor } from '../types/system';
 
 export const assets = {
-  radiumHeader: new URL('../../images/radiumcompanion-header.png', import.meta.url).href,
-  radiumHeaderNew: new URL('../../images/radiumheader-new.png', import.meta.url).href,
+  radiumHeader: new URL('../../images/clean/radiumheader-transparent.png', import.meta.url).href,
   radiumLogo: new URL('../../images/radiumlogo.png', import.meta.url).href,
-  thermalChamber: new URL('../../images/thermal-chamber-premium.png', import.meta.url).href,
-  trayBase: new URL('../../images/icon-source.png', import.meta.url).href,
   intel: new URL('../../images/clean/intel-transparent.png', import.meta.url).href,
   amd: new URL('../../images/clean/amd-transparent.png', import.meta.url).href,
   nvidia: new URL('../../images/clean/nvidia-transparent.png', import.meta.url).href,
@@ -14,7 +11,6 @@ export const assets = {
   msi: new URL('../../images/msi.png', import.meta.url).href,
   asrock: new URL('../../images/asrock.png', import.meta.url).href,
   asus: new URL('../../images/asus.png', import.meta.url).href,
-  appIcon: new URL('../../images/favicon.ico', import.meta.url).href,
 };
 
 export function vendorFromText(label?: string | null): Vendor {

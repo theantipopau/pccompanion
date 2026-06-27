@@ -8,6 +8,7 @@ mod hardware;
 mod igcl_provider;
 #[cfg(windows)]
 mod nvml_provider;
+mod rgb_provider;
 #[cfg(windows)]
 mod sidecar_provider;
 mod windows_util;
@@ -719,10 +720,16 @@ fn restore_registry_backup(backup_id: String) -> Vec<String> {
 }
 
 #[tauri::command]
+fn discover_rgb_devices() -> rgb_provider::RgbDiscovery {
+    rgb_provider::discover_openrgb()
+}
+
+#[tauri::command]
 fn export_diagnostics(
     app: AppHandle,
     engine: tauri::State<'_, MonitoringEngine>,
     runtime: tauri::State<'_, AppRuntimeState>,
+    frontend_context: Option<serde_json::Value>,
 ) -> DiagnosticsExport {
     let diagnostics = engine.telemetry_diagnostics_snapshot();
     let created_at = diagnostics.created_at.clone();
@@ -749,6 +756,12 @@ fn export_diagnostics(
         .get_webview_window("osd")
         .and_then(|window| window.is_visible().ok())
         .unwrap_or(false);
+    let frontend_context_provided = frontend_context.is_some();
+    let frontend_context_payload = frontend_context.unwrap_or_else(|| serde_json::json!({
+        "provided": false,
+        "reason": "frontend context not supplied"
+    }));
+    let rgb_discovery = rgb_provider::discover_openrgb();
 
     let payload = serde_json::json!({
         "createdAt": created_at,
@@ -768,6 +781,8 @@ fn export_diagnostics(
             "osdWindowVisible": osd_window_visible,
             "trayRegistered": app.tray_by_id("main-tray").is_some()
         },
+        "frontendContext": frontend_context_payload,
+        "rgbDiscovery": rgb_discovery,
         "diagnostics": diagnostics,
         "notes": [
             "Generated locally.",
@@ -782,17 +797,24 @@ fn export_diagnostics(
         Ok(_) => "Diagnostics bundle exported locally.".to_string(),
         Err(err) => format!("Diagnostics export failed: {err}"),
     };
+    let mut sections = vec![
+        "Provider orchestration".to_string(),
+        "Capability matrix".to_string(),
+        "Sensor provenance".to_string(),
+        "Sensor discovery report".to_string(),
+        "OpenRGB discovery".to_string(),
+        "Support tooling".to_string(),
+    ];
+    if frontend_context_provided {
+        sections.insert(0, "Radium build identity".to_string());
+        sections.insert(1, "Frontend support context".to_string());
+    }
+
     DiagnosticsExport {
         path: path.to_string_lossy().to_string(),
         created_at,
         message,
-        sections: vec![
-            "Provider orchestration".to_string(),
-            "Capability matrix".to_string(),
-            "Sensor provenance".to_string(),
-            "Sensor discovery report".to_string(),
-            "Support tooling".to_string(),
-        ],
+        sections,
         provider_count: diagnostics.providers.len(),
         capability_count: diagnostics.capabilities.len(),
         sensor_count: diagnostics.sensors.len(),
@@ -1365,6 +1387,7 @@ pub fn run() {
             get_hardware_capabilities,
             get_telemetry_diagnostics,
             get_platform_telemetry_discovery,
+            discover_rgb_devices,
             probe_sensor_sidecar,
             optimize_ram,
             scan_bloatware,

@@ -16,6 +16,10 @@ This note tracks the app posture needed for a marketed or sold Windows desktop p
 - Raw telemetry state is retained for diagnostics, while user-facing telemetry state is stabilised in the frontend so transient provider churn does not produce misleading status changes.
 - Benchmark capture, CoPilot context, diagnostics exports, and provider diagnostics should continue to use raw telemetry evidence. The retained display sample is for presentation-only surfaces and is visible as such in Telemetry Diagnostics.
 - OmenCore optimizer review is documented in `docs/omencore-optimizer-assessment.md`; broad service, network, visual, and policy registry writes remain out of scope until a Radium-owned preflight/backup/revert/verification model exists for each setting.
+- RGB Phase 1 discovery (`src-tauri/src/rgb_provider.rs`, validated and committed 2026-06-27) opens a short-timeout TCP client to `127.0.0.1:6742` (OpenRGB SDK) only, parses bounded/length-checked packets, and contains no lighting-write commands. It does not start, install, or bundle OpenRGB.
+- `export_diagnostics` (validated and committed 2026-06-27) accepts an optional `frontend_context` JSON payload built entirely from local settings/state (`createDiagnosticsExportContext`) and writes it into the local diagnostics JSON only; no new network egress was added by this change.
+
+Last reviewed: 2026-06-27 (bullets above); the rest of this file was last reviewed 2026-06-07 and should be revisited alongside the next signing/distribution pass.
 
 ## Release Checks
 

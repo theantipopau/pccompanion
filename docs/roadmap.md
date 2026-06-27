@@ -133,11 +133,11 @@
 - [x] **Gauge circle readability** — dark gauge face, corrected SVG track contrast, explicit light text in center
 - [x] **Registry cleaner UX** — step guide (Scan→Review→Backup→Clean), safety legend, row layout fix, guarantees list
 - [x] **Wire `apply_performance_profile`** to real Win32 power plan calls (`powercfg /setactive <GUID>`)
-- [ ] Hardware alert notifications (temp threshold exceeded, RAM critical, etc.)
-- [ ] RGB integration (OpenRGB API)
+- [x] Hardware alert notifications — sustained CPU/GPU temp, RAM pressure, and storage-headroom thresholds with cooldown-throttled action history
+- [x] RGB integration Phase 1 — read-only OpenRGB SDK discovery over localhost; static-color writes and Radium presets remain deferred (Phase 2/3 in `docs/radium-improvement-audit.md`)
 - [ ] Per-game profiles (detect active game process, apply profile)
 - [ ] Historical data logging to SQLite
-- [ ] Export diagnostics report (HTML/PDF)
+- [x] Export diagnostics report (HTML) — local OEM support report generator; PDF export remains deferred
 - [ ] Remote monitoring (optional local network)
 - [ ] OSD themes and layout customisation
 - [x] Search functionality (topbar search now supports keyboard navigation and quick actions)

@@ -6,8 +6,10 @@ import { Panel } from '../components/Panel';
 import { brand } from '../lib/branding';
 import { Skeleton } from '../components/Skeleton';
 import { useMonitor } from '../hooks/useMonitor';
-import { recordCompanionAction } from '../lib/actionHistory';
-import { exportDiagnostics, getTelemetryDiagnostics, probeSensorSidecar } from '../services/systemService';
+import { useSettings } from '../hooks/useSettings';
+import { readCompanionActions, recordCompanionAction } from '../lib/actionHistory';
+import { exportLocalSupportReport } from '../lib/supportReport';
+import { createDiagnosticsExportContext, exportDiagnostics, getTelemetryDiagnostics, probeSensorSidecar } from '../services/systemService';
 import type { DiagnosticsExport, SensorSidecarProbe, TelemetryDiagnosticsSnapshot } from '../types/system';
 
 type ValidationResult = {
@@ -30,9 +32,11 @@ const capabilityStates: Array<'live' | 'partial' | 'degraded' | 'staged' | 'unsu
 ];
 
 export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const { sample, displaySample, presentation } = useMonitor();
+  const { systemInfo, sample, displaySample, presentation } = useMonitor();
+  const { settings } = useSettings();
   const [snapshot, setSnapshot] = useState<TelemetryDiagnosticsSnapshot | null>(null);
   const [exportResult, setExportResult] = useState<DiagnosticsExport | null>(null);
+  const [reportResult, setReportResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [probeBusy, setProbeBusy] = useState(false);
   const [sidecarProbe, setSidecarProbe] = useState<SensorSidecarProbe | null>(null);
@@ -59,7 +63,12 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
     setBusy(true);
     setOperationError(null);
     try {
-      const result = await exportDiagnostics();
+      const result = await exportDiagnostics(createDiagnosticsExportContext({
+        settings,
+        systemInfo,
+        sample: displaySample ?? sample,
+        presentationLabel: presentation.label,
+      }));
       setExportResult(result);
       recordCompanionAction('support', 'Diagnostics bundle exported', result.path);
     } catch (err) {
@@ -69,6 +78,20 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleOemReport() {
+    const result = exportLocalSupportReport({
+      settings,
+      systemInfo,
+      sample: displaySample ?? sample,
+      presentationLabel: presentation.label,
+      presentationState: presentation.state,
+      recentActions: readCompanionActions(),
+      diagnostics: snapshot,
+    });
+    setReportResult(result.filename);
+    recordCompanionAction('support', 'OEM support report exported', result.filename);
   }
 
   async function handleSidecarProbe() {
@@ -526,7 +549,7 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
                 className="support-tool-button"
                 onClick={() => {
                   if (action === 'Generate OEM Report') {
-                    void handleExport();
+                    handleOemReport();
                     return;
                   }
                   if (action === 'Validate System Health') {
@@ -540,6 +563,12 @@ export function TelemetryDiagnosticsPage({ embedded = false }: { embedded?: bool
               </button>
             ))}
           </div>
+          {reportResult && (
+            <div className="support-report-status" role="status">
+              <span>Latest OEM report</span>
+              <strong title={reportResult}>{reportResult}</strong>
+            </div>
+          )}
           <div className="support-snapshot-list">
             {(snapshot?.supportSnapshot ?? []).map((line) => (
               <div key={line} className="support-snapshot-row">

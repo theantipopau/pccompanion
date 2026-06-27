@@ -1,6 +1,6 @@
 # Radium PCs Companion - Current State
 
-Last reviewed: 2026-06-12
+Last reviewed: 2026-06-27
 
 This is the short handoff brief. Keep long session history in `docs/context_log.md`; keep durable architecture in `docs/architecture.md`; keep validation coverage in `docs/compatibility-matrix.md`.
 
@@ -32,6 +32,7 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - Direct sidecar smoke passed on 2026-06-02 and confirmed the loaded LibreHardwareMonitor library version is `0.9.6+3d331e3370efb858411f19511373eff65a218701`.
 - `cargo test -q` has passed for library tests; full binary test execution may still require elevation on some hosts.
 - `npm.cmd run build:exe` has produced the release executable and NSIS installer in prior validation passes.
+- On 2026-06-27, roughly two weeks of accumulated uncommitted changes (RGB Phase 1 OpenRGB discovery, OEM HTML support report export, hardware alert thresholds, Owner/Technician interface mode, Radium build identity provisioning with JSON seed import/export, OEM driver-update checks, dashboard chart code-splitting) were validated and committed. This machine previously had neither Node nor Rust on PATH and no Rust toolchain installed at all; Node was located at `C:\Program Files\nodejs`, and a Rust toolchain plus MSVC Build Tools were installed via `winget` specifically to validate this batch. `npm.cmd run build`, `npm.cmd run test:telemetry-presentation` (21/21), `cargo check --manifest-path src-tauri/Cargo.toml`, and `cargo test --manifest-path src-tauri/Cargo.toml --lib` (11/11, includes the URL policy validator tests) all passed on this machine before commit. Prior dated Rust-check entries above were recorded on a different machine/session.
 
 ## Current Product State
 
@@ -53,6 +54,10 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - Benchmark capture and CoPilot context continue to consume raw telemetry, not retained presentation samples. Telemetry Diagnostics now includes a read-only raw-vs-displayed presentation inspector for native runtime validation.
 - Telemetry Diagnostics now shows visible refresh/export/probe failures, records failed export/probe actions in local history, and displays the last successful diagnostics refresh time.
 - OmenCore optimizer functionality has been assessed in `docs/omencore-optimizer-assessment.md`; direct code import and broad Windows policy/service/network tweaks are deferred in favor of Radium's existing guarded Performance Profiles subset.
+- RGB Phase 1 (validated and committed 2026-06-27): read-only OpenRGB SDK discovery over localhost `127.0.0.1:6742`, with bounded packet parsing and no lighting-write commands. Surfaced as a Utilities readiness card and included in diagnostics export under `rgbDiscovery`.
+- OEM support reports (validated and committed 2026-06-27): a local HTML support report generator (`src/lib/supportReport.ts`) bundles Radium build identity, detected hardware, performance score, telemetry, storage, capabilities, sensor evidence, and recent local actions. Export is local-only; the owner/technician chooses whether to share it.
+- Hardware alerts (validated and committed 2026-06-27): sustained-threshold CPU/GPU temperature, RAM pressure, and storage headroom alerts (`src/lib/hardwareAlerts.ts`) feed Dashboard and record cooldown-throttled local action history entries; thresholds are configurable in Settings.
+- Owner/Technician interface mode and Radium build identity provisioning (validated and committed 2026-06-27): Settings now has an interface-mode toggle and a System Passport build-identity panel with local JSON seed import/export.
 - Security readiness is tracked in `docs/security-readiness.md`; clean-machine walkthrough criteria are tracked in `docs/clean-machine-test.md`.
 - Signing workflow scaffold is available through `npm.cmd run sign:radium`; Windows SDK `signtool.exe` is discoverable, but no signing identity is configured in this workspace yet.
 - Latest Radium-branded audited build outputs:

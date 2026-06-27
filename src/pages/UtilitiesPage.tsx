@@ -1,12 +1,12 @@
-import { Activity, Bot, Cpu, Fan, FileWarning, Gamepad2, HardDrive, Network, PackageMinus, Palette, Rocket, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
+import { Activity, Bot, Cpu, Fan, FileWarning, Gamepad2, HardDrive, Network, PackageMinus, Palette, RefreshCw, Rocket, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
 import { assets } from '../lib/assets';
-import { getPerformanceProfiles } from '../services/systemService';
-import type { PerformanceProfile } from '../types/system';
+import { discoverRgbDevices, getPerformanceProfiles } from '../services/systemService';
+import type { PerformanceProfile, RgbDiscovery } from '../types/system';
 
 type UtilityStatus = 'live' | 'staged' | 'planned' | 'blocked' | 'driver_required';
 
@@ -16,6 +16,7 @@ type UtilityModule = {
   status: UtilityStatus;
   oem: string;
   text: string;
+  highlights?: string[];
   group: 'live' | 'staged' | 'planned';
   action?: { label: string; view: string };
 };
@@ -84,7 +85,12 @@ const modules: UtilityModule[] = [
     status: 'staged',
     group: 'staged',
     oem: assets.msi,
-    text: 'Vendor capability abstraction is staged for safe OpenRGB or native SDK adapters later.',
+    text: 'OpenRGB is the first planned adapter path. Phase 1 remains read-only discovery with localhost-only detection and no lighting writes.',
+    highlights: [
+      'OpenRGB SDK localhost 127.0.0.1:6742',
+      'Controllers, zones, LEDs, modes, and colors only',
+      'Writes blocked until restore state is proven',
+    ],
   },
   {
     title: 'Benchmark page',
@@ -154,6 +160,8 @@ const maintenanceTools: UtilityModule[] = [
 
 export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?: (view: string) => void }) {
   const [profiles, setProfiles] = useState<PerformanceProfile[]>([]);
+  const [rgbDiscovery, setRgbDiscovery] = useState<RgbDiscovery | null>(null);
+  const [rgbBusy, setRgbBusy] = useState(false);
   const { settings } = useSettings();
   const title = mode === 'profiles' ? 'Performance Profiles' : mode === 'monitoring' ? 'Monitoring Suite' : 'Utilities';
 
@@ -167,6 +175,31 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
     return () => {
       alive = false;
     };
+  }, []);
+
+  async function refreshRgbDiscovery() {
+    setRgbBusy(true);
+    try {
+      setRgbDiscovery(await discoverRgbDevices());
+    } catch (err) {
+      setRgbDiscovery({
+        provider: 'OpenRGB',
+        endpoint: '127.0.0.1:6742',
+        state: 'degraded',
+        protocolVersion: null,
+        controllerCount: 0,
+        controllers: [],
+        message: err instanceof Error ? err.message : String(err),
+        writeSafe: false,
+        warnings: ['RGB discovery failed closed. No lighting writes were attempted.'],
+      });
+    } finally {
+      setRgbBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshRgbDiscovery();
   }, []);
 
   const displayProfiles = useMemo(
@@ -196,7 +229,14 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
         </div>
         <div className="maintenance-focus-grid">
           {maintenanceTools.map((module) => (
-            <UtilityCard key={module.title} module={module} onNavigate={onNavigate} />
+            <UtilityCard
+                  key={module.title}
+                  module={module}
+                  onNavigate={onNavigate}
+                  rgbDiscovery={module.title === 'RGB integration' ? rgbDiscovery : undefined}
+                  rgbBusy={module.title === 'RGB integration' ? rgbBusy : false}
+                  onRefreshRgb={module.title === 'RGB integration' ? refreshRgbDiscovery : undefined}
+                />
           ))}
         </div>
       </section>
@@ -259,7 +299,14 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
             </div>
             <div className="utility-grid">
               {modules.filter((module) => module.group === group.id).map((module) => (
-                <UtilityCard key={module.title} module={module} onNavigate={onNavigate} />
+                <UtilityCard
+                  key={module.title}
+                  module={module}
+                  onNavigate={onNavigate}
+                  rgbDiscovery={module.title === 'RGB integration' ? rgbDiscovery : undefined}
+                  rgbBusy={module.title === 'RGB integration' ? rgbBusy : false}
+                  onRefreshRgb={module.title === 'RGB integration' ? refreshRgbDiscovery : undefined}
+                />
               ))}
             </div>
           </section>
@@ -269,18 +316,43 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
   );
 }
 
-function UtilityCard({ module, onNavigate }: { module: UtilityModule; onNavigate?: (view: string) => void }) {
+function UtilityCard({
+  module,
+  onNavigate,
+  rgbDiscovery,
+  rgbBusy = false,
+  onRefreshRgb,
+}: {
+  module: UtilityModule;
+  onNavigate?: (view: string) => void;
+  rgbDiscovery?: RgbDiscovery | null;
+  rgbBusy?: boolean;
+  onRefreshRgb?: () => void;
+}) {
   const Icon = module.icon;
+  const isRgbModule = module.title === 'RGB integration';
   return (
     <Panel className={`utility-card utility-card-${module.status}`}>
       <div className="utility-card-head">
         <Icon size={21} />
-        <img className="utility-card-oem" src={module.oem} alt="" aria-hidden="true" />
+        <img className="utility-card-oem" src={module.oem} alt="" aria-hidden="true" loading="lazy" decoding="async" />
       </div>
       <h2>{module.title}</h2>
       <p>{module.text}</p>
+      {module.highlights && (
+        <ul className="utility-card-highlights">
+          {module.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}
+        </ul>
+      )}
+      {isRgbModule && <RgbDiscoveryPanel discovery={rgbDiscovery} busy={rgbBusy} />}
       <div className="utility-card-footer">
-        <span className={`utility-status ${module.status}`}>{statusLabels[module.status]}</span>
+        <span className={'utility-status ' + module.status}>{statusLabels[module.status]}</span>
+        {isRgbModule && (
+          <button type="button" className="utility-card-link" onClick={onRefreshRgb} disabled={rgbBusy}>
+            <RefreshCw size={12} />
+            <span>{rgbBusy ? 'Scanning' : 'Rescan'}</span>
+          </button>
+        )}
         {module.action && (
           <button type="button" className="utility-card-link" onClick={() => onNavigate?.(module.action!.view)}>
             {module.action.label}
@@ -291,6 +363,34 @@ function UtilityCard({ module, onNavigate }: { module: UtilityModule; onNavigate
   );
 }
 
+function RgbDiscoveryPanel({ discovery, busy }: { discovery?: RgbDiscovery | null; busy: boolean }) {
+  if (!discovery && busy) {
+    return <div className="rgb-discovery-panel rgb-discovery-loading">Scanning localhost OpenRGB SDK...</div>;
+  }
+  if (!discovery) return null;
+  const protocol = discovery.protocolVersion == null ? 'unknown' : 'v' + discovery.protocolVersion;
+  return (
+    <div className={'rgb-discovery-panel rgb-discovery-' + discovery.state}>
+      <div className="rgb-discovery-summary">
+        <span>{discovery.provider} {protocol}</span>
+        <strong>{discovery.controllerCount} controller{discovery.controllerCount === 1 ? '' : 's'}</strong>
+      </div>
+      <small>{discovery.message}</small>
+      {discovery.controllers.length > 0 && (
+        <div className="rgb-controller-list">
+          {discovery.controllers.slice(0, 3).map((controller) => (
+            <div className="rgb-controller-row" key={controller.index}>
+              <span>{controller.vendor || 'RGB'} - {controller.name || 'Controller ' + controller.index}</span>
+              <b>{controller.ledCount} LEDs / {controller.zones.length} zones</b>
+              {controller.zones.length > 0 && <em>{controller.zones.slice(0, 3).map((zone) => zone.name || 'Zone').join(' / ')}</em>}
+            </div>
+          ))}
+        </div>
+      )}
+      {discovery.warnings.slice(0, 2).map((warning) => <small className="rgb-discovery-warning" key={warning}>{warning}</small>)}
+    </div>
+  );
+}
 const fallbackProfiles: PerformanceProfile[] = [
   {
     id: 'balanced',

@@ -1,9 +1,8 @@
 import { AlertTriangle, Cpu, ExternalLink, Fan, Gauge, HardDrive, MemoryStick, MonitorUp, Network, ShieldCheck, Sparkles, Thermometer, Zap, type LucideIcon } from 'lucide-react';
-import { useMemo, useState, useEffect } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Gauge as RadialGauge } from '../components/Gauge';
-import { CpuIcon, GpuIcon, NvmeIcon, RamIcon, HddIcon, VramIcon, NetworkIcon, EthernetIcon, WifiIcon } from '../components/HardwareIcon';
+import { CpuIcon, GpuIcon, NvmeIcon, RamIcon, HddIcon, VramIcon, NetworkIcon } from '../components/HardwareIcon';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -14,6 +13,8 @@ import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
 import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
 import { assets, oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
+import { recordCompanionAction } from '../lib/actionHistory';
+import { buildHardwareAlerts } from '../lib/hardwareAlerts';
 import { computePerformanceScore } from '../lib/performanceScore';
 import { openExternalUrl, callNative } from '../services/native';
 import type { DriverUpdateInfo, Vendor } from '../types/system';
@@ -22,12 +23,16 @@ type DashboardPageProps = {
   onNavigate?: (view: string) => void;
 };
 
+const DashboardCharts = lazy(() => import('../components/DashboardCharts').then((module) => ({ default: module.DashboardCharts })));
+
+
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const { systemInfo, sample: rawSample, displaySample, presentation, loading, error, native } = useMonitor();
   const { settings } = useSettings();
   const sample = displaySample ?? rawSample;
   // undefined = check pending/not started, null = check failed or N/A, object = result
   const [driverUpdateInfo, setDriverUpdateInfo] = useState<DriverUpdateInfo | null | undefined>(undefined);
+  const alertHistoryRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!systemInfo?.gpuDriverVersion) return;
@@ -107,6 +112,42 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     driverUrl: driverUpdateInfo?.downloadUrl,
     telemetryReady: presentation.isUsable,
   }), [sample, driverUpdateInfo, performanceScore.value, storageMaxUsed, presentation.isUsable]);
+  const dashboardVerdict = useMemo(() => buildDashboardVerdict({
+    scoreValue: performanceScore.value,
+    scoreGrade: performanceScore.grade,
+    storageMaxUsed,
+    updateAvailable: driverUpdateInfo?.updateAvailable === true,
+    latestDriver: driverUpdateInfo?.latestVersion,
+    driverUrl: driverUpdateInfo?.downloadUrl,
+    telemetryReady: presentation.isUsable,
+    telemetryLive: presentation.isLive,
+    telemetryLabel: presentation.label,
+    activeProfile: settings.experience.performanceProfile,
+  }), [
+    driverUpdateInfo,
+    performanceScore.grade,
+    performanceScore.value,
+    presentation.isLive,
+    presentation.isUsable,
+    presentation.label,
+    settings.experience.performanceProfile,
+    storageMaxUsed,
+  ]);
+  const VerdictIcon = dashboardVerdict.icon;
+  const hardwareAlerts = useMemo(() => buildHardwareAlerts(sample, presentation, settings.alerts), [sample, presentation, settings.alerts]);
+
+  useEffect(() => {
+    if (!settings.alerts.enabled || hardwareAlerts.length === 0) return;
+    const now = Date.now();
+    hardwareAlerts.forEach((alert) => {
+      if (alert.severity === 'info') return;
+      const last = alertHistoryRef.current[alert.id] ?? 0;
+      if (now - last < settings.alerts.cooldownMs) return;
+      alertHistoryRef.current[alert.id] = now;
+      recordCompanionAction('diagnostics', 'Hardware alert: ' + alert.title, alert.evidence.join(' / '));
+    });
+  }, [hardwareAlerts, settings.alerts.cooldownMs, settings.alerts.enabled]);
+
   const statusItems = useMemo(() => buildDashboardStatusItems({
     activeProfile: settings.experience.performanceProfile,
     gpuProvider,
@@ -159,6 +200,54 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         <div className="notice notice-error">
           Hardware monitoring error: {error}
         </div>
+      )}
+
+      <section className={`dashboard-verdict tone-${dashboardVerdict.tone}`} aria-label="Recommended next action">
+        <div className="dashboard-verdict-copy">
+          <span className="eyebrow">Current status</span>
+          <h2>{dashboardVerdict.headline}</h2>
+          <p>{dashboardVerdict.detail}</p>
+        </div>
+        <div className="dashboard-verdict-action">
+          <div className="dashboard-verdict-evidence" aria-label="Status evidence">
+            {dashboardVerdict.evidence.map((item) => <span key={item}>{item}</span>)}
+          </div>
+          <button
+            className={dashboardVerdict.tone === 'green' ? 'secondary-button' : 'primary-button'}
+            type="button"
+            onClick={() => {
+              if (dashboardVerdict.actionUrl) {
+                openExternalUrl(dashboardVerdict.actionUrl);
+                return;
+              }
+              onNavigate?.(dashboardVerdict.actionView);
+            }}
+          >
+            <VerdictIcon size={16} />
+            <span>{dashboardVerdict.actionLabel}</span>
+          </button>
+        </div>
+      </section>
+
+      {hardwareAlerts.length > 0 && (
+        <section className="hardware-alert-strip" aria-label="Hardware alerts">
+          {hardwareAlerts.map((alert) => (
+            <article key={alert.id} className={'hardware-alert-card severity-' + alert.severity}>
+              <AlertTriangle size={17} />
+              <span>
+                <small>{alert.severity === 'critical' ? 'Critical alert' : alert.severity === 'warning' ? 'Attention needed' : 'Heads up'}</small>
+                <strong>{alert.title}</strong>
+                <em>{alert.detail}</em>
+              </span>
+              <div className="hardware-alert-evidence">
+                {alert.evidence.map((item) => <b key={item}>{item}</b>)}
+              </div>
+              <button className="secondary-button compact-button" type="button" onClick={() => onNavigate?.(alert.actionView)}>
+                {alert.actionLabel}
+              </button>
+            </article>
+          ))}
+        </section>
       )}
 
       <section className="dashboard-status-strip" aria-label="Current app state">
@@ -347,57 +436,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
         </Panel>
 
-        <Panel className="chart-panel wide primary-trend">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Live graph</span>
-              <h2>Thermals and usage</h2>
-            </div>
-            <span className="subtle">48 samples</span>
-          </div>
-          <ResponsiveContainer width="100%" height={198}>
-            <AreaChart data={history}>
-              <defs>
-                <linearGradient id="cpuFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff7a00" stopOpacity={0.26} />
-                  <stop offset="95%" stopColor="#ff7a00" stopOpacity={0.01} />
-                </linearGradient>
-                <linearGradient id="gpuFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#84f08c" stopOpacity={0.24} />
-                  <stop offset="95%" stopColor="#84f08c" stopOpacity={0.01} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
-              <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
-              <Tooltip content={<DashboardTooltip />} />
-              <Area isAnimationActive={false} type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={1.8} dot={false} name="CPU %" />
-              <Area isAnimationActive={false} type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={1.8} dot={false} name="GPU %" />
-              <Line isAnimationActive={false} type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={1.9} dot={false} name="RAM %" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Panel>
-
-        <Panel className="chart-panel secondary-trend">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Network</span>
-              <h2>Throughput</h2>
-            </div>
-            {sample?.network.adapterType === 'wifi'
-              ? <WifiIcon size={18} />
-              : <EthernetIcon size={18} />}
-          </div>
-          <ResponsiveContainer width="100%" height={146}>
-            <LineChart data={history}>
-              <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="time" hide />
-              <YAxis hide />
-              <Tooltip content={<DashboardTooltip />} />
-              <Line isAnimationActive={false} type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.05} dot={false} name="Download Mbps" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Panel>
+        <Suspense fallback={<DashboardChartsFallback />}>
+          <DashboardCharts history={history} networkAdapterType={sample?.network.adapterType} />
+        </Suspense>
 
         <Panel className="hardware-list identity-panel">
           <div className="panel-heading">
@@ -510,6 +551,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   );
 }
 
+type DashboardVerdict = {
+  headline: string;
+  detail: string;
+  tone: 'green' | 'amber' | 'cyan';
+  icon: LucideIcon;
+  actionLabel: string;
+  actionView: string;
+  actionUrl?: string;
+  evidence: string[];
+};
+
 type CareAction = {
   label: string;
   detail: string;
@@ -527,6 +579,122 @@ type DashboardStatusItem = {
   icon: LucideIcon;
   tone: 'green' | 'amber' | 'cyan';
 };
+
+function DashboardChartsFallback() {
+  return (
+    <>
+      <Panel className="chart-panel wide primary-trend">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Live graph</span>
+            <h2>Thermals and usage</h2>
+          </div>
+          <span className="subtle">Loading</span>
+        </div>
+        <Skeleton className="dashboard-chart-skeleton" />
+      </Panel>
+      <Panel className="chart-panel secondary-trend">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Network</span>
+            <h2>Throughput</h2>
+          </div>
+        </div>
+        <Skeleton className="dashboard-chart-skeleton compact" />
+      </Panel>
+    </>
+  );
+}
+
+function buildDashboardVerdict({
+  scoreValue,
+  scoreGrade,
+  storageMaxUsed,
+  updateAvailable,
+  latestDriver,
+  driverUrl,
+  telemetryReady,
+  telemetryLive,
+  telemetryLabel,
+  activeProfile,
+}: {
+  scoreValue: number;
+  scoreGrade: string;
+  storageMaxUsed: number;
+  updateAvailable: boolean;
+  latestDriver?: string;
+  driverUrl?: string;
+  telemetryReady: boolean;
+  telemetryLive: boolean;
+  telemetryLabel: string;
+  activeProfile: string;
+}): DashboardVerdict {
+  const evidence = [
+    `Score ${scoreValue} / ${scoreGrade}`,
+    `Telemetry ${telemetryLive ? 'live' : telemetryLabel.toLowerCase()}`,
+    storageMaxUsed > 0 ? `Storage peak ${Math.round(storageMaxUsed)}%` : 'Storage pending',
+    `Profile ${activeProfile}`,
+  ];
+
+  if (!telemetryReady || !telemetryLive) {
+    return {
+      headline: 'Support evidence recommended',
+      detail: 'Telemetry is not fully live yet. Open diagnostics to capture provider state before troubleshooting performance.',
+      tone: 'amber',
+      icon: ShieldCheck,
+      actionLabel: 'Open diagnostics',
+      actionView: 'diagnostics',
+      evidence,
+    };
+  }
+
+  if (updateAvailable && driverUrl) {
+    return {
+      headline: 'Needs attention',
+      detail: latestDriver ? `A newer GPU driver is available: ${latestDriver}.` : 'A newer GPU driver is available.',
+      tone: 'amber',
+      icon: MonitorUp,
+      actionLabel: 'Open driver download',
+      actionView: 'dashboard',
+      actionUrl: driverUrl,
+      evidence,
+    };
+  }
+
+  if (storageMaxUsed >= 85) {
+    return {
+      headline: 'Needs attention',
+      detail: 'One drive is getting tight. Freeing space now helps game updates, shader caches, and Windows maintenance stay smooth.',
+      tone: storageMaxUsed >= 92 ? 'amber' : 'cyan',
+      icon: HardDrive,
+      actionLabel: 'Open storage cleaner',
+      actionView: 'storage',
+      evidence,
+    };
+  }
+
+  if (scoreValue < 75) {
+    return {
+      headline: 'Needs attention',
+      detail: 'The current performance state has clear headroom. Review profiles before heavy gaming or workstation loads.',
+      tone: 'cyan',
+      icon: Zap,
+      actionLabel: 'Review profiles',
+      actionView: 'profiles',
+      evidence,
+    };
+  }
+
+  return {
+    headline: 'Healthy',
+    detail: 'Telemetry is live and the current operating state looks ready for normal use.',
+    tone: 'green',
+    icon: Sparkles,
+    actionLabel: 'Open passport',
+    actionView: 'passport',
+    evidence,
+  };
+}
 
 function buildDashboardStatusItems({
   activeProfile,

@@ -83,9 +83,14 @@ src-tauri/src/
 ├── lib.rs               — Command handlers, tray, OSD, pub fn run()
 ├── hardware.rs          — HAL: types, MonitoringEngine, monitor_loop
 ├── wmi_provider.rs      — WMI queries (Windows-only module)
+├── nvml_provider.rs     — NVIDIA NVML GPU telemetry (Windows-only module)
+├── amd_provider.rs      — AMD ADL GPU telemetry (Windows-only module)
 ├── igcl_provider.rs     — Intel Arc / IGCL staging loader
+├── sidecar_provider.rs  — LibreHardwareMonitor sensor sidecar bridge (Windows-only module)
+├── rgb_provider.rs      — Read-only OpenRGB SDK discovery client
+├── driver_update.rs     — NVIDIA/AMD/Intel driver version check (release-note links only)
 ├── cleanup.rs           — RAM cleaner + storage scanner
-└── windows_util.rs      — Startup manager + bloatware scanner
+└── windows_util.rs      — Startup manager, bloatware scanner, registry, performance profiles
 ```
 
 ### Module Responsibilities
@@ -104,6 +109,24 @@ src-tauri/src/
 - `query_cpu_temp()` — ACPI thermal zones first, with perf thermal classes and sysinfo component fallbacks
 - `query_gpu_usage()` — 3D engine utilisation via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`
 - `query_static_system_info()` — GPU name/VRAM, CPU name, MB, BIOS, RAM speed from `Win32_*` inventory classes
+
+#### `nvml_provider.rs` / `amd_provider.rs` (Windows only)
+- `NvmlContext::init()` / `AmdAdlContext::init()` — load the vendor GPU library if present, fail closed to `None` otherwise
+- `query_primary_gpu()` — GPU usage/temperature/clocks via vendor API instead of WMI fallback
+- `query_driver_version()` — vendor-reported driver version for diagnostics and `driver_update.rs`
+- `AmdAdlContext::query_fan_rpm()` — AMD fan telemetry where ADL exposes it
+
+#### `sidecar_provider.rs` (Windows only)
+- `query_sensor_sidecar()` — launches the bundled .NET `radium-sensor-sidecar` process (LibreHardwareMonitor/PawnIO bridge) and parses its JSON stdout into `RadiumSidecarSample`
+- Runs out-of-process, not on the `radium-monitor` thread; failures (missing binary, no matching sensors) are reported as explicit states rather than fabricated readings
+
+#### `rgb_provider.rs`
+- `discover_openrgb()` — read-only OpenRGB SDK client over a local TCP socket (`127.0.0.1:6742`)
+- Bounded, fail-closed packet parsing (`ByteCursor`); no lighting-write commands exist in this module
+
+#### `driver_update.rs`
+- `check_nvidia_driver_update()` / `check_amd_driver_update()` / `check_intel_arc_driver_update()` — compare the locally reported driver version against vendor release-note metadata
+- Used for manual "what's new" surfacing only; no auto-download or auto-install
 
 #### `cleanup.rs`
 - `optimize_ram()` — calls `K32EmptyWorkingSet` on all accessible processes, measures before/after
@@ -202,7 +225,15 @@ Tauri commands are registered in `tauri::generate_handler![]`. Fast telemetry co
 | `get_performance_profiles` | — | `PerformanceProfile[]` | `lib` |
 | `apply_performance_profile` | `id: string, dry_run: bool` | `PerformanceProfileResult` | `lib/windows_util` |
 | `list_top_processes` | `limit?: number` | `ProcessInfo[]` | `hardware` |
-| `export_diagnostics` | — | `DiagnosticsExport` | `lib` |
+| `export_diagnostics` | `frontend_context?: serde_json::Value` | `DiagnosticsExport` | `lib` |
+| `get_app_metadata` | — | `AppMetadata` | `lib` |
+| `discover_rgb_devices` | — | `RgbDiscovery` | `rgb_provider` |
+| `probe_sensor_sidecar` | — | `RadiumSidecarSample` | `sidecar_provider` |
+| `check_driver_update` | `vendor: string, current_version: string` | `Option<DriverUpdateInfo>` | `driver_update` |
+| `run_local_ai_setup` | — | `string` | `lib` |
+| `open_url` | `url: string` | `Result<(), string>` | `lib` (HTTPS allow-list enforced) |
+
+Not all registered commands are listed above; see the `tauri::generate_handler![]` block in `lib.rs` for the authoritative, current set.
 
 ---
 

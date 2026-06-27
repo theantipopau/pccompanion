@@ -15,8 +15,10 @@ import {
 import type {
   BloatwareItem,
   AppMetadata,
+  CompanionSettings,
   HardwareCapability,
   DiagnosticsExport,
+  DiagnosticsExportContext,
   HardwareSample,
   MetricPoint,
   PerformanceProfile,
@@ -26,6 +28,7 @@ import type {
   RamCleanupResult,
   RegistryBackup,
   RegistryIssue,
+  RgbDiscovery,
   StartupItem,
   StorageCleanupItem,
   StorageScanStatus,
@@ -37,6 +40,7 @@ import type {
   TrayStatus,
 } from '../types/system';
 import { brand } from '../lib/branding';
+import { readCompanionActions } from '../lib/actionHistory';
 
 export async function getAppMetadata(): Promise<AppMetadata> {
   return callNative<AppMetadata>('get_app_metadata', undefined, async () => ({
@@ -210,12 +214,67 @@ export async function listRegistryBackups(): Promise<RegistryBackup[]> {
   return callNative<RegistryBackup[]>('list_registry_backups', undefined, async () => []);
 }
 
-export async function exportDiagnostics(): Promise<DiagnosticsExport> {
-  return callNative<DiagnosticsExport>('export_diagnostics', undefined, async () => ({
+export function createDiagnosticsExportContext({
+  settings,
+  systemInfo,
+  sample,
+  presentationLabel,
+}: {
+  settings: CompanionSettings;
+  systemInfo: SystemInfo | null;
+  sample: HardwareSample | null;
+  presentationLabel: string;
+}): DiagnosticsExportContext {
+  return {
+    providedAt: new Date().toISOString(),
+    buildIdentity: settings.buildIdentity,
+    interfaceMode: settings.experience.interfaceMode,
+    performanceProfile: settings.experience.performanceProfile,
+    performanceMode: settings.experience.performanceMode,
+    monitoring: {
+      enabled: settings.monitoring.launchOnStartup,
+      refreshMs: settings.monitoring.refreshMs,
+      backgroundRefreshMs: settings.monitoring.backgroundRefreshMs,
+      historyLimit: settings.monitoring.historyLimit,
+      temperatureUnit: settings.monitoring.temperatureUnit,
+    },
+    alerts: settings.alerts,
+    overlay: {
+      enabled: settings.overlay.enabled,
+      preset: settings.overlay.preset,
+      metrics: settings.overlay.metrics,
+    },
+    tray: {
+      minimizeToTray: settings.tray.minimizeToTray,
+      minimizeOnMinimize: settings.tray.minimizeOnMinimize,
+      showLiveTooltip: settings.tray.showLiveTooltip,
+      liveIconMetric: settings.tray.liveIconMetric,
+    },
+    hardwareIdentity: systemInfo,
+    telemetry: {
+      presentationLabel,
+      rawSampleState: sample?.state ?? 'pending',
+      sampleTimestamp: sample?.timestamp ?? null,
+    },
+    recentActions: readCompanionActions().slice(0, 10).map(({ timestamp, category, label, detail }) => ({
+      timestamp,
+      category,
+      label,
+      detail,
+    })),
+  };
+}
+
+export async function exportDiagnostics(frontendContext?: DiagnosticsExportContext): Promise<DiagnosticsExport> {
+  return callNative<DiagnosticsExport>('export_diagnostics', { frontendContext: frontendContext ?? null }, async () => ({
     path: 'Browser preview only',
     createdAt: new Date().toLocaleString(),
-    message: 'Native diagnostics export is available in the Tauri desktop app.',
-    sections: ['System identity', 'Telemetry sample', 'Capability registry', 'Provider orchestration', 'Sensor discovery report'],
+    message: frontendContext
+      ? 'Native diagnostics export is available in the Tauri desktop app. Radium support context prepared for desktop export.'
+      : 'Native diagnostics export is available in the Tauri desktop app.',
+    sections: frontendContext
+      ? ['Radium build identity', 'Frontend support context', 'System identity', 'Telemetry sample', 'Capability registry', 'Provider orchestration', 'Sensor discovery report', 'OpenRGB discovery']
+      : ['System identity', 'Telemetry sample', 'Capability registry', 'Provider orchestration', 'Sensor discovery report', 'OpenRGB discovery'],
     providerCount: 3,
     capabilityCount: 3,
     sensorCount: 4,
@@ -351,6 +410,20 @@ export async function listTopProcesses(limit = 30): Promise<ProcessInfo[]> {
 
 export async function restartMonitoringEngine(): Promise<string> {
   return callNative<string>('restart_monitoring_engine', undefined, async () => '[browser] monitoring engine restart requested');
+}
+
+export async function discoverRgbDevices(): Promise<RgbDiscovery> {
+  return callNative<RgbDiscovery>('discover_rgb_devices', undefined, async () => ({
+    provider: 'OpenRGB',
+    endpoint: '127.0.0.1:6742',
+    state: 'unavailable',
+    protocolVersion: null,
+    controllerCount: 0,
+    controllers: [],
+    message: 'OpenRGB SDK discovery is available in the Tauri desktop app.',
+    writeSafe: false,
+    warnings: ['Phase 1 is read-only and localhost-only.'],
+  }));
 }
 
 export async function getHardwareCapabilities(): Promise<HardwareCapability[]> {

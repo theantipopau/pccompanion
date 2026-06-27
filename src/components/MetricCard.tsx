@@ -36,7 +36,7 @@ export function MetricCard({
         <span>{label}</span>
         <div className="metric-head-right">
           {vendorAssetSrc && (
-            <img className="metric-vendor-badge" src={vendorAssetSrc} alt={vendorAssetAlt ?? `${label} vendor`} />
+            <img className="metric-vendor-badge" src={vendorAssetSrc} alt={vendorAssetAlt ?? `${label} vendor`} loading="lazy" decoding="async" />
           )}
           <div className="metric-icon">
             <Icon size={16} />

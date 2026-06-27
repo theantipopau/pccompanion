@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const enableSourceMaps =
+  process.env.VITE_ENABLE_SOURCEMAPS === '1' ||
+  process.env.RADIUM_ENABLE_SOURCEMAPS === '1';
+
 export default defineConfig({
   base: './',
   plugins: [react()],
@@ -13,7 +17,7 @@ export default defineConfig({
   build: {
     target: 'es2022',
     minify: 'esbuild',
-    sourcemap: true,
+    sourcemap: enableSourceMaps,
     rollupOptions: {
       output: {
         manualChunks: {

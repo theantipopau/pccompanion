@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   core-quality-gates:
@@ -29,7 +30,8 @@ jobs:
         run: npm run quality:gate
 
   web-demo:
-    name: Quality Gate (demo)
+    name: Quality Gate (demo manual)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Checkout

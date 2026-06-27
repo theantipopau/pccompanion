@@ -2,10 +2,12 @@ import { Cpu, Fan, HardDrive, MemoryStick, MonitorUp, Power, Thermometer } from 
 import type { LucideIcon } from 'lucide-react';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
-import { assets, oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
+import { oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { pct, temp } from '../lib/format';
 import type { Vendor } from '../types/system';
 import { Panel } from './Panel';
+
+const thermalChamberImage = new URL('../../images/thermal-chamber-premium.png', import.meta.url).href;
 
 type Zone = {
   id: string;
@@ -106,7 +108,7 @@ export function ThermalCaseView() {
 
       <div className="case-visual">
         <div className="case-frame">
-          <img className="case-backdrop" src={assets.thermalChamber} alt="" aria-hidden="true" />
+          <img className="case-backdrop" src={thermalChamberImage} alt="" aria-hidden="true" decoding="async" />
           <div className="case-backdrop-scrim" />
           <span className="case-glow cpu-glow" style={{ opacity: intensity(cpuTemp, maxTemp) }} />
           <span className="case-glow gpu-glow" style={{ opacity: intensity(gpuTemp, maxTemp) }} />
@@ -223,7 +225,7 @@ function SensorBadge({
         <small>{detail}</small>
       </div>
       <em>{confidenceLabel(confidence)}</em>
-      {logo && <img src={logo} alt={logoAlt ?? `${label} vendor`} />}
+      {logo && <img src={logo} alt={logoAlt ?? `${label} vendor`} loading="lazy" decoding="async" />}
     </div>
   );
 }

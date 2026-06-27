@@ -226,18 +226,40 @@ export function MonitorProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!settings.monitoring.launchOnStartup) return undefined;
-    const timer = window.setInterval(() => {
+    let disposed = false;
+    let timer = 0;
+
+    const schedule = () => {
+      const interval = visibleRef.current || settings.overlay.enabled
+        ? 1_000
+        : Math.max(settings.monitoring.backgroundRefreshMs, 5_000);
+      timer = window.setTimeout(publishFrame, interval);
+    };
+
+    const publishFrame = () => {
+      if (disposed) return;
       const current = presentationRef.current;
-      if (!current?.displaySample) return;
-      publishPresentation({
-        sample: null,
-        loading: loadingRef.current,
-        error: errorRef.current,
-        monitoringEnabled: true,
-      });
-    }, 1_000);
-    return () => window.clearInterval(timer);
-  }, [settings.monitoring.launchOnStartup]);
+      if (current?.displaySample) {
+        publishPresentation({
+          sample: null,
+          loading: loadingRef.current,
+          error: errorRef.current,
+          monitoringEnabled: true,
+        });
+      }
+      schedule();
+    };
+
+    schedule();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    settings.monitoring.launchOnStartup,
+    settings.monitoring.backgroundRefreshMs,
+    settings.overlay.enabled,
+  ]);
 
   const value = useMemo(() => ({
     systemInfo,
