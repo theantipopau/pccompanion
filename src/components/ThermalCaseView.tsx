@@ -7,7 +7,7 @@ import { pct, temp } from '../lib/format';
 import type { Vendor } from '../types/system';
 import { Panel } from './Panel';
 
-const thermalChamberImage = new URL('../../images/thermal-chamber-premium.png', import.meta.url).href;
+const thermalChamberImage = new URL('../../images/thermal-chamber-premium.jpg', import.meta.url).href;
 
 type Zone = {
   id: string;

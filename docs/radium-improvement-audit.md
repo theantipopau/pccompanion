@@ -179,7 +179,8 @@ Work:
 - Moved Dashboard chart panels into a lazy chart chunk with skeleton placeholders to reduce first-render JS pressure.
 - Added hover/focus route prefetching for lazy secondary pages so navigation feels immediate after user intent.
 - Added lazy loading and async decoding hints to non-critical images across utility, Passport, vendor badge, and thermal surfaces.
-- Convert remaining large thermal/marketing PNG assets to WebP or AVIF where Windows WebView support is acceptable.
+- Done 2026-06-27: re-encoded `images/thermal-chamber-premium.png` (1.68 MB, the single largest built asset) as a quality-88 JPEG via .NET `System.Drawing` (no new tooling installed) — `thermal-chamber-premium.jpg` is 164 KB, a 90% reduction, visually confirmed side-by-side with no perceptible quality loss. Updated `ThermalCaseView.tsx` and `README.md` references; removed the old PNG. `msi.png` (283 KB) is now the largest single image asset.
+- Convert remaining large marketing PNG assets (`msi.png`, `asrock.png`) to WebP or AVIF where Windows WebView support is acceptable, or apply the same JPEG re-encode approach where transparency isn't required.
 - Keep PNG fallback only where needed.
 
 Acceptance:
@@ -504,7 +505,7 @@ Work:
 - AMD desktop validated 2026-06-27 (backend probe only; full UI/tray/OSD/installer pass still pending elevated access on that machine).
 - Migrate `amd_provider.rs` off legacy ADL2 Overdrive (OD5 and OverdriveN both confirmed non-functional on RDNA4 by raw return-code diagnostics) to the ADLX SDK, or surface the fallback explicitly in diagnostics instead of silently degrading to WMI-only quality. This is a larger task: ADLX is a COM-style C++ interface, not a flat-function FFI like ADL2.
 - Complete signing path.
-- Convert largest PNG assets or add optimized variants.
+- Largest PNG asset converted 2026-06-27 (thermal-chamber-premium: 1.68 MB -> 164 KB JPEG). `msi.png`/`asrock.png` are next if further reduction is wanted.
 
 ### Next
 

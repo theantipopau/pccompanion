@@ -104,7 +104,7 @@ Important scope notes:
 The interface uses a dark industrial Radium visual language with orange accents, hardware-aware vendor identity, compact cards, and high information density.
 
 <p align="center">
-  <img src="images/thermal-chamber-premium.png" alt="Premium thermal chamber visual asset" width="760" />
+  <img src="images/thermal-chamber-premium.jpg" alt="Premium thermal chamber visual asset" width="760" />
 </p>
 
 Current visual assets include:
@@ -114,7 +114,7 @@ Current visual assets include:
 | Radium brand | `radiumlogo.png`, `radiumheader-new.png`, `radiumcompanion-header.png`, `radiumcompanion-marketing.png` |
 | GPU vendors | `nvidia.png`, `amd.png`, `radeon.png`, `intel.png`, `intelarc.png` |
 | Motherboard vendors | `asus.png`, `asrock.png`, `msi.png` |
-| Thermal presentation | `thermal-chamber-premium.png` |
+| Thermal presentation | `thermal-chamber-premium.jpg` |
 
 ## Architecture
 
