@@ -201,14 +201,27 @@ impl AmdAdlContext {
             return None;
         }
 
-        // Find the first adapter that responds to Overdrive5 temperature.
-        // This is the active AMD discrete GPU.
+        // Find the first adapter that responds to a temperature query. Prefer
+        // legacy Overdrive5 (works through roughly RX 500 series), but current-
+        // generation cards (confirmed: Radeon RX 9070 XT / RDNA4) don't answer
+        // OD5 at all — only the newer OverdriveN call succeeds. Probing both
+        // means we don't lose adapter detection entirely on cards where OD5 is
+        // gone but OverdriveN (already used for readings below) still works.
         let adapter_index = (0..num_adapters.min(8)).find(|&idx| {
             let mut temp = AdlTemperature {
                 i_size: std::mem::size_of::<AdlTemperature>() as i32,
                 i_temperature: 0,
             };
-            (unsafe { fn_od5_temp(adl_ctx, idx, 0, &mut temp) }) == ADL_OK
+            let od5_ok = (unsafe { fn_od5_temp(adl_ctx, idx, 0, &mut temp) }) == ADL_OK;
+            if od5_ok {
+                return true;
+            }
+            if let Some(fn_odn) = fn_odn_temp {
+                let mut temp_milli: i32 = 0;
+                return (unsafe { fn_odn(adl_ctx, idx, ADL_ODN_TEMPERATURE_CORE, &mut temp_milli) })
+                    == ADL_OK;
+            }
+            false
         });
 
         let adapter_index = match adapter_index {
