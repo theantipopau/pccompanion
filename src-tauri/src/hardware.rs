@@ -1642,13 +1642,24 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
         });
 
     // One-shot vendor GPU provider init (Windows only).
-    // Priority: NVML (NVIDIA) → AMD ADL → Intel IGCL groundwork → WMI fallback.
+    // Priority: NVML (NVIDIA) -> AMD ADLX -> legacy AMD ADL2 -> Intel IGCL
+    // groundwork -> WMI fallback. ADLX is tried before legacy ADL2 because
+    // ADL2's Overdrive5/OverdriveN calls were confirmed non-functional on a
+    // Radeon RX 9070 XT (RDNA4) by raw return-code diagnostics; ADL2 is kept
+    // as a fallback for older AMD cards where ADLX may be unavailable.
     #[cfg(windows)]
     let nvml_opt: Option<crate::nvml_provider::NvmlContext> =
         crate::nvml_provider::NvmlContext::init();
 
     #[cfg(windows)]
-    let amd_opt: Option<crate::amd_provider::AmdAdlContext> = if nvml_opt.is_none() {
+    let adlx_opt: Option<crate::adlx_provider::AdlxContext> = if nvml_opt.is_none() {
+        crate::adlx_provider::AdlxContext::init()
+    } else {
+        None
+    };
+
+    #[cfg(windows)]
+    let amd_opt: Option<crate::amd_provider::AmdAdlContext> = if nvml_opt.is_none() && adlx_opt.is_none() {
         crate::amd_provider::AmdAdlContext::init()
     } else {
         None
@@ -1656,7 +1667,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
 
     #[cfg(windows)]
     let igcl_opt: Option<crate::igcl_provider::IntelIgclContext> =
-        if nvml_opt.is_none() && amd_opt.is_none() {
+        if nvml_opt.is_none() && adlx_opt.is_none() && amd_opt.is_none() {
             crate::igcl_provider::IntelIgclContext::init()
         } else {
             None
@@ -1722,6 +1733,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
         let provider_load_order = vec![
             "WMI / sysinfo".to_string(),
             "NVIDIA NVML".to_string(),
+            "AMD ADLX".to_string(),
             "AMD ADL2".to_string(),
             "Intel IGCL".to_string(),
             "Radium sensor sidecar".to_string(),
@@ -1763,17 +1775,42 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
                 errors: if nvml_opt.is_some() { Vec::new() } else { vec!["NVML not initialised".to_string()] },
             },
             ProviderDiagnostics {
+                id: "adlx".to_string(),
+                label: "AMD ADLX".to_string(),
+                vendor: "amd".to_string(),
+                load_order: 3,
+                state: if adlx_opt.is_some() { "loaded".to_string() } else { "unavailable".to_string() },
+                active: false,
+                dll: "amdadlx64.dll".to_string(),
+                dll_available: adlx_opt.is_some(),
+                symbols_resolved: adlx_opt.is_some(),
+                symbols: vec!["ADLXInitialize".to_string(), "IADLXPerformanceMonitoringServices::GetCurrentGPUMetrics".to_string()],
+                notes: if adlx_opt.is_some() {
+                    "Native AMD telemetry loaded via the current ADLX SDK; preferred over legacy ADL2 on current-generation cards".to_string()
+                } else {
+                    "Available only on AMD systems with the ADLX runtime present".to_string()
+                },
+                warnings: if adlx_opt.is_some() { Vec::new() } else { vec!["ADLX not initialised; legacy ADL2 will be tried instead".to_string()] },
+                errors: if adlx_opt.is_some() { Vec::new() } else { vec!["ADLX not initialised".to_string()] },
+            },
+            ProviderDiagnostics {
                 id: "adl2".to_string(),
                 label: "AMD ADL2".to_string(),
                 vendor: "amd".to_string(),
-                load_order: 3,
+                load_order: 4,
                 state: if amd_opt.is_some() { "loaded".to_string() } else { "unavailable".to_string() },
                 active: false,
                 dll: "atiadlxx.dll".to_string(),
                 dll_available: amd_opt.is_some(),
                 symbols_resolved: amd_opt.is_some(),
                 symbols: vec!["ADL2_Main_Control_Create".to_string(), "ADL2_Overdrive5_Temperature_Get".to_string(), "ADL2_Overdrive5_CurrentActivity_Get".to_string()],
-                notes: if amd_opt.is_some() { "Native AMD telemetry loaded".to_string() } else { "Available only on AMD systems".to_string() },
+                notes: if amd_opt.is_some() {
+                    "Native AMD telemetry loaded (legacy ADL2 fallback)".to_string()
+                } else if adlx_opt.is_some() {
+                    "Not attempted; ADLX already loaded".to_string()
+                } else {
+                    "Available only on AMD systems".to_string()
+                },
                 warnings: if amd_opt.is_some() { Vec::new() } else { vec!["No AMD driver API available".to_string()] },
                 errors: if amd_opt.is_some() { Vec::new() } else { vec!["ADL2 not initialised".to_string()] },
             },
@@ -1781,7 +1818,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
                 id: "igcl".to_string(),
                 label: "Intel IGCL".to_string(),
                 vendor: "intel".to_string(),
-                load_order: 4,
+                load_order: 5,
                 state: if igcl_opt.is_some() { "staged".to_string() } else { "unavailable".to_string() },
                 active: false,
                 dll: "igcl64.dll / ControlLib.dll".to_string(),
@@ -1796,7 +1833,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
                 id: "radium-sidecar".to_string(),
                 label: "Radium Sensor Sidecar".to_string(),
                 vendor: "radium".to_string(),
-                load_order: 5,
+                load_order: 6,
                 state: "staged".to_string(),
                 active: false,
                 dll: "radium-sensor-sidecar.dll + bundled .NET runtime + LibreHardwareMonitorLib + PawnIO".to_string(),
@@ -1895,11 +1932,13 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
         let (cpu_temp, sensor_discovery): (Option<f32>, SensorDiscoveryReport) =
             (None, SensorDiscoveryReport::default());
 
-        // --- GPU reading: NVML > AMD ADL > IGCL > WMI fallback (Windows only) ---
+        // --- GPU reading: NVML > AMD ADLX > AMD ADL2 > IGCL > WMI fallback (Windows only) ---
         #[cfg(windows)]
         let (gpu_reading, gpu_provider): (Option<GpuReading>, &'static str) = {
             if let Some(ref nvml) = nvml_opt {
                 (nvml.query_primary_gpu(), "nvml")
+            } else if let Some(ref adlx) = adlx_opt {
+                (adlx.query_primary_gpu(), "adlx")
             } else if let Some(ref amd) = amd_opt {
                 let mut r = amd.query_primary_gpu();
                 // AMD ADL reports RPM via a separate call; wire it into fan_rpm.

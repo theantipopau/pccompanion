@@ -84,7 +84,8 @@ src-tauri/src/
 ├── hardware.rs          — HAL: types, MonitoringEngine, monitor_loop
 ├── wmi_provider.rs      — WMI queries (Windows-only module)
 ├── nvml_provider.rs     — NVIDIA NVML GPU telemetry (Windows-only module)
-├── amd_provider.rs      — AMD ADL GPU telemetry (Windows-only module)
+├── adlx_provider.rs     — AMD ADLX GPU telemetry, preferred over amd_provider.rs (Windows-only module)
+├── amd_provider.rs      — Legacy AMD ADL2 GPU telemetry, fallback for older cards (Windows-only module)
 ├── igcl_provider.rs     — Intel Arc / IGCL staging loader
 ├── sidecar_provider.rs  — LibreHardwareMonitor sensor sidecar bridge (Windows-only module)
 ├── rgb_provider.rs      — Read-only OpenRGB SDK discovery client
@@ -110,11 +111,12 @@ src-tauri/src/
 - `query_gpu_usage()` — 3D engine utilisation via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`
 - `query_static_system_info()` — GPU name/VRAM, CPU name, MB, BIOS, RAM speed from `Win32_*` inventory classes
 
-#### `nvml_provider.rs` / `amd_provider.rs` (Windows only)
-- `NvmlContext::init()` / `AmdAdlContext::init()` — load the vendor GPU library if present, fail closed to `None` otherwise
+#### `nvml_provider.rs` / `adlx_provider.rs` / `amd_provider.rs` (Windows only)
+- `NvmlContext::init()` / `AdlxContext::init()` / `AmdAdlContext::init()` — load the vendor GPU library if present, fail closed to `None` otherwise
 - `query_primary_gpu()` — GPU usage/temperature/clocks via vendor API instead of WMI fallback
-- `query_driver_version()` — vendor-reported driver version for diagnostics and `driver_update.rs`
-- `AmdAdlContext::query_fan_rpm()` — AMD fan telemetry where ADL exposes it
+- `query_driver_version()` — vendor-reported driver version for diagnostics and `driver_update.rs` (NVML/ADL2 only; ADLX does not currently expose this)
+- `AmdAdlContext::query_fan_rpm()` — AMD fan telemetry where legacy ADL2 exposes it
+- `adlx_provider.rs` calls into AMD's ADLX SDK (`amdadlx64.dll`) through hand-transcribed C-ABI vtable structs (verbatim from AMD's official public headers, not reverse engineered) since ADLX exposes C++ interfaces rather than flat exports. Every metric read is gated on the matching `IADLXGPUMetricsSupport::IsSupportedX` flag before being trusted — confirmed necessary on real hardware (a Radeon RX 9070 XT reports `ADLX_OK` with a meaningless value for unsupported metrics rather than failing the call). Preferred over `amd_provider.rs`'s legacy ADL2 path, which was confirmed non-functional (every Overdrive5/OverdriveN call fails) on current-generation RDNA3/4 cards.
 
 #### `sidecar_provider.rs` (Windows only)
 - `query_sensor_sidecar()` — launches the bundled .NET `radium-sensor-sidecar` process (LibreHardwareMonitor/PawnIO bridge) and parses its JSON stdout into `RadiumSidecarSample`

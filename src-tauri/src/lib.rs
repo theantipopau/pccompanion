@@ -1,4 +1,6 @@
 #[cfg(windows)]
+mod adlx_provider;
+#[cfg(windows)]
 mod amd_provider;
 mod cleanup;
 #[cfg(windows)]
