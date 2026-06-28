@@ -1631,74 +1631,6 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   font-size: 10px;
 }
 
-.dashboard-status-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.dashboard-status-card {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  min-height: 66px;
-  padding: 9px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-left-width: 3px;
-  border-radius: 10px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.014)),
-    rgba(12, 16, 22, 0.84);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.dashboard-status-card.tone-green {
-  border-left-color: var(--green);
-}
-
-.dashboard-status-card.tone-amber {
-  border-left-color: var(--amber);
-}
-
-.dashboard-status-card.tone-cyan {
-  border-left-color: var(--cyan);
-}
-
-.dashboard-status-card svg {
-  color: #f3c18a;
-}
-
-.dashboard-status-card span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.dashboard-status-card small {
-  color: #8e9bae;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.dashboard-status-card strong {
-  color: #eef7ff;
-  font-size: 13px;
-  font-weight: 850;
-  overflow-wrap: anywhere;
-}
-
-.dashboard-status-card em {
-  color: #b7c7d7;
-  font-size: 11px;
-  font-style: normal;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
 .dashboard-theme-nvidia {
   --vendor-accent: rgba(118, 224, 124, 0.42);
   --vendor-fog: rgba(118, 224, 124, 0.12);
@@ -1815,13 +1747,6 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   line-height: 1.08;
 }
 
-.hero-status-line {
-  margin-top: 4px;
-  color: #e7f2fa;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .hero-links {
   display: flex;
   flex-wrap: wrap;
@@ -1859,28 +1784,6 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   font-size: 11px;
   font-weight: 700;
   line-height: 1.3;
-}
-
-.hero-runtime-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.hero-runtime-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 20px;
-  padding: 0 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.035);
-  color: #c6d7e5;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 .hero-links a {
@@ -2747,25 +2650,6 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   color: var(--muted);
   font-size: 11.5px;
   line-height: 1.4;
-}
-
-.score-mini-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.score-mini-metrics span {
-  min-height: 22px;
-  padding: 0 7px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #cbdbea;
-  font-size: 10px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
 }
 
 .dashboard-care-actions {
@@ -8284,7 +8168,6 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 
 @media (max-width: 1180px) {
   .dashboard-grid,
-  .dashboard-status-strip,
   .copilot-layout,
   .utility-overview-grid,
   .maintenance-focus-grid,
@@ -8624,7 +8507,6 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   }
 
   .dashboard-grid,
-    .dashboard-status-strip,
     .module-grid,
     .copilot-layout,
     .utility-overview-grid,

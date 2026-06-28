@@ -1982,10 +1982,16 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
         let (gpu_reading, gpu_provider): (Option<GpuReading>, &'static str) = (None, "none");
 
         // --- Derive state label ---
+        // A provider that returned *any* reading this tick is valid telemetry,
+        // even if a specific sub-field (e.g. temperature) is momentarily
+        // unsupported/unread or the GPU is genuinely idle at 0% usage. Gating
+        // on temperature_c.is_some() || usage_pct > 0.0 caused the whole
+        // channel to flip to "degraded" on transient single-tick hiccups
+        // (observed with the AMD ADLX provider under sustained real-world
+        // polling), which cascaded into frequent Live/Recovering/Stabilising
+        // churn in the frontend telemetry presentation layer.
         let has_cpu = cpu_temp.is_some();
-        let has_gpu = gpu_reading
-            .as_ref()
-            .map_or(false, |g| g.temperature_c.is_some() || g.usage_pct > 0.0);
+        let has_gpu = gpu_reading.is_some();
         let state = if has_cpu || has_gpu {
             "valid"
         } else {

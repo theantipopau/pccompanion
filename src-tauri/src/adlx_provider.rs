@@ -418,10 +418,20 @@ impl AdlxContext {
 
     /// Poll the detected AMD GPU and return a [`GpuReading`].
     pub fn query_primary_gpu(&self) -> Option<GpuReading> {
+        // GetCurrentGPUMetrics has been observed to fail transiently on a
+        // single tick under sustained real-world polling (driver busy /
+        // power-state transition). One immediate retry absorbs that without
+        // masking a genuine, sustained provider outage (which still returns
+        // None after the retry also fails).
         let mut metrics: *mut IadlxGpuMetrics = std::ptr::null_mut();
-        let result = unsafe {
+        let mut result = unsafe {
             ((*(*self.perf_services).vtbl).get_current_gpu_metrics)(self.perf_services, self.gpu, &mut metrics)
         };
+        if !adlx_succeeded(result) || metrics.is_null() {
+            result = unsafe {
+                ((*(*self.perf_services).vtbl).get_current_gpu_metrics)(self.perf_services, self.gpu, &mut metrics)
+            };
+        }
         if !adlx_succeeded(result) || metrics.is_null() {
             return None;
         }

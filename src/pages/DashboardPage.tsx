@@ -7,7 +7,6 @@ import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Skeleton } from '../components/Skeleton';
-import { StatePill } from '../components/StatePill';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
@@ -46,7 +45,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const performanceScore = useMemo(() => computePerformanceScore(sample), [sample]);
   const gpuProvider = presentation.provider !== 'Pending' ? presentation.provider : sample?.gpu.provider ? sample.gpu.provider.toUpperCase() : 'WMI';
   const nominal = presentation.isLive;
-  const sampleAgeLabel = presentation.ageLabel;
   const activeChannels = presentation.activeChannels;
   const normalizeIdentity = (value?: string | null) => {
     if (!value) return null;
@@ -83,8 +81,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const deviceName = boardName
     || normalizeIdentity(systemInfo?.windows)
     || 'System identity pending';
-  const telemetryHeadline = presentation.headline;
-  const telemetrySubline = presentation.detail;
   const cpuVendorAsset = vendorLogo(cpuVendor);
   const gpuVendorAsset = oemLogoForText(gpuName) ?? vendorLogo(gpuVendor);
   const boardVendorAsset = oemLogoForText(boardName ?? '');
@@ -148,30 +144,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     });
   }, [hardwareAlerts, settings.alerts.cooldownMs, settings.alerts.enabled]);
 
-  const statusItems = useMemo(() => buildDashboardStatusItems({
-    activeProfile: settings.experience.performanceProfile,
-    gpuProvider,
-    telemetryLabel: presentation.label,
-    telemetryOk: presentation.isLive,
-    sampleAgeLabel,
-    trayMetric: settings.tray.liveIconMetric,
-    startWithWindows: settings.tray.startWithWindows,
-    startMinimized: settings.tray.startMinimized,
-    overlayEnabled: settings.overlay.enabled,
-    localOnly: true,
-    native,
-  }), [
-    gpuProvider,
-    native,
-    sampleAgeLabel,
-    presentation.isLive,
-    presentation.label,
-    settings.experience.performanceProfile,
-    settings.overlay.enabled,
-    settings.tray.liveIconMetric,
-    settings.tray.startMinimized,
-    settings.tray.startWithWindows,
-  ]);
 
   return (
     <div className="page">
@@ -181,8 +153,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         description="Overview of your system's performance."
         action={(
           <div className="dashboard-header-actions">
-            <StatePill state={presentation.state} label={presentation.label} />
-            <span className="badge badge-dim">GPU provider {gpuProvider}</span>
             <button className="secondary-button" onClick={() => onNavigate?.('diagnostics')}>
               <ShieldCheck size={16} />
               <span>Telemetry Diagnostics</span>
@@ -250,22 +220,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         </section>
       )}
 
-      <section className="dashboard-status-strip" aria-label="Current app state">
-        {statusItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article key={item.id} className={`dashboard-status-card tone-${item.tone}`}>
-              <Icon size={16} />
-              <span>
-                <small>{item.label}</small>
-                <strong>{item.value}</strong>
-                <em>{item.detail}</em>
-              </span>
-            </article>
-          );
-        })}
-      </section>
-
       <div className={`dashboard-grid dashboard-theme-${hardwareTheme}`}>
         <Panel className="hero-monitor">
           <div className="hero-ambient" aria-hidden="true" />
@@ -279,13 +233,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 </div>
               </div>
               <h2>{deviceName}</h2>
-              <p className="hero-status-line">{telemetryHeadline}</p>
-              <p>{telemetrySubline}</p>
-              <div className="hero-runtime-meta">
-                <span><ShieldCheck size={13} /> State: {presentation.label}</span>
-                <span><MonitorUp size={13} /> Provider: {gpuProvider}</span>
-                <span><Gauge size={13} /> Lanes: {activeChannels}/4</span>
-              </div>
               <motion.div
                 className="hero-telemetry-ribbon"
                 initial={animateEntrance ? { opacity: 0, y: 10 } : false}
@@ -403,11 +350,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div className="score-panel-body">
             <strong>{performanceScore.value}</strong>
             <p>{performanceScore.summary}</p>
-            <div className="score-mini-metrics">
-              <span>Provider {gpuProvider}</span>
-              <span>Telemetry {activeChannels}/4</span>
-              <span>{presentation.isLive ? 'Runtime nominal' : presentation.label}</span>
-            </div>
             <div className="dashboard-care-actions">
               {careActions.map((action) => {
                 const Icon = action.icon;
@@ -571,15 +513,6 @@ type CareAction = {
   tone: 'green' | 'amber' | 'cyan';
 };
 
-type DashboardStatusItem = {
-  id: string;
-  label: string;
-  value: string;
-  detail: string;
-  icon: LucideIcon;
-  tone: 'green' | 'amber' | 'cyan';
-};
-
 function DashboardChartsFallback() {
   return (
     <>
@@ -694,71 +627,6 @@ function buildDashboardVerdict({
     actionView: 'passport',
     evidence,
   };
-}
-
-function buildDashboardStatusItems({
-  activeProfile,
-  gpuProvider,
-  telemetryLabel,
-  telemetryOk,
-  sampleAgeLabel,
-  trayMetric,
-  startWithWindows,
-  startMinimized,
-  overlayEnabled,
-  localOnly,
-  native,
-}: {
-  activeProfile: string;
-  gpuProvider: string;
-  telemetryLabel: string;
-  telemetryOk: boolean;
-  sampleAgeLabel: string;
-  trayMetric: string;
-  startWithWindows: boolean;
-  startMinimized: boolean;
-  overlayEnabled: boolean;
-  localOnly: boolean;
-  native: boolean;
-}): DashboardStatusItem[] {
-  const profileLabel = activeProfile.charAt(0).toUpperCase() + activeProfile.slice(1);
-  const trayLabel = trayMetric === 'disabled'
-    ? 'Static icon'
-    : `${trayMetric.replace(/([A-Z])/g, ' $1').replace(/^./, (value) => value.toUpperCase())}`;
-  return [
-    {
-      id: 'profile',
-      label: 'Active profile',
-      value: profileLabel,
-      detail: 'OS-level safe controls only',
-      icon: Zap,
-      tone: activeProfile === 'quiet' ? 'cyan' : activeProfile === 'gaming' || activeProfile === 'creator' ? 'amber' : 'green',
-    },
-    {
-      id: 'telemetry',
-      label: 'Telemetry',
-      value: telemetryOk ? 'Live' : telemetryLabel,
-      detail: `${gpuProvider} provider - ${sampleAgeLabel}`,
-      icon: Gauge,
-      tone: telemetryOk ? 'green' : 'amber',
-    },
-    {
-      id: 'tray',
-      label: 'Tray and startup',
-      value: startWithWindows ? 'Startup enabled' : 'Manual start',
-      detail: `${trayLabel}${startMinimized ? ' - starts minimized' : ''}`,
-      icon: MonitorUp,
-      tone: startWithWindows ? 'green' : 'cyan',
-    },
-    {
-      id: 'security',
-      label: 'Safety posture',
-      value: localOnly && native ? 'Local guarded' : localOnly ? 'Preview guarded' : 'Review',
-      detail: overlayEnabled ? 'OSD enabled - writes still confirmed' : 'No cloud upload or hidden writes',
-      icon: ShieldCheck,
-      tone: 'green',
-    },
-  ];
 }
 
 function buildCareActions({
