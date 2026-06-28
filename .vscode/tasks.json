@@ -196,7 +196,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-Command",
-				"$setup='F:/radiumpcs/src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe'; $exe='F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe'; Get-Item $exe,$setup | Select-Object FullName,Length,LastWriteTime | Format-Table -AutoSize; (Get-Item $setup).VersionInfo | Select-Object FileVersion,ProductVersion,FileDescription,ProductName | Format-Table -AutoSize"
+				"$setup='F:/radiumpcs/src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.2.0_x64-setup.exe'; $exe='F:/radiumpcs/src-tauri/target/release/radium_pcs_companion.exe'; Get-Item $exe,$setup | Select-Object FullName,Length,LastWriteTime | Format-Table -AutoSize; (Get-Item $setup).VersionInfo | Select-Object FileVersion,ProductVersion,FileDescription,ProductName | Format-Table -AutoSize"
 			],
 			"isBackground": false
 		},
@@ -384,7 +384,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-Command",
-				"$p='F:\\radiumpcs\\src-tauri\\target-demo-icon-final\\release\\bundle\\nsis\\PC Companion_0.1.0-pre_x64-setup.exe'; if(Test-Path $p){Get-Item $p | Select-Object FullName,Length,LastWriteTime | Format-List}else{Write-Output 'MISSING'}"
+				"$p='F:\\radiumpcs\\src-tauri\\target-demo-icon-final\\release\\bundle\\nsis\\PC Companion_0.2.0_x64-setup.exe'; if(Test-Path $p){Get-Item $p | Select-Object FullName,Length,LastWriteTime | Format-List}else{Write-Output 'MISSING'}"
 			],
 			"isBackground": false
 		},
@@ -397,7 +397,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-Command",
-				"$p=\"F:/radiumpcs/src-tauri/target-demo-icon-final/release/bundle/nsis/PC Companion_0.1.0-pre_x64-setup.exe\"; if (Test-Path $p) { Get-Item $p | Select-Object FullName,Length,LastWriteTime | Format-List } else { 'MISSING' }"
+				"$p=\"F:/radiumpcs/src-tauri/target-demo-icon-final/release/bundle/nsis/PC Companion_0.2.0_x64-setup.exe\"; if (Test-Path $p) { Get-Item $p | Select-Object FullName,Length,LastWriteTime | Format-List } else { 'MISSING' }"
 			],
 			"isBackground": false
 		},

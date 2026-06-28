@@ -512,7 +512,7 @@ export function SettingsPage({ initialTab = 'general' }: { initialTab?: Settings
           <div className="app-version-grid">
             <div>
               <span>Version</span>
-              <strong>{appMetadata?.version ?? '0.1.0-pre'}</strong>
+              <strong>{appMetadata?.version ?? '0.2.0'}</strong>
             </div>
             <div>
               <span>Channel</span>
@@ -706,7 +706,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
     `I need assistance with ${brand.productName}.`,
     '',
     `Bundle path: ${supportBundlePath || 'Not exported yet'}`,
-    `App version: ${appMetadata?.version ?? '0.1.0-pre'}`,
+    `App version: ${appMetadata?.version ?? '0.2.0'}`,
     `System: ${systemInfo?.cpu ?? 'CPU pending'} / ${systemInfo?.gpu ?? 'GPU pending'}`,
     `Motherboard: ${systemInfo?.motherboard ?? 'Pending'}`,
     `Telemetry: ${presentation.label} (raw ${sample?.state ?? 'pending'})`,
@@ -757,7 +757,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
       presentationLabel: presentation.label,
       presentationState: presentation.state,
       recentActions: actions,
-      appVersion: appMetadata?.version ?? '0.1.0-pre',
+      appVersion: appMetadata?.version ?? '0.2.0',
     });
     setSupportReportPath(result.filename);
     recordCompanionAction('support', 'OEM support report exported', result.filename);
@@ -788,7 +788,7 @@ function AboutCompanion({ appMetadata }: { appMetadata: AppMetadata | null }) {
           {brand.settingsHeroBody}
         </p>
         <div className="about-stat-grid">
-          <div><span>Version</span><strong>{appMetadata?.version ?? '0.1.0-pre'}</strong></div>
+          <div><span>Version</span><strong>{appMetadata?.version ?? '0.2.0'}</strong></div>
           <div><span>Channel</span><strong>{appMetadata?.releaseChannel ?? 'pre-release'}</strong></div>
           <div><span>Support mode</span><strong>Diagnostics first</strong></div>
         </div>

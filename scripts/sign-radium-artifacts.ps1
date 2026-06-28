@@ -1,6 +1,6 @@
 param(
   [string]$ExePath = "src-tauri/target/release/radium_pcs_companion.exe",
-  [string]$SetupPath = "src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe",
+  [string]$SetupPath = "src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.2.0_x64-setup.exe",
   [string]$PfxPath = $env:RADIUM_SIGN_PFX,
   [string]$PfxPassword = $env:RADIUM_SIGN_PFX_PASSWORD,
   [string]$CertThumbprint = $env:RADIUM_SIGN_CERT_THUMBPRINT,

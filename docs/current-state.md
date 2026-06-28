@@ -6,7 +6,7 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 
 ## Release Posture
 
-- Target version: `0.1.0-pre`
+- Target version: `0.2.0` (bumped 2026-06-28 from `0.1.0-pre`, after validating and committing RGB Phase 1, OEM support reports, hardware alerts, Owner/Technician mode, the Vite dev-watcher fix, the WMI VRAM fix, and the new AMD ADLX GPU telemetry provider)
 - Channel: controlled public pre-release
 - Runtime: Windows Tauri desktop app
 - Distribution: NSIS installer plus release executable
@@ -60,10 +60,10 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - Owner/Technician interface mode and Radium build identity provisioning (validated and committed 2026-06-27): Settings now has an interface-mode toggle and a System Passport build-identity panel with local JSON seed import/export.
 - Security readiness is tracked in `docs/security-readiness.md`; clean-machine walkthrough criteria are tracked in `docs/clean-machine-test.md`.
 - Signing workflow scaffold is available through `npm.cmd run sign:radium`; Windows SDK `signtool.exe` is discoverable, but no signing identity is configured in this workspace yet.
-- Latest Radium-branded audited build outputs (2026-06-27, includes the AMD ADLX provider, RGB Phase 1, support reports, hardware alerts, and Owner/Technician mode):
+- Latest Radium-branded audited build outputs, version `0.2.0` (2026-06-28, includes the AMD ADLX provider, RGB Phase 1, support reports, hardware alerts, and Owner/Technician mode):
   - `src-tauri/target/release/radium_pcs_companion.exe`
-  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe`
-  - `artifacts/radium/radium-artifact-manifest-20260628-140439.json`
+  - `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.2.0_x64-setup.exe`
+  - `artifacts/radium/radium-artifact-manifest-20260628-143157.json`
   - Built and audited on the Ryzen 7 9800X3D + Radeon RX 9070 XT host; unsigned by deliberate choice for this personal test build (`npm.cmd run sign:radium` was not run). `npm.cmd run verify:radium-artifact` confirmed correct `Radium PCs Companion` product identity on both the EXE and installer.
   - Not yet installed/launched on real hardware as of this writing — installing and running it is the next step, and will also serve as the first real elevated-launch/tray/OSD/installer validation pass (dev-mode UAC automation was unreliable in the assistant's session; a normal end-user install/launch goes through UAC once, interactively, which should not have the same issue).
 

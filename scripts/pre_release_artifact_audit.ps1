@@ -1,6 +1,6 @@
 param(
   [string]$ExePath = "src-tauri/target/release/radium_pcs_companion.exe",
-  [string]$SetupPath = "src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe",
+  [string]$SetupPath = "src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.2.0_x64-setup.exe",
   [string]$ExpectedProductName = "Radium PCs Companion",
   [switch]$RequireSignature,
   [string]$ManifestPath = ""

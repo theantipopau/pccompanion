@@ -45,7 +45,7 @@ import { readCompanionActions } from '../lib/actionHistory';
 export async function getAppMetadata(): Promise<AppMetadata> {
   return callNative<AppMetadata>('get_app_metadata', undefined, async () => ({
     name: brand.productName,
-    version: '0.1.0-pre',
+    version: '0.2.0',
     releaseChannel: 'pre-release',
     buildProfile: 'browser',
     updateStatus: 'manual',

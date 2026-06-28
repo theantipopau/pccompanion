@@ -41,7 +41,7 @@ try {
 
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $demoExe = Join-Path $env:CARGO_TARGET_DIR 'release\radium_pcs_companion.exe'
-  $demoSetup = Join-Path $env:CARGO_TARGET_DIR 'release\bundle\nsis\PC Companion_0.1.0-pre_x64-setup.exe'
+  $demoSetup = Join-Path $env:CARGO_TARGET_DIR 'release\bundle\nsis\PC Companion_0.2.0_x64-setup.exe'
 
   if (Test-Path $demoExe) {
     $stampedExe = Join-Path $outDir ("pc-companion-demo-" + $stamp + ".exe")
