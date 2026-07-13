@@ -1,12 +1,17 @@
 import { AlertTriangle, CheckCircle2, FileText, PackageMinus, ShieldCheck } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { useSettings } from '../hooks/useSettings';
 import { recordCompanionAction } from '../lib/actionHistory';
+import { EASE_OUT } from '../lib/motion';
 import { removeBloatware, restoreBloatware, scanBloatware } from '../services/systemService';
 import type { BloatwareItem } from '../types/system';
 
 export function BloatwarePage() {
+  const { settings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const [items, setItems] = useState<BloatwareItem[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(true);
@@ -138,19 +143,29 @@ export function BloatwarePage() {
             <ShieldCheck size={19} />
           </div>
           <div className="cleanup-items">
-            {visibleItems.map((item) => (
-              <label className={item.detected ? 'cleanup-item' : 'cleanup-item muted'} key={item.id}>
-                <input type="checkbox" checked={item.selected} disabled={!item.detected} onChange={() => toggle(item.id)} />
-                <div>
-                  <div className="cleanup-item-title">
-                    <strong>{item.name}</strong>
-                    <span className={`risk risk-${item.risk}`}>{item.risk}</span>
+            <AnimatePresence initial={false}>
+              {visibleItems.map((item) => (
+                <motion.label
+                  className={item.detected ? 'cleanup-item' : 'cleanup-item muted'}
+                  key={item.id}
+                  layout={animateEntrance}
+                  initial={animateEntrance ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  exit={animateEntrance ? { opacity: 0 } : undefined}
+                  transition={{ duration: 0.16, ease: EASE_OUT }}
+                >
+                  <input type="checkbox" checked={item.selected} disabled={!item.detected} onChange={() => toggle(item.id)} />
+                  <div>
+                    <div className="cleanup-item-title">
+                      <strong>{item.name}</strong>
+                      <span className={`risk risk-${item.risk}`}>{item.risk}</span>
+                    </div>
+                    <p>{item.description}</p>
+                    <small>{item.category} · {item.publisher} · {item.action}</small>
                   </div>
-                  <p>{item.description}</p>
-                  <small>{item.category} · {item.publisher} · {item.action}</small>
-                </div>
-              </label>
-            ))}
+                </motion.label>
+              ))}
+            </AnimatePresence>
             {!busy && visibleItems.length === 0 && (
               <div className="empty-state">
                 <ShieldCheck size={18} />

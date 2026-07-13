@@ -1,6 +1,6 @@
 {
   "name": "radium-pcs-companion",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Premium Windows companion utility for Radium PCs custom gaming and workstation systems.",

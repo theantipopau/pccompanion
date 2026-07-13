@@ -1,12 +1,13 @@
 # Radium PCs Companion - Current State
 
-Last reviewed: 2026-06-27
+Last reviewed: 2026-07-13
 
 This is the short handoff brief. Keep long session history in `docs/context_log.md`; keep durable architecture in `docs/architecture.md`; keep validation coverage in `docs/compatibility-matrix.md`.
 
 ## Release Posture
 
-- Target version: `0.2.0` (bumped 2026-06-28 from `0.1.0-pre`, after validating and committing RGB Phase 1, OEM support reports, hardware alerts, Owner/Technician mode, the Vite dev-watcher fix, the WMI VRAM fix, and the new AMD ADLX GPU telemetry provider)
+- Target version: `0.3.0` (bumped 2026-07-13 from `0.2.0` — premium-feel/reliability pass; see `CHANGELOG.md` and `docs/premium-experience-roadmap.md`. No changes to hardware telemetry providers, native write paths, or the safety/capability-gating model in this release.)
+- Prior: `0.2.0` (bumped 2026-06-28 from `0.1.0-pre`, after validating and committing RGB Phase 1, OEM support reports, hardware alerts, Owner/Technician mode, the Vite dev-watcher fix, the WMI VRAM fix, and the new AMD ADLX GPU telemetry provider)
 - Channel: controlled public pre-release
 - Runtime: Windows Tauri desktop app
 - Distribution: NSIS installer plus release executable
@@ -33,6 +34,7 @@ This is the short handoff brief. Keep long session history in `docs/context_log.
 - `cargo test -q` has passed for library tests; full binary test execution may still require elevation on some hosts.
 - `npm.cmd run build:exe` has produced the release executable and NSIS installer in prior validation passes.
 - On 2026-06-27, roughly two weeks of accumulated uncommitted changes (RGB Phase 1 OpenRGB discovery, OEM HTML support report export, hardware alert thresholds, Owner/Technician interface mode, Radium build identity provisioning with JSON seed import/export, OEM driver-update checks, dashboard chart code-splitting) were validated and committed. This machine previously had neither Node nor Rust on PATH and no Rust toolchain installed at all; Node was located at `C:\Program Files\nodejs`, and a Rust toolchain plus MSVC Build Tools were installed via `winget` specifically to validate this batch. `npm.cmd run build`, `npm.cmd run test:telemetry-presentation` (21/21), `cargo check --manifest-path src-tauri/Cargo.toml`, and `cargo test --manifest-path src-tauri/Cargo.toml --lib` (11/11, includes the URL policy validator tests) all passed on this machine before commit. Prior dated Rust-check entries above were recorded on a different machine/session.
+- On 2026-07-13, the 0.3.0 premium-feel/reliability pass (see `CHANGELOG.md`) was validated: `npm.cmd run build`, `cargo check --manifest-path src-tauri/Cargo.toml`, `cargo test --manifest-path src-tauri/Cargo.toml --lib` (25/25, up from 11 — added coverage for hardware-detection/vendor-classification logic), `cargo test --lib external_url_validator` (2/2), and `npm.cmd run test:telemetry-presentation` (21/21) all passed before commit.
 
 ## Current Product State
 

@@ -23,21 +23,21 @@ export function DashboardCharts({ history, networkAdapterType }: DashboardCharts
           <AreaChart data={history}>
             <defs>
               <linearGradient id="cpuFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ff7a00" stopOpacity={0.26} />
-                <stop offset="95%" stopColor="#ff7a00" stopOpacity={0.01} />
+                <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.26} />
+                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0.01} />
               </linearGradient>
               <linearGradient id="gpuFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#84f08c" stopOpacity={0.24} />
-                <stop offset="95%" stopColor="#84f08c" stopOpacity={0.01} />
+                <stop offset="5%" stopColor="var(--green)" stopOpacity={0.24} />
+                <stop offset="95%" stopColor="var(--green)" stopOpacity={0.01} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis dataKey="time" tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={28} />
             <YAxis tick={{ fill: '#788293', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
             <Tooltip content={<DashboardTooltip />} />
-            <Area isAnimationActive={false} type="monotone" dataKey="cpuUsage" stroke="#ff7a00" fill="url(#cpuFill)" strokeWidth={1.8} dot={false} name="CPU %" />
-            <Area isAnimationActive={false} type="monotone" dataKey="gpuUsage" stroke="#84f08c" fill="url(#gpuFill)" strokeWidth={1.8} dot={false} name="GPU %" />
-            <Line isAnimationActive={false} type="monotone" dataKey="ramUsage" stroke="#f5c86b" strokeWidth={1.9} dot={false} name="RAM %" />
+            <Area isAnimationActive={false} type="monotone" dataKey="cpuUsage" stroke="var(--accent)" fill="url(#cpuFill)" strokeWidth={1.8} dot={false} name="CPU %" />
+            <Area isAnimationActive={false} type="monotone" dataKey="gpuUsage" stroke="var(--green)" fill="url(#gpuFill)" strokeWidth={1.8} dot={false} name="GPU %" />
+            <Line isAnimationActive={false} type="monotone" dataKey="ramUsage" stroke="var(--amber)" strokeWidth={1.9} dot={false} name="RAM %" />
           </AreaChart>
         </ResponsiveContainer>
       </Panel>
@@ -58,7 +58,7 @@ export function DashboardCharts({ history, networkAdapterType }: DashboardCharts
             <XAxis dataKey="time" hide />
             <YAxis hide />
             <Tooltip content={<DashboardTooltip />} />
-            <Line isAnimationActive={false} type="monotone" dataKey="networkDown" stroke="#ff8f1f" strokeWidth={2.05} dot={false} name="Download Mbps" />
+            <Line isAnimationActive={false} type="monotone" dataKey="networkDown" stroke="var(--network-line)" strokeWidth={2.05} dot={false} name="Download Mbps" />
           </LineChart>
         </ResponsiveContainer>
       </Panel>
@@ -76,7 +76,7 @@ function DashboardTooltip({ active, payload, label }: { active?: boolean; payloa
       <strong>{label ?? ''}</strong>
       {payload.map((item, index) => (
         <div className="chart-tooltip-row" key={`${item.name ?? 'series'}-${index}`}>
-          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? '#ff7a00' }} />
+          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? 'var(--accent)' }} />
           <span>{item.name ?? 'Value'}</span>
           <span>{typeof item.value === 'number' ? item.value.toFixed(1) : item.value ?? '-'}</span>
         </div>

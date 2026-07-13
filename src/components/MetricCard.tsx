@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { memo } from 'react';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { Panel } from './Panel';
 
@@ -16,7 +17,7 @@ type MetricCardProps = {
   vendorAssetAlt?: string;
 };
 
-export function MetricCard({
+export const MetricCard = memo(function MetricCard({
   label,
   value,
   detail,
@@ -51,4 +52,4 @@ export function MetricCard({
       </div>
     </Panel>
   );
-}
+});

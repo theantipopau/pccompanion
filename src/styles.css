@@ -17,14 +17,25 @@
   --line-strong: rgba(255, 255, 255, 0.14);
   --muted: #a8b0bd;
   --text: #f5f7fa;
-  --cyan: #ff7a00;
-  --cyan-dim: rgba(255, 122, 0, 0.55);
-  --cyan-glow: rgba(255, 122, 0, 0.14);
+  --accent: #ff7a00;
+  --accent-dim: rgba(255, 122, 0, 0.55);
+  --accent-glow: rgba(255, 122, 0, 0.14);
   --green: #84f08c;
   --amber: #f5c86b;
   --red: #ff6d6d;
   --vendor-accent: rgba(255, 122, 0, 0.45);
   --vendor-fog: rgba(255, 122, 0, 0.12);
+
+  --gauge-cool: #55d6ff;
+  --gauge-cool-end: #84f0c4;
+  --gauge-cool-glow: rgba(85, 214, 255, 0.34);
+  --gauge-warm: var(--amber);
+  --gauge-warm-end: #fad482;
+  --gauge-warm-glow: rgba(245, 200, 107, 0.34);
+  --gauge-hot: var(--red);
+  --gauge-hot-end: #ff9999;
+  --gauge-hot-glow: rgba(255, 109, 109, 0.36);
+  --network-line: #ff8f1f;
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22);
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.18);
@@ -58,14 +69,25 @@ html[data-theme='graphite'] {
   --surface-strong: rgba(22, 31, 38, 0.98);
   --muted: #a7b5bd;
   --text: #f4f8fa;
-  --cyan: #45d7c6;
-  --cyan-dim: rgba(69, 215, 198, 0.55);
-  --cyan-glow: rgba(69, 215, 198, 0.14);
+  --accent: #45d7c6;
+  --accent-dim: rgba(69, 215, 198, 0.55);
+  --accent-glow: rgba(69, 215, 198, 0.14);
   --green: #8ee6a7;
   --amber: #e6c267;
   --red: #ff7474;
   --vendor-accent: rgba(69, 215, 198, 0.42);
   --vendor-fog: rgba(69, 215, 198, 0.11);
+
+  --gauge-cool: #4fd8f0;
+  --gauge-cool-end: #8ee6a7;
+  --gauge-cool-glow: rgba(79, 216, 240, 0.34);
+  --gauge-warm: var(--amber);
+  --gauge-warm-end: #f0d18f;
+  --gauge-warm-glow: rgba(230, 194, 103, 0.34);
+  --gauge-hot: var(--red);
+  --gauge-hot-end: #ff9a9a;
+  --gauge-hot-glow: rgba(255, 116, 116, 0.36);
+  --network-line: #45d7c6;
 }
 
 *,
@@ -259,7 +281,7 @@ textarea:focus-visible {
 }
 
 .brand-copy span {
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.09em;
@@ -326,8 +348,8 @@ textarea:focus-visible {
 .nav-item.active {
   border-color: rgba(255, 122, 0, 0.34);
   background: rgba(255, 122, 0, 0.12);
-  color: var(--cyan);
-  border-left-color: var(--cyan);
+  color: var(--accent);
+  border-left-color: var(--accent);
   padding-left: 8px;
   box-shadow: inset 0 0 14px rgba(255, 122, 0, 0.08), -2px 0 10px rgba(255, 122, 0, 0.12);
 }
@@ -341,7 +363,7 @@ textarea:focus-visible {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: var(--accent);
   flex-shrink: 0;
   pointer-events: none;
 }
@@ -376,7 +398,7 @@ textarea:focus-visible {
 }
 
 .sidebar-owner-status svg {
-  color: var(--cyan);
+  color: var(--accent);
   margin-top: 2px;
 }
 
@@ -434,7 +456,7 @@ textarea:focus-visible {
   font-size: 11px;
   font-weight: 700;
   text-decoration: none;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .sidebar-contact-link + .sidebar-contact-link {
@@ -443,7 +465,7 @@ textarea:focus-visible {
 
 .sidebar-contact-link:hover {
   background: rgba(255, 122, 0, 0.11);
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .sidebar-contact-line {
@@ -836,7 +858,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   color: var(--text);
   font: inherit;
   font-size: 12.5px;
-  caret-color: var(--cyan);
+  caret-color: var(--accent);
 }
 
 .search-input::placeholder {
@@ -963,14 +985,14 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .search-result-item:hover {
   border-color: rgba(255, 122, 0, 0.24);
   background: rgba(255, 122, 0, 0.12);
-  color: var(--cyan);
+  color: var(--accent);
   transform: translateX(1px);
 }
 
 .search-result-item.active {
   border-color: rgba(255, 122, 0, 0.32);
   background: rgba(255, 122, 0, 0.15);
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .search-result-item svg {
@@ -979,7 +1001,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .search-result-item:hover svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .search-result-copy {
@@ -1023,7 +1045,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .search-result-item.active em,
 .search-result-item:hover em {
   border-color: rgba(255, 122, 0, 0.22);
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .window-actions {
@@ -1053,7 +1075,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .topbar-support-link:hover {
   border-color: rgba(255, 143, 31, 0.44);
   background: rgba(255, 143, 31, 0.14);
-  color: var(--cyan);
+  color: var(--accent);
   transform: translateY(-1px);
 }
 
@@ -1452,7 +1474,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -1465,7 +1487,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   width: 16px;
   height: 2px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--cyan), rgba(255, 122, 0, 0.3));
+  background: linear-gradient(90deg, var(--accent), rgba(255, 122, 0, 0.3));
   flex-shrink: 0;
 }
 
@@ -1507,7 +1529,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .dashboard-verdict.tone-cyan {
-  border-left-color: var(--cyan);
+  border-left-color: var(--accent);
 }
 
 .dashboard-verdict-copy {
@@ -1799,7 +1821,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   font-weight: 700;
   letter-spacing: 0.01em;
   text-decoration: none;
-  transition: 150ms ease;
+  transition: var(--dur-base) var(--ease-out);
 }
 
 .hero-links a:first-child {
@@ -1811,7 +1833,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .hero-links a:hover {
   border-color: rgba(255, 143, 31, 0.44);
   background: rgba(255, 143, 31, 0.18);
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .hero-links .secondary-button {
@@ -2388,12 +2410,12 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   display: block;
   height: 100%;
   border-radius: inherit;
-  transition: width 460ms cubic-bezier(0.2, 0, 0.13, 1), filter 220ms cubic-bezier(0.2, 0, 0.13, 1);
+  transition: width 460ms var(--ease-out), filter 220ms var(--ease-out);
   will-change: width;
 }
 
 .tone-cyan .meter span { background: linear-gradient(90deg, #d86a00, #ff7a00); box-shadow: 0 0 12px rgba(255, 122, 0, 0.65), 0 0 4px rgba(255, 122, 0, 0.35); }
-.tone-cyan .metric-icon { background: rgba(255, 122, 0, 0.14); color: var(--cyan); }
+.tone-cyan .metric-icon { background: rgba(255, 122, 0, 0.14); color: var(--accent); }
 
 .tone-green .meter span { background: linear-gradient(90deg, #5ecf6c, #84f08c); box-shadow: 0 0 10px rgba(132, 240, 140, 0.58), 0 0 4px rgba(132, 240, 140, 0.28); }
 .tone-green .metric-icon { background: rgba(132, 240, 140, 0.12); color: var(--green); }
@@ -2624,7 +2646,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   align-items: center;
   justify-content: center;
   background: rgba(255, 122, 0, 0.12);
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 800;
   box-shadow: 0 0 12px rgba(255, 122, 0, 0.18), inset 0 1px 0 rgba(255, 122, 0, 0.28);
@@ -2671,7 +2693,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   color: var(--text);
   cursor: pointer;
   text-align: left;
-  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .dashboard-care-action:hover {
@@ -2681,7 +2703,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .dashboard-care-action svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .dashboard-care-action.tone-green svg {
@@ -2744,7 +2766,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .passport-score-chip small {
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 800;
 }
@@ -3103,7 +3125,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .diagnostics-stat-card svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .diagnostics-stat-card span {
@@ -3513,7 +3535,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   height: 10px;
   margin-top: 4px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: var(--accent);
   box-shadow: 0 0 12px rgba(255, 122, 0, 0.28);
 }
 
@@ -3594,7 +3616,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .state-initialising,
 .state-recovering,
 .state-inactive {
-  color: var(--cyan);
+  color: var(--accent);
   background: rgba(85, 214, 255, 0.08);
   border-color: rgba(85, 214, 255, 0.2);
 }
@@ -3663,7 +3685,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .filter-chip strong {
-  color: var(--cyan);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3697,7 +3719,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .maintenance-signal svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .maintenance-signal span {
@@ -3750,7 +3772,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .ops-summary-tile strong {
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 20px;
   font-weight: 850;
   line-height: 1;
@@ -3812,7 +3834,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .ram-bar-used {
   height: 100%;
   border-radius: 99px;
-  background: linear-gradient(90deg, var(--cyan), #84f08c);
+  background: linear-gradient(90deg, var(--accent), #84f08c);
   transition: width 220ms var(--ease-out);
 }
 
@@ -3833,7 +3855,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   vertical-align: middle;
 }
 
-.ram-dot.used { background: var(--cyan); }
+.ram-dot.used { background: var(--accent); }
 .ram-dot.free { background: var(--green); }
 .ram-dot.total { background: rgba(255, 255, 255, 0.22); }
 
@@ -3900,7 +3922,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.014)),
     rgba(255, 255, 255, 0.024);
-  transition: border-color 120ms ease, background 120ms ease;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 
 .cleanup-item:hover,
@@ -3913,7 +3935,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 
 .cleanup-item input {
   margin-top: 3px;
-  accent-color: var(--cyan);
+  accent-color: var(--accent);
 }
 
 .cleanup-item.muted {
@@ -4128,7 +4150,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .utility-card svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .utility-card-head {
@@ -4227,7 +4249,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: var(--accent);
 }
 
 .utility-card-footer {
@@ -4384,7 +4406,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   outline: none;
 }
 
-.copilot-search-center textarea:focus {
+.copilot-search-center textarea:focus-visible {
   border-color: rgba(255, 122, 0, 0.48);
   box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.14);
 }
@@ -4533,7 +4555,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .copilot-insight-card.tone-cyan {
-  border-left-color: var(--cyan);
+  border-left-color: var(--accent);
 }
 
 .copilot-insight-topline {
@@ -4708,7 +4730,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   outline: none;
 }
 
-.copilot-runtime-config select:focus {
+.copilot-runtime-config select:focus-visible {
   border-color: rgba(255, 122, 0, 0.48);
   box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.16);
 }
@@ -4720,7 +4742,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   justify-content: flex-end;
 }
 
-.copilot-runtime-config input:focus {
+.copilot-runtime-config input:focus-visible {
   border-color: rgba(255, 122, 0, 0.48);
   box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.16);
 }
@@ -4810,7 +4832,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   outline: none;
 }
 
-.copilot-installed-row select:focus {
+.copilot-installed-row select:focus-visible {
   border-color: rgba(255, 122, 0, 0.48);
   box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.16);
 }
@@ -4873,7 +4895,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   outline: none;
 }
 
-.copilot-chat-input-row textarea:focus {
+.copilot-chat-input-row textarea:focus-visible {
   border-color: rgba(255, 122, 0, 0.48);
   box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.14);
 }
@@ -4969,7 +4991,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   position: absolute;
   inset: 0;
   border: 1.5px solid rgba(255, 122, 0, 0.26);
-  border-top-color: var(--cyan);
+  border-top-color: var(--accent);
   border-right-color: rgba(132, 240, 140, 0.75);
   border-radius: 50%;
 }
@@ -5129,7 +5151,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .onboarding-check input {
   width: 38px;
   height: 20px;
-  accent-color: var(--cyan);
+  accent-color: var(--accent);
 }
 
 .onboarding-steps {
@@ -5155,7 +5177,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   border-radius: 7px;
   border: 1px solid rgba(255, 122, 0, 0.26);
   background: rgba(255, 122, 0, 0.11);
-  color: var(--cyan);
+  color: var(--accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5290,7 +5312,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .osd-metric svg {
-  color: var(--cyan);
+  color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -5727,7 +5749,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 .toggle-row input {
   width: 42px;
   height: 22px;
-  accent-color: var(--cyan);
+  accent-color: var(--accent);
 }
 
 .control-row select {
@@ -5744,11 +5766,11 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .slider-row input {
-  accent-color: var(--cyan);
+  accent-color: var(--accent);
 }
 
 .slider-row strong {
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 13px;
   text-align: right;
 }
@@ -5914,7 +5936,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .about-contact-list svg {
-  color: var(--cyan);
+  color: var(--accent);
   flex: 0 0 auto;
 }
 
@@ -6291,7 +6313,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   border: 1px solid rgba(255, 122, 0, 0.18);
   border-radius: 50%;
   background: rgba(14, 20, 30, 0.82);
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .case-fan svg {
@@ -6611,7 +6633,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .thermal-row b {
-  color: var(--cyan);
+  color: var(--accent);
   white-space: nowrap;
 }
 
@@ -6627,7 +6649,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .thermal-index.heat-cool {
-  background: var(--cyan);
+  background: var(--accent);
 }
 
 .thermal-index.heat-warm {
@@ -6679,7 +6701,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .detail-row svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .detail-row span {
@@ -6725,7 +6747,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--orange), var(--cyan));
+  background: linear-gradient(90deg, var(--orange), var(--accent));
   transition: width 260ms var(--ease-out);
 }
 
@@ -6747,7 +6769,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .benchmark-live-stat svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .benchmark-live-stat span,
@@ -6980,7 +7002,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   height: 16px;
   border-radius: 50%;
   background: #8e99a8;
-  transition: transform 160ms ease, background 160ms ease;
+  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
 }
 
 .switch.on span {
@@ -7002,7 +7024,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .rec-optional {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .rec-review {
@@ -7015,7 +7037,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .storage-item b {
-  color: var(--cyan);
+  color: var(--accent);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
@@ -7135,7 +7157,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   font-weight: 500;
   text-decoration: none;
   opacity: 0.8;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
   white-space: nowrap;
 }
 
@@ -7157,7 +7179,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background var(--dur-base) var(--ease-out);
   animation: badge-pulse 2.8s ease-in-out infinite;
 }
 
@@ -7237,7 +7259,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--cyan), #9ee7ff);
+  background: linear-gradient(90deg, var(--accent), #9ee7ff);
   transition: width 120ms var(--ease-out);
 }
 
@@ -7264,7 +7286,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   color: var(--text);
   cursor: pointer;
   text-align: left;
-  transition: 160ms ease;
+  transition: var(--dur-base) var(--ease-out);
 }
 
 .registry-category span {
@@ -7276,7 +7298,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .registry-category strong {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .registry-results {
@@ -7297,7 +7319,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
     rgba(255, 255, 255, 0.025);
 }
 
-.summary-item.tone-cyan svg { color: var(--cyan); }
+.summary-item.tone-cyan svg { color: var(--accent); }
 .summary-item.tone-green svg { color: var(--green); }
 .summary-item.tone-amber svg { color: var(--amber); }
 
@@ -7332,7 +7354,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
     linear-gradient(145deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.014)),
     rgba(255, 255, 255, 0.024);
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 
 .registry-row:hover {
@@ -7346,7 +7368,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 
 .registry-row input {
   margin-top: 3px;
-  accent-color: var(--cyan);
+  accent-color: var(--accent);
 }
 
 .registry-row p {
@@ -7361,7 +7383,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   max-width: 100%;
   margin-top: 6px;
   overflow: hidden;
-  color: var(--cyan);
+  color: var(--accent);
   opacity: 0.7;
   font-size: 11px;
   text-overflow: ellipsis;
@@ -7387,7 +7409,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.028);
   opacity: 0.65;
-  transition: 160ms ease;
+  transition: var(--dur-base) var(--ease-out);
 }
 
 .reg-step.done {
@@ -7453,7 +7475,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .reg-guarantee-item:last-child svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .reg-empty {
@@ -7524,7 +7546,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   color: inherit;
   cursor: pointer;
   text-align: left;
-  transition: 160ms ease;
+  transition: var(--dur-base) var(--ease-out);
 }
 
 .profile-row:hover:not(:disabled),
@@ -7550,7 +7572,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   height: 38px;
   border: 1px solid rgba(255, 122, 0, 0.18);
   border-radius: 8px;
-  color: var(--cyan);
+  color: var(--accent);
   background: rgba(255, 122, 0, 0.08);
 }
 
@@ -7620,7 +7642,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 
 .profile-detail-hero svg {
   flex: 0 0 auto;
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .profile-metrics {
@@ -7641,7 +7663,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
 }
 
 .profile-metric svg {
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .profile-metric span {
@@ -8003,14 +8025,14 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
-  transition: 140ms ease;
+  transition: var(--dur-fast) var(--ease-out);
 }
 
 .proc-sort-btn:hover,
 .proc-sort-btn.active {
   border-color: rgba(255, 122, 0, 0.4);
   background: rgba(255, 122, 0, 0.1);
-  color: var(--cyan);
+  color: var(--accent);
 }
 
 .proc-panel {
@@ -8043,7 +8065,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   align-items: center;
   padding: 7px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  transition: background 100ms ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .proc-row:hover {
@@ -8072,7 +8094,7 @@ html[data-theme='graphite'] .thermal-confidence-summary {
   opacity: 0.6;
   max-width: 140px;
   min-width: 2px;
-  transition: width 0.6s ease, background 0.4s ease;
+  transition: width 0.6s var(--ease-out), background 0.4s var(--ease-out);
 }
 
 .proc-col-pid,

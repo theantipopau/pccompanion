@@ -32,8 +32,8 @@ use tauri::{
 };
 
 use hardware::{
-    HardwareCapability, HardwareSample, MetricPoint, MonitoringEngine, SensorDiscoveryReport,
-    SystemInfo, TelemetryDiagnosticsSnapshot,
+    HardwareCapability, HardwareSample, MetricPoint, MonitoringEngine, MutexExt,
+    SensorDiscoveryReport, SystemInfo, TelemetryDiagnosticsSnapshot,
 };
 
 #[derive(Debug, Deserialize)]
@@ -213,7 +213,7 @@ struct ProcessInfo {
 
 #[tauri::command]
 fn get_system_info(engine: tauri::State<'_, MonitoringEngine>) -> SystemInfo {
-    let sys_guard = engine.sysinfo.lock().expect("sysinfo lock");
+    let sys_guard = engine.sysinfo.lock_recover();
     engine.system_info_snapshot(&sys_guard.sys)
 }
 
@@ -322,7 +322,7 @@ async fn run_storage_cleanup(
     dry_run: bool,
     state: tauri::State<'_, StorageScanState>,
 ) -> Result<Vec<String>, String> {
-    let scan_items = state.items.lock().expect("storage scan items lock").clone();
+    let scan_items = state.items.lock_recover().clone();
     tauri::async_runtime::spawn_blocking(move || {
         if let Some(items) = scan_items {
             cleanup::run_storage_cleanup_from_items(ids, dry_run, items)
@@ -336,25 +336,21 @@ async fn run_storage_cleanup(
 
 #[tauri::command]
 fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> StorageScanStatus {
-    let mut running = state.running.lock().expect("storage scan running lock");
+    let mut running = state.running.lock_recover();
     if *running {
-        return state
-            .status
-            .lock()
-            .expect("storage scan status lock")
-            .clone();
+        return state.status.lock_recover().clone();
     }
 
     *running = true;
     state.cancel_flag.store(false, Ordering::Relaxed);
 
     {
-        let mut items = state.items.lock().expect("storage scan items lock");
+        let mut items = state.items.lock_recover();
         *items = None;
     }
 
     {
-        let mut status = state.status.lock().expect("storage scan status lock");
+        let mut status = state.status.lock_recover();
         *status = StorageScanStatus {
             running: true,
             completed: false,
@@ -421,24 +417,16 @@ fn start_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> Stor
         }
     });
 
-    state
-        .status
-        .lock()
-        .expect("storage scan status lock")
-        .clone()
+    state.status.lock_recover().clone()
 }
 
 #[tauri::command]
 fn get_storage_cleanup_scan_status(
     state: tauri::State<'_, StorageScanState>,
 ) -> StorageScanStatusPayload {
-    let status = state
-        .status
-        .lock()
-        .expect("storage scan status lock")
-        .clone();
+    let status = state.status.lock_recover().clone();
     let items = if status.completed {
-        state.items.lock().expect("storage scan items lock").clone()
+        state.items.lock_recover().clone()
     } else {
         None
     };
@@ -450,7 +438,7 @@ fn get_storage_cleanup_scan_status(
 fn cancel_storage_cleanup_scan(state: tauri::State<'_, StorageScanState>) -> StorageScanStatus {
     state.cancel_flag.store(true, Ordering::Relaxed);
 
-    let mut status = state.status.lock().expect("storage scan status lock");
+    let mut status = state.status.lock_recover();
     if status.running {
         status.message = "Cancelling storage scan".to_string();
     }

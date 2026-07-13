@@ -1,9 +1,12 @@
 import { CheckCircle2, HardDrive, ShieldCheck, Trash2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { useSettings } from '../hooks/useSettings';
 import { recordCompanionAction } from '../lib/actionHistory';
 import { gb } from '../lib/format';
+import { EASE_OUT } from '../lib/motion';
 import {
   cancelStorageCleanupScan,
   getStorageCleanupScanStatus,
@@ -14,6 +17,8 @@ import {
 import type { StorageCleanupItem, StorageScanStatus } from '../types/system';
 
 export function StorageCleanerPage() {
+  const { settings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const [items, setItems] = useState<StorageCleanupItem[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [scanning, setScanning] = useState(true);
@@ -227,20 +232,30 @@ export function StorageCleanerPage() {
             <HardDrive size={19} />
           </div>
           <div className="cleanup-items">
-            {visibleItems.map((item) => (
-              <label className="cleanup-item storage-item" key={item.id}>
-                <input type="checkbox" checked={item.selected} onChange={() => toggle(item.id)} />
-                <div>
-                  <div className="cleanup-item-title">
-                    <strong>{item.name}</strong>
-                    <span className={item.safe ? 'recommendation rec-keep' : 'recommendation rec-review'}>{item.safe ? 'safe' : 'review'}</span>
+            <AnimatePresence initial={false}>
+              {visibleItems.map((item) => (
+                <motion.label
+                  className="cleanup-item storage-item"
+                  key={item.id}
+                  layout={animateEntrance}
+                  initial={animateEntrance ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  exit={animateEntrance ? { opacity: 0 } : undefined}
+                  transition={{ duration: 0.16, ease: EASE_OUT }}
+                >
+                  <input type="checkbox" checked={item.selected} onChange={() => toggle(item.id)} />
+                  <div>
+                    <div className="cleanup-item-title">
+                      <strong>{item.name}</strong>
+                      <span className={item.safe ? 'recommendation rec-keep' : 'recommendation rec-review'}>{item.safe ? 'safe' : 'review'}</span>
+                    </div>
+                    <p>{item.description}</p>
+                    <small>{item.category} · {item.location}</small>
                   </div>
-                  <p>{item.description}</p>
-                  <small>{item.category} · {item.location}</small>
-                </div>
-                <b>{gb(item.sizeGb)}</b>
-              </label>
-            ))}
+                  <b>{gb(item.sizeGb)}</b>
+                </motion.label>
+              ))}
+            </AnimatePresence>
             {!scanning && visibleItems.length === 0 && (
               <div className="empty-state">
                 <ShieldCheck size={18} />

@@ -5,7 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
-import { mhz, pct, temp } from '../lib/format';
+import { LOADING_VALUE, NOT_EXPOSED, mhz, pct, temp } from '../lib/format';
 import type { HardwareSample } from '../types/system';
 
 type CapturePoint = {
@@ -132,8 +132,8 @@ export function BenchmarkPage() {
           </div>
           <div className="benchmark-live-grid">
             <LiveStat label="Profile" value={settings.experience.performanceProfile} detail={native ? 'Desktop telemetry' : 'Preview telemetry'} icon={Gauge} />
-            <LiveStat label="CPU" value={sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Scanning'} detail={sample ? `${pct(sample.cpu.usage)} - ${mhz(sample.cpu.clockMhz)}` : 'No sample'} icon={Thermometer} />
-            <LiveStat label="GPU" value={sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : 'Scanning'} detail={sample ? `${pct(sample.gpu.usage)} - ${mhz(sample.gpu.coreClockMhz)}` : 'No sample'} icon={Activity} />
+            <LiveStat label="CPU" value={sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : LOADING_VALUE} detail={sample ? `${pct(sample.cpu.usage)} - ${mhz(sample.cpu.clockMhz)}` : LOADING_VALUE} icon={Thermometer} />
+            <LiveStat label="GPU" value={sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : LOADING_VALUE} detail={sample ? `${pct(sample.gpu.usage)} - ${mhz(sample.gpu.coreClockMhz)}` : LOADING_VALUE} icon={Activity} />
             <LiveStat label="Samples" value={`${points.length}`} detail={running ? 'Recording' : 'Idle'} icon={ClipboardList} />
           </div>
         </Panel>
@@ -166,7 +166,7 @@ export function BenchmarkPage() {
               <CompareRow label="CPU temp avg" current={latestResult.cpuTempAvg} previous={previousResult.cpuTempAvg} formatter={(value) => temp(value, settings.monitoring.temperatureUnit)} lowerIsBetter />
               <CompareRow label="GPU temp avg" current={latestResult.gpuTempAvg} previous={previousResult.gpuTempAvg} formatter={(value) => temp(value, settings.monitoring.temperatureUnit)} lowerIsBetter />
               <CompareRow label="GPU load avg" current={latestResult.gpuUsageAvg} previous={previousResult.gpuUsageAvg} formatter={(value) => pct(value ?? 0)} />
-              <CompareRow label="GPU power avg" current={latestResult.gpuPowerAvg} previous={previousResult.gpuPowerAvg} formatter={(value) => value == null ? 'Unavailable' : `${value.toFixed(0)} W`} lowerIsBetter />
+              <CompareRow label="GPU power avg" current={latestResult.gpuPowerAvg} previous={previousResult.gpuPowerAvg} formatter={(value) => value == null ? NOT_EXPOSED : `${value.toFixed(0)} W`} lowerIsBetter />
             </div>
           ) : (
             <p className="benchmark-note">Run two captures to compare profile effect. The app will only compare sensors that were present in both runs.</p>
@@ -247,8 +247,8 @@ function BenchmarkResultCard({ result, unit }: { result: CaptureResult; unit: 'c
         <Metric label="CPU load" value={pct(result.cpuUsageAvg)} />
         <Metric label="GPU avg/max" value={`${temp(result.gpuTempAvg, unit)} / ${temp(result.gpuTempMax, unit)}`} />
         <Metric label="GPU load" value={pct(result.gpuUsageAvg)} />
-        <Metric label="GPU fan" value={result.gpuFanAvg == null ? 'Unavailable' : `${Math.round(result.gpuFanAvg)}%`} />
-        <Metric label="GPU power" value={result.gpuPowerAvg == null ? 'Unavailable' : `${result.gpuPowerAvg.toFixed(0)} W`} />
+        <Metric label="GPU fan" value={result.gpuFanAvg == null ? NOT_EXPOSED : `${Math.round(result.gpuFanAvg)}%`} />
+        <Metric label="GPU power" value={result.gpuPowerAvg == null ? NOT_EXPOSED : `${result.gpuPowerAvg.toFixed(0)} W`} />
         <Metric label="RAM" value={pct(result.ramAvg)} />
         <Metric label="Samples" value={`${result.pointCount}`} />
       </dl>

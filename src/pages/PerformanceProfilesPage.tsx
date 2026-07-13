@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Cpu, Fan, Gauge, Gamepad2, Loader2, Lock, Moon, RadioTower, Sparkles, Zap } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useSettings } from '../hooks/useSettings';
 import { recordCompanionAction } from '../lib/actionHistory';
+import { EASE_OUT } from '../lib/motion';
 import { applyPerformanceProfile, getPerformanceProfiles } from '../services/systemService';
 import type { PerformanceProfile, PerformanceProfileId, PerformanceProfileResult } from '../types/system';
 
@@ -16,6 +18,7 @@ const iconMap = {
 
 export function PerformanceProfilesPage() {
   const { settings, updateSettings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const [profiles, setProfiles] = useState<PerformanceProfile[]>([]);
   const [activeId, setActiveId] = useState<PerformanceProfileId>('balanced');
   const [selectedId, setSelectedId] = useState<PerformanceProfileId>('balanced');
@@ -94,15 +97,18 @@ export function PerformanceProfilesPage() {
           </div>
 
           <div className="profiles-list">
-            {profiles.map((profile) => {
+            {profiles.map((profile, index) => {
               const Icon = iconMap[profile.id];
               const isActive = profile.id === activeId;
               const isSelected = profile.id === selectedId;
               const isBusy = busyId === profile.id;
               return (
-                <button
+                <motion.button
                   className={`profile-row ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}`}
                   key={profile.id}
+                  initial={animateEntrance ? { opacity: 0, y: 8 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05, duration: 0.2, ease: EASE_OUT }}
                   onClick={() => {
                     setSelectedId(profile.id);
                     setError(null);
@@ -117,7 +123,7 @@ export function PerformanceProfilesPage() {
                     <small>{profile.summary}</small>
                   </span>
                   <span className="profile-row-state">{isBusy ? <Loader2 size={17} className="spin" /> : isActive ? <Check size={17} /> : isSelected ? <Sparkles size={16} /> : null}</span>
-                </button>
+                </motion.button>
               );
             })}
           </div>
@@ -125,7 +131,14 @@ export function PerformanceProfilesPage() {
 
         <Panel className="profile-detail-panel">
           {selectedProfile && (
-            <>
+            <AnimatePresence mode="wait">
+            <motion.div
+              key={selectedProfile.id}
+              initial={animateEntrance ? { opacity: 0, y: 6 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              exit={animateEntrance ? { opacity: 0 } : undefined}
+              transition={{ duration: 0.18, ease: EASE_OUT }}
+            >
               <div className="profile-detail-hero">
                 <div>
                   <span className="eyebrow">{selectedProfile.id === activeId ? 'Active profile' : 'Profile preview'}</span>
@@ -251,7 +264,8 @@ export function PerformanceProfilesPage() {
                   )}
                 </div>
               )}
-            </>
+            </motion.div>
+            </AnimatePresence>
           )}
         </Panel>
       </div>

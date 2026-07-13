@@ -13,6 +13,7 @@ import { useSettings } from './hooks/useSettings';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { brand } from './lib/branding';
 import { recordCompanionAction } from './lib/actionHistory';
+import { EASE_PAGE_TRANSITION } from './lib/motion';
 import {
   exportDiagnostics,
   applyPerformanceProfile,
@@ -253,9 +254,9 @@ function CompanionApp() {
             exit={settings.experience.animations ? { opacity: 0, x: -8, y: 0, scale: 0.998 } : { opacity: 0 }}
             transition={{
               x: { type: 'spring', stiffness: 310, damping: 34, mass: 0.55 },
-              y: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.22, 1, 0.36, 1] },
-              opacity: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.22, 1, 0.36, 1] },
-              scale: { duration: settings.experience.animations ? 0.16 : 0.01, ease: [0.22, 1, 0.36, 1] },
+              y: { duration: settings.experience.animations ? 0.16 : 0.01, ease: EASE_PAGE_TRANSITION },
+              opacity: { duration: settings.experience.animations ? 0.16 : 0.01, ease: EASE_PAGE_TRANSITION },
+              scale: { duration: settings.experience.animations ? 0.16 : 0.01, ease: EASE_PAGE_TRANSITION },
             }}
           >
             <ErrorBoundary>

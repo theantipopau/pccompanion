@@ -1,19 +1,34 @@
 import { Award, BadgeCheck, CircuitBoard, ClipboardCopy, Cpu, FileClock, HardDrive, MonitorUp, ShieldCheck } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { AnimatedValue } from '../components/AnimatedValue';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
+import { LOADING_VALUE } from '../lib/format';
 import { oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { recordCompanionAction } from '../lib/actionHistory';
 import { computePerformanceScore } from '../lib/performanceScore';
+import { EASE_OUT } from '../lib/motion';
 import { getHardwareCapabilities } from '../services/systemService';
 import type { HardwareCapability, Vendor } from '../types/system';
+
+function entranceProps(index: number, animate: boolean) {
+  return animate
+    ? {
+        initial: { opacity: 0, y: 10 },
+        animate: { opacity: 1, y: 0 },
+        transition: { delay: index * 0.06, duration: 0.22, ease: EASE_OUT },
+      }
+    : { initial: false as const };
+}
 
 export function SystemPassportPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { systemInfo, sample: rawSample, displaySample, presentation, native } = useMonitor();
   const { settings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const [capabilities, setCapabilities] = useState<HardwareCapability[]>([]);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const sample = displaySample ?? rawSample;
@@ -59,7 +74,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
     .slice(0, 8)}`;
   const validationState = presentation.isLive ? 'Validated runtime profile' : presentation.isUsable ? 'Recent telemetry profile' : 'Telemetry baseline pending';
   const storageMaxUsed = sample?.storage.reduce((max, drive) => Math.max(max, drive.usedPercent), 0) ?? 0;
-  const gpuProvider = sample?.gpu.provider?.toUpperCase() ?? 'Pending';
+  const gpuProvider = sample?.gpu.provider?.toUpperCase() ?? LOADING_VALUE;
   const careItems: Array<{ label: string; status: 'live' | 'partial' | 'unsupported'; detail: string }> = [
     {
       label: 'Runtime telemetry',
@@ -123,7 +138,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
   const scoreChip = (
     <div className="passport-score-chip" title={brand.dashboardHeroTitle}>
       <span>{brand.shortName} Score</span>
-      <strong>{score.value}</strong>
+      <strong><AnimatedValue value={score.value} format={(v) => Math.round(v).toString()} /></strong>
       <small>{score.grade}</small>
     </div>
   );
@@ -170,6 +185,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
       )}
 
       <div className="passport-grid">
+        <motion.div {...entranceProps(0, animateEntrance)}>
         <Panel className="passport-hero">
           <div className="passport-ambient" aria-hidden="true" />
           <div className="passport-hero-top">
@@ -184,13 +200,15 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             {score.pillars.map((pillar) => (
               <div className="passport-pillar" key={pillar.id}>
                 <strong>{pillar.label}</strong>
-                <span>{pillar.score}/100</span>
+                <span><AnimatedValue value={pillar.score} format={(v) => `${Math.round(v)}/100`} /></span>
                 <small>{pillar.detail}</small>
               </div>
             ))}
           </div>
         </Panel>
+        </motion.div>
 
+        <motion.div {...entranceProps(1, animateEntrance)}>
         <Panel className="passport-panel">
           <div className="panel-heading">
             <div>
@@ -219,7 +237,9 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             <dd>{systemInfo?.bios ?? 'Pending detection'}</dd>
           </dl>
         </Panel>
+        </motion.div>
 
+        <motion.div {...entranceProps(2, animateEntrance)}>
         <Panel className="passport-panel">
           <div className="panel-heading">
             <div>
@@ -239,7 +259,9 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             <PassportField label="Build identity" value={`${buildRecordLabel} - ${systemInfo?.windows ?? 'Windows'} - ${score.grade} profile`} />
           </div>
         </Panel>
+        </motion.div>
 
+        <motion.div {...entranceProps(3, animateEntrance)}>
         <Panel className="passport-panel wide passport-support-context">
           <div className="panel-heading">
             <div>
@@ -253,7 +275,9 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
           </div>
           <pre>{supportContext}</pre>
         </Panel>
+        </motion.div>
 
+        <motion.div {...entranceProps(4, animateEntrance)}>
         <Panel className="passport-panel wide">
           <div className="panel-heading">
             <div>
@@ -275,7 +299,9 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             )}
           </div>
         </Panel>
+        </motion.div>
 
+        <motion.div {...entranceProps(5, animateEntrance)}>
         <Panel className="passport-panel wide">
           <div className="panel-heading">
             <div>
@@ -290,6 +316,7 @@ export function SystemPassportPage({ embedded = false }: { embedded?: boolean } 
             ))}
           </div>
         </Panel>
+        </motion.div>
       </div>
     </div>
   );

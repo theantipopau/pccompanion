@@ -10,7 +10,7 @@ import { Skeleton } from '../components/Skeleton';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
-import { gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
+import { LOADING_VALUE, NOT_EXPOSED, gb, mbps, mhz, pct, temp, adapterTypeLabel, driveTypeLabel } from '../lib/format';
 import { assets, oemLogoForText, vendorFromProvider, vendorFromText, vendorLogo } from '../lib/assets';
 import { recordCompanionAction } from '../lib/actionHistory';
 import { buildHardwareAlerts } from '../lib/hardwareAlerts';
@@ -93,10 +93,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     { key: 'support', label: `${brand.readinessLabel} ${presentation.isUsable ? 'Ready' : 'Pending'} - ${performanceScore.grade}` },
   ];
   const heroSignals = [
-    { id: 'cpu', label: 'CPU', value: sample ? pct(sample.cpu.usage) : 'Scan', detail: sample?.cpu.temperature != null ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : 'Temp unavailable' },
-    { id: 'gpu', label: 'GPU', value: sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : 'Scan', detail: sample ? pct(sample.gpu.usage) : 'Pending' },
-    { id: 'ram', label: 'RAM', value: sample ? pct(sample.memory.usage) : 'Scan', detail: sample ? `${gb(sample.memory.usedGb)} used` : 'Pending' },
-    { id: 'net', label: 'NET', value: sample ? mbps(sample.network.downMbps) : 'Scan', detail: sample ? `${mbps(sample.network.upMbps)} up` : 'Pending' },
+    { id: 'cpu', label: 'CPU', value: sample ? pct(sample.cpu.usage) : LOADING_VALUE, detail: sample?.cpu.temperature != null ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : NOT_EXPOSED },
+    { id: 'gpu', label: 'GPU', value: sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : LOADING_VALUE, detail: sample ? pct(sample.gpu.usage) : LOADING_VALUE },
+    { id: 'ram', label: 'RAM', value: sample ? pct(sample.memory.usage) : LOADING_VALUE, detail: sample ? `${gb(sample.memory.usedGb)} used` : LOADING_VALUE },
+    { id: 'net', label: 'NET', value: sample ? mbps(sample.network.downMbps) : LOADING_VALUE, detail: sample ? `${mbps(sample.network.upMbps)} up` : LOADING_VALUE },
   ];
   const storageMaxUsed = sample?.storage.reduce((max, drive) => Math.max(max, drive.usedPercent), 0) ?? 0;
   const careActions = useMemo(() => buildCareActions({
@@ -285,12 +285,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           icon={Thermometer}
           label={sample?.cpu.temperature == null ? 'CPU Load' : 'CPU Temperature'}
           componentName={cpuName}
-          value={loading ? 'Scanning' : sample?.cpu.temperature == null ? pct(sample?.cpu.usage ?? 0) : temp(sample?.cpu.temperature ?? null, settings.monitoring.temperatureUnit)}
+          value={loading ? LOADING_VALUE : sample?.cpu.temperature == null ? pct(sample?.cpu.usage ?? 0) : temp(sample?.cpu.temperature ?? null, settings.monitoring.temperatureUnit)}
           detail={sample
             ? sample.cpu.temperature == null
               ? `Provider WMI ACPI - ${mhz(sample.cpu.clockMhz)} - package sensor unavailable`
               : `Provider WMI ACPI - ${mhz(sample.cpu.clockMhz)}`
-            : 'Awaiting scan'}
+            : LOADING_VALUE}
           progress={sample?.cpu.temperature ?? 0}
           tone="cyan"
           vendorAssetSrc={cpuVendorAsset}
@@ -301,10 +301,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           icon={MonitorUp}
           label="GPU Temperature"
           componentName={gpuName}
-          value={loading ? 'Scanning' : temp(sample?.gpu.temperature ?? null, settings.monitoring.temperatureUnit)}
+          value={loading ? LOADING_VALUE : temp(sample?.gpu.temperature ?? null, settings.monitoring.temperatureUnit)}
           detail={sample
             ? `Provider ${gpuProvider} - ${mhz(sample.gpu.coreClockMhz)} core - VRAM ${gb(sample.gpu.vramUsedGb)} / ${gb(sample.gpu.vramTotalGb)}`
-            : 'Awaiting scan'}
+            : LOADING_VALUE}
           progress={sample?.gpu.temperature ?? 0}
           tone="green"
           vendorAssetSrc={gpuVendorAsset}
@@ -315,8 +315,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           icon={MemoryStick}
           label="Memory"
           componentName={boardName ?? 'Mainboard detecting'}
-          value={sample ? `${gb(sample.memory.usedGb)} / ${gb(sample.memory.totalGb)}` : 'Scanning'}
-          detail={sample ? `${pct(sample.memory.usage)} - low-overhead monitor cache` : 'Awaiting scan'}
+          value={sample ? `${gb(sample.memory.usedGb)} / ${gb(sample.memory.totalGb)}` : LOADING_VALUE}
+          detail={sample ? `${pct(sample.memory.usage)} - low-overhead monitor cache` : LOADING_VALUE}
           progress={sample?.memory.usage ?? 0}
           tone="amber"
           vendorAssetSrc={boardVendorAsset}
@@ -326,7 +326,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           className="metric-secondary metric-network"
           icon={Network}
           label="Network"
-          value={sample ? mbps(sample.network.downMbps) : 'Scanning'}
+          value={sample ? mbps(sample.network.downMbps) : LOADING_VALUE}
           detail={sample ? (
             <>
               {mbps(sample.network.upMbps)} up
@@ -334,7 +334,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                 <> - <span className="badge badge-dim">{adapterTypeLabel(sample.network.adapterType)}</span> {sample.network.adapterName}</>
               )}
             </>
-          ) : 'Awaiting scan'}
+          ) : LOADING_VALUE}
           progress={Math.min((sample?.network.downMbps ?? 0) * 2, 100)}
           tone="cyan"
         />
@@ -477,7 +477,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             {(sample?.fans ?? []).map((fan) => (
               <div className="fan-row" key={fan.label}>
                 <span>{fan.label}</span>
-                <strong>{fan.rpm != null ? `${fan.rpm.toLocaleString()} RPM` : fan.pct != null ? `${fan.pct}%` : 'Unavailable'}</strong>
+                <strong>{fan.rpm != null ? `${fan.rpm.toLocaleString()} RPM` : fan.pct != null ? `${fan.pct}%` : NOT_EXPOSED}</strong>
               </div>
             ))}
             {sample?.gpu.powerWatts != null && (
@@ -713,7 +713,7 @@ function DashboardTooltip({ active, payload, label }: { active?: boolean; payloa
       <strong>{label ?? ''}</strong>
       {payload.map((item, index) => (
         <div className="chart-tooltip-row" key={`${item.name ?? 'series'}-${index}`}>
-          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? '#ff7a00' }} />
+          <span className="chart-tooltip-dot" style={{ backgroundColor: item.color ?? 'var(--accent)' }} />
           <span>{item.name ?? 'Value'}</span>
           <span>{typeof item.value === 'number' ? item.value.toFixed(1) : item.value ?? '-'}</span>
         </div>

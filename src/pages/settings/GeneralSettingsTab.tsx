@@ -1,0 +1,349 @@
+import { Bell, Gauge, MonitorDot, Palette, Power, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Panel } from '../../components/Panel';
+import { useMonitor } from '../../hooks/useMonitor';
+import { useSettings } from '../../hooks/useSettings';
+import { brand } from '../../lib/branding';
+import { oemLogoForText, vendorLogo } from '../../lib/assets';
+import { openExternalUrl } from '../../services/native';
+import { setStartupMode } from '../../services/systemService';
+import type { AppMetadata, InterfaceMode, OverlayPreset, PerformanceMode, PerformanceProfileId, TrayMetric } from '../../types/system';
+import { SensorSource, Slider, Toggle } from './controls';
+
+const overlayPresets: Array<{ id: OverlayPreset; label: string }> = [
+  { id: 'compact-bar',    label: 'Compact bar' },
+  { id: 'corner-widget',  label: 'Corner widget' },
+  { id: 'vertical-list',  label: 'Vertical list' },
+  { id: 'minimal-card',   label: 'Minimal card' },
+  { id: 'cinematic',      label: 'Cinematic - big numbers' },
+  { id: 'benchmark',      label: 'Benchmark - dense grid' },
+];
+
+function profileForMode(mode: PerformanceMode): PerformanceProfileId {
+  if (mode === 'performance') return 'gaming';
+  if (mode === 'quiet') return 'quiet';
+  return 'balanced';
+}
+
+function formatUpdateStatus(status: AppMetadata['updateStatus']): string {
+  if (status === 'up_to_date') return 'Up to date';
+  if (status === 'available') return 'Available';
+  if (status === 'unavailable') return 'Unavailable';
+  if (status === 'checking') return 'Checking';
+  return 'Manual check';
+}
+
+export function GeneralSettingsTab({ appMetadata }: { appMetadata: AppMetadata | null }) {
+  const { sample: rawSample, displaySample, presentation, systemInfo, native } = useMonitor();
+  const { settings, updateSettings } = useSettings();
+  const sample = displaySample ?? rawSample;
+  const normalizedTrayIconMode: TrayMetric = settings.tray.liveIconMetric;
+  const cpuVendorAsset = systemInfo?.cpuVendor ? vendorLogo(systemInfo.cpuVendor) : brand.splashIcon;
+  const gpuVendorAsset = systemInfo?.gpuVendor ? vendorLogo(systemInfo.gpuVendor) : brand.splashIcon;
+  const boardAsset = oemLogoForText(systemInfo?.motherboard ?? '') ?? brand.splashIcon;
+
+  return (
+    <div className="settings-grid">
+      <Panel className="settings-panel settings-hero wide">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Companion profile</span>
+            <h2>Current platform identity</h2>
+          </div>
+          <img className="settings-hero-wordmark" src={brand.splashLogo} alt={brand.productName} />
+        </div>
+        <div className="settings-identity-row">
+          <span className="settings-identity-pill">
+            <img src={cpuVendorAsset} alt="CPU vendor" />
+            <strong>{systemInfo?.cpuVendor?.toUpperCase() ?? 'CPU'}</strong>
+          </span>
+          <span className="settings-identity-pill">
+            <img src={gpuVendorAsset} alt="GPU vendor" />
+            <strong>{systemInfo?.gpuVendor?.toUpperCase() ?? 'GPU'}</strong>
+          </span>
+          <span className="settings-identity-pill">
+            <img src={boardAsset} alt="Mainboard vendor" />
+            <strong>{systemInfo?.motherboard ?? 'Mainboard pending'}</strong>
+          </span>
+          <span className="settings-identity-pill no-image">
+            <strong>Runtime {presentation.label}</strong>
+          </span>
+        </div>
+      </Panel>
+
+      <Panel className="settings-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Desktop</span>
+            <h2>Tray behaviour</h2>
+          </div>
+          <Bell size={19} />
+        </div>
+        <Toggle
+          label="Minimise to tray (X button)"
+          checked={settings.tray.minimizeToTray}
+          onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, minimizeToTray: checked } }))}
+        />
+        <Toggle
+          label="Minimise to tray on minimise"
+          checked={settings.tray.minimizeOnMinimize}
+          onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, minimizeOnMinimize: checked } }))}
+        />
+        <Toggle
+          label="Start with Windows"
+          checked={settings.tray.startWithWindows}
+          onChange={(checked) => {
+            updateSettings((current) => ({ ...current, tray: { ...current.tray, startWithWindows: checked } }));
+            void setStartupMode(checked, settings.tray.startMinimized);
+          }}
+        />
+        <Toggle
+          label="Start minimised"
+          checked={settings.tray.startMinimized}
+          onChange={(checked) => {
+            updateSettings((current) => ({ ...current, tray: { ...current.tray, startMinimized: checked } }));
+            if (settings.tray.startWithWindows) {
+              void setStartupMode(true, checked);
+            }
+          }}
+        />
+        <Toggle
+          label="Live tray tooltip"
+          checked={settings.tray.showLiveTooltip}
+          onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, showLiveTooltip: checked } }))}
+        />
+        <Toggle
+          label="Silent background mode"
+          checked={settings.tray.silentBackground}
+          onChange={(checked) => updateSettings((current) => ({ ...current, tray: { ...current.tray, silentBackground: checked } }))}
+        />
+        <label className="control-row">
+          <span>Live tray icon</span>
+          <select
+            value={normalizedTrayIconMode}
+            onChange={(e) => updateSettings((current) => ({ ...current, tray: { ...current.tray, liveIconMetric: e.target.value as TrayMetric } }))}
+          >
+            <option value="disabled">App icon (static)</option>
+            <option value="cpuTemp">CPU temperature gauge</option>
+            <option value="gpuTemp">GPU temperature gauge</option>
+            <option value="cpuUsage">CPU usage gauge</option>
+            <option value="gpuUsage">GPU usage gauge</option>
+            <option value="ramUsage">RAM usage gauge</option>
+          </select>
+        </label>
+      </Panel>
+
+      <Panel className="settings-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">OSD</span>
+            <h2>Overlay</h2>
+          </div>
+          <MonitorDot size={19} />
+        </div>
+        <Toggle
+          label="Enable overlay"
+          checked={settings.overlay.enabled}
+          onChange={(checked) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, enabled: checked } }))}
+        />
+        <Toggle
+          label="Launch overlay on startup"
+          checked={settings.overlay.launchOnStartup}
+          onChange={(checked) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, launchOnStartup: checked } }))}
+        />
+        <Toggle
+          label="Click-through native window"
+          checked={settings.overlay.clickThrough}
+          onChange={(checked) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, clickThrough: checked } }))}
+        />
+        <label className="control-row">
+          <span>Preset</span>
+          <select
+            value={settings.overlay.preset}
+            onChange={(event) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, preset: event.target.value as OverlayPreset } }))}
+          >
+            {overlayPresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>{preset.label}</option>
+            ))}
+          </select>
+        </label>
+        <Slider
+          label="Opacity"
+          min={0.35}
+          max={1}
+          step={0.01}
+          value={settings.overlay.opacity}
+          onChange={(value) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, opacity: value } }))}
+        />
+        <Slider
+          label="Scale"
+          min={0.75}
+          max={1.5}
+          step={0.05}
+          value={settings.overlay.scale}
+          onChange={(value) => updateSettings((current) => ({ ...current, overlay: { ...current.overlay, scale: value } }))}
+        />
+      </Panel>
+
+      <Panel className="settings-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Telemetry</span>
+            <h2>Monitoring</h2>
+          </div>
+          <Gauge size={19} />
+        </div>
+        <Toggle
+          label="Launch monitoring on startup"
+          checked={settings.monitoring.launchOnStartup}
+          onChange={(checked) => updateSettings((current) => ({ ...current, monitoring: { ...current.monitoring, launchOnStartup: checked } }))}
+        />
+        <Slider
+          label="Foreground refresh"
+          min={750}
+          max={3000}
+          step={50}
+          value={settings.monitoring.refreshMs}
+          suffix="ms"
+          onChange={(value) => updateSettings((current) => ({ ...current, monitoring: { ...current.monitoring, refreshMs: value } }))}
+        />
+        <Slider
+          label="Background refresh"
+          min={1500}
+          max={8000}
+          step={100}
+          value={settings.monitoring.backgroundRefreshMs}
+          suffix="ms"
+          onChange={(value) => updateSettings((current) => ({ ...current, monitoring: { ...current.monitoring, backgroundRefreshMs: value } }))}
+        />
+        <label className="control-row">
+          <span>Temperature</span>
+          <select
+            value={settings.monitoring.temperatureUnit}
+            onChange={(event) => updateSettings((current) => ({ ...current, monitoring: { ...current.monitoring, temperatureUnit: event.target.value as 'c' | 'f' } }))}
+          >
+            <option value="c">Celsius</option>
+            <option value="f">Fahrenheit</option>
+          </select>
+        </label>
+      </Panel>
+
+      <Panel className="settings-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Experience</span>
+            <h2>Interface</h2>
+          </div>
+          <Palette size={19} />
+        </div>
+        <label className="control-row">
+          <span>Interface mode</span>
+          <select
+            value={settings.experience.interfaceMode}
+            onChange={(event) => updateSettings((current) => ({
+              ...current,
+              experience: { ...current.experience, interfaceMode: event.target.value as InterfaceMode },
+            }))}
+          >
+            <option value="owner">Owner - calm daily view</option>
+            <option value="technician">Technician - dense support view</option>
+          </select>
+        </label>
+        <Toggle
+          label="Smooth animations"
+          checked={settings.experience.animations}
+          onChange={(checked) => updateSettings((current) => ({ ...current, experience: { ...current.experience, animations: checked } }))}
+        />
+        <Toggle
+          label="Compact density"
+          checked={settings.experience.compactMode}
+          onChange={(checked) => updateSettings((current) => ({ ...current, experience: { ...current.experience, compactMode: checked } }))}
+        />
+        <label className="control-row">
+          <span>Mode</span>
+          <select
+            value={settings.experience.performanceMode}
+            onChange={(event) =>
+              updateSettings((current) => ({
+                ...current,
+                experience: {
+                  ...current.experience,
+                  performanceMode: event.target.value as PerformanceMode,
+                  performanceProfile: profileForMode(event.target.value as PerformanceMode),
+                },
+              }))
+            }
+          >
+            <option value="balanced">Balanced</option>
+            <option value="performance">Performance</option>
+            <option value="quiet">Quiet</option>
+          </select>
+        </label>
+      </Panel>
+
+      <Panel className="settings-panel wide">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Telemetry</span>
+            <h2>Live data availability</h2>
+          </div>
+          <Gauge size={19} />
+        </div>
+        {!native && (
+          <p className="subtle">Browser preview mode is active. Run desktop mode to verify live hardware channels.</p>
+        )}
+        <div className="sensor-source-grid">
+          <SensorSource label="CPU load / RAM / disks" value="sysinfo" live={!!sample} />
+          <SensorSource
+            label="CPU temperature"
+            value={sample?.cpu.temperature != null ? 'CPU package sensor' : 'Low-level provider integration required'}
+            live={sample?.cpu.temperature != null}
+            hint={sample?.cpu.temperature == null ? 'Ryzen desktop package temperature needs bundled SMN/MSR access; generic Windows WMI cannot expose it reliably.' : undefined}
+          />
+          <SensorSource
+            label="GPU sensors"
+            value={systemInfo?.gpuVendor === 'nvidia' ? 'NVML internal' : systemInfo?.gpuVendor === 'amd' ? 'AMD ADL internal' : systemInfo?.gpuVendor === 'intel' ? 'WMI (usage only)' : 'WMI fallback'}
+            live={(sample?.gpu.temperature != null) || (sample?.gpu.usage ?? 0) > 0}
+            hint={systemInfo?.gpuVendor === 'intel' ? 'Intel Arc: usage via WMI only. Temp, fans, and power require IGCL support.' : undefined}
+          />
+          <SensorSource label="GPU power / fans" value="Vendor driver API" live={sample?.gpu.powerWatts != null || sample?.gpu.fanPct != null || sample?.fans.some((fan) => fan.rpm != null) === true} />
+        </div>
+      </Panel>
+
+      <Panel className="settings-panel wide">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Native integration</span>
+            <h2>Production groundwork</h2>
+          </div>
+          <Power size={19} />
+        </div>
+        <div className="app-version-grid">
+          <div>
+            <span>Version</span>
+            <strong>{appMetadata?.version ?? '0.2.0'}</strong>
+          </div>
+          <div>
+            <span>Channel</span>
+            <strong>{appMetadata?.releaseChannel ?? 'pre-release'}</strong>
+          </div>
+          <div>
+            <span>Build</span>
+            <strong>{appMetadata?.buildProfile ?? (native ? 'desktop' : 'browser')}</strong>
+          </div>
+          <div>
+            <span>Updates</span>
+            <strong>{formatUpdateStatus(appMetadata?.updateStatus ?? 'manual')}</strong>
+          </div>
+        </div>
+        <button className="secondary-button settings-release-link" type="button" onClick={() => openExternalUrl(appMetadata?.releaseNotesUrl ?? 'https://github.com/theantipopau/pccompanion/releases')}>
+          <RefreshCw size={16} />
+          <span>Release notes</span>
+        </button>
+        <div className="integration-row">
+          <SlidersHorizontal size={18} />
+          <span>Tray, OSD, cleanup, startup, notifications, and low-level sensor work are routed through native command boundaries.</span>
+        </div>
+      </Panel>
+    </div>
+  );
+}

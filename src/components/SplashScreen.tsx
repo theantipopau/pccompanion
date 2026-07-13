@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { brand } from '../lib/branding';
+import { EASE_OUT, EASE_SPRING } from '../lib/motion';
 
 type SplashStep = {
   label: string;
@@ -32,13 +33,13 @@ export function SplashScreen({ steps, onComplete }: SplashScreenProps) {
       className="splash"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.015 }}
-      transition={{ duration: 0.42, ease: 'easeOut' }}
+      transition={{ duration: 0.42, ease: EASE_OUT }}
     >
       <motion.div
         className="splash-panel"
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.42, ease: [0.2, 0.7, 0.2, 1] }}
+        transition={{ duration: 0.42, ease: EASE_SPRING }}
       >
         <div className="splash-logo-hero">
           <img className="splash-logo" src={brand.splashLogo} alt={brand.productName} />

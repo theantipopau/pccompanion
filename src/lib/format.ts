@@ -1,3 +1,8 @@
+/** Shared placeholder for a value whose sample hasn't arrived yet — distinct from a value the current hardware/provider doesn't expose at all. */
+export const LOADING_VALUE = 'Reading…';
+/** Shared placeholder for a metric the current hardware/provider does not expose, as opposed to one still loading. */
+export const NOT_EXPOSED = 'Not exposed';
+
 export function pct(value: number) {
   return `${Math.round(value)}%`;
 }

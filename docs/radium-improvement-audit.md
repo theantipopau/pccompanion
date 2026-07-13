@@ -1,10 +1,22 @@
 # Radium PCs Companion Improvement Audit
 
-Last updated: 2026-06-27
+Last updated: 2026-07-13
 
 This is the living audit and improvement backlog for Radium PCs Companion. It captures product, engineering, UI/UX, packaging, validation, and future-feature work in one place so the project can be improved in steady slices.
 
 ## Rolling Changelog
+
+### 2026-07-13
+
+- Completed a premium-feel and reliability pass, released as `0.3.0`. Full detail in `CHANGELOG.md` and `docs/premium-experience-roadmap.md` (new doc this session — a targeted audit plus prioritized roadmap for closing the gap to professional PC-builder-suite polish, with a top-10 findings list per layer and open-source integration research).
+- Fixed a real reliability bug: `hardware.rs`'s monitor loop used `.expect()` on cache/sysinfo lock access, so a single panic while holding a lock permanently poisoned it and cascaded into repeated panics on the next 1 Hz tick, silently killing telemetry until restart. Added poison-tolerant `LockExt`/`MutexExt` traits and replaced every such `.expect()` in `hardware.rs`/`lib.rs`.
+- Fixed a real visual bug: `Gauge.tsx` and `DashboardCharts.tsx` hardcoded colors instead of reading CSS custom properties, so switching the app's theme did not reskin the two most visible dashboard widgets. Renamed the `--cyan` token to `--accent` (it was always orange) along the way.
+- Extended Framer Motion entrance/list animations from 2 to 9 of the app's pages, and unified the app's entire CSS + JS motion vocabulary (15 ad hoc CSS transitions, 13+ duplicated Framer Motion easing-curve literals across 11 files) onto one consistent, shared set of curves (`src/lib/motion.ts`).
+- Standardized "no data yet" vs "not exposed by this hardware" messaging on Thermals, Dashboard, System Passport, and Benchmark, replacing an inconsistent mix of "Scanning"/"Pending"/"Unavailable"/"Awaiting scan" for the same underlying states.
+- Decomposed `SettingsPage.tsx` (1195 lines) into `src/pages/settings/*.tsx` — mechanical extraction, no behavior change.
+- Added 14 unit tests for `hardware.rs` pure-logic functions (vendor detection, adapter-type detection, confidence scoring) — Rust test count 11 → 25.
+- Investigated and explicitly deferred (with written rationale, not silently dropped): a shared `GpuProvider` trait for the four vendor backends, sensor-sidecar .NET runtime trimming, native NVMe SMART reads, fan-curve write support, a PresentMon-based frame-time overlay, and RGB Phase 2/3. All six require either real target hardware to validate against or are hardware **write** capabilities this project's principles already single out for extra caution — none were available/appropriate to implement blind in this session.
+- Validation: `npm.cmd run build` clean, `cargo check --manifest-path src-tauri/Cargo.toml` clean, `cargo test --manifest-path src-tauri/Cargo.toml --lib` 25/25, `npm.cmd run test:telemetry-presentation` 21/21.
 
 ### 2026-06-27
 

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Award, CircuitBoard, Sparkles } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
+import { EASE_OUT } from '../lib/motion';
 import { setStartupMode } from '../services/systemService';
 import type { PerformanceProfileId, TrayMetric } from '../types/system';
 
@@ -58,7 +59,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       className="onboarding-backdrop"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.28, ease: [0.2, 0, 0.13, 1] }}
+      transition={{ duration: 0.28, ease: EASE_OUT }}
     >
       <motion.div
         className="onboarding-panel"

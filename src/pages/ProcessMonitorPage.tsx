@@ -1,8 +1,11 @@
 import { Activity, RefreshCw } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
+import { useSettings } from '../hooks/useSettings';
+import { EASE_OUT } from '../lib/motion';
 import { listTopProcesses } from '../services/systemService';
 import type { ProcessInfo } from '../types/system';
 
@@ -10,7 +13,9 @@ type SortKey = 'cpuPct' | 'memMb' | 'name';
 
 export function ProcessMonitorPage() {
   const { sample: rawSample, displaySample } = useMonitor();
+  const { settings } = useSettings();
   const sample = displaySample ?? rawSample;
+  const animateEntrance = settings.experience.animations;
   const [procs, setProcs] = useState<ProcessInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('cpuPct');
@@ -52,13 +57,13 @@ export function ProcessMonitorPage() {
   function cpuColor(pct: number) {
     if (pct >= 20) return 'var(--red)';
     if (pct >= 8) return 'var(--amber)';
-    if (pct >= 2) return 'var(--cyan)';
+    if (pct >= 2) return 'var(--accent)';
     return 'var(--muted)';
   }
 
   function memColor(mb: number) {
     if (mb >= 500) return 'var(--amber)';
-    if (mb >= 200) return 'var(--cyan)';
+    if (mb >= 200) return 'var(--accent)';
     return 'var(--muted)';
   }
 
@@ -95,13 +100,13 @@ export function ProcessMonitorPage() {
         <div className="proc-summary-row">
           <div className="proc-stat">
             <span>Total CPU</span>
-            <strong style={{ color: totalCpu !== null && totalCpu > 80 ? 'var(--red)' : totalCpu !== null && totalCpu > 50 ? 'var(--amber)' : 'var(--cyan)' }}>
+            <strong style={{ color: totalCpu !== null && totalCpu > 80 ? 'var(--red)' : totalCpu !== null && totalCpu > 50 ? 'var(--amber)' : 'var(--accent)' }}>
               {totalCpu !== null ? `${totalCpu}%` : '—'}
             </strong>
           </div>
           <div className="proc-stat">
             <span>RAM In Use</span>
-            <strong style={{ color: 'var(--cyan)' }}>{totalRamGb !== null ? `${totalRamGb} GB` : '—'}</strong>
+            <strong style={{ color: 'var(--accent)' }}>{totalRamGb !== null ? `${totalRamGb} GB` : '—'}</strong>
           </div>
           <div className="proc-stat">
             <span>Processes listed</span>
@@ -126,26 +131,36 @@ export function ProcessMonitorPage() {
             <div className="proc-empty">Scanning processes…</div>
           ) : (
             <div className="proc-list">
-              {sorted.map((p) => (
-                <div className="proc-row" key={p.pid}>
-                  <div className="proc-col-name">
-                    <span className="proc-name">{p.name}</span>
-                    <div
-                      className="proc-cpu-bar"
-                      style={{ width: `${Math.min(p.cpuPct * 3, 100)}%`, background: cpuColor(p.cpuPct) }}
-                    />
-                  </div>
-                  <span className="proc-col-pid proc-muted">{p.pid}</span>
-                  <span className="proc-col-cpu" style={{ color: cpuColor(p.cpuPct) }}>
-                    {p.cpuPct < 0.1 ? '<0.1' : p.cpuPct.toFixed(1)}%
-                  </span>
-                  <span className="proc-col-mem" style={{ color: memColor(p.memMb) }}>
-                    {p.memMb >= 1024
-                      ? `${(p.memMb / 1024).toFixed(1)} GB`
-                      : `${Math.round(p.memMb)} MB`}
-                  </span>
-                </div>
-              ))}
+              <AnimatePresence initial={false}>
+                {sorted.map((p) => (
+                  <motion.div
+                    className="proc-row"
+                    key={p.pid}
+                    layout={animateEntrance}
+                    initial={animateEntrance ? { opacity: 0 } : false}
+                    animate={{ opacity: 1 }}
+                    exit={animateEntrance ? { opacity: 0 } : undefined}
+                    transition={{ duration: 0.18, ease: EASE_OUT }}
+                  >
+                    <div className="proc-col-name">
+                      <span className="proc-name">{p.name}</span>
+                      <div
+                        className="proc-cpu-bar"
+                        style={{ width: `${Math.min(p.cpuPct * 3, 100)}%`, background: cpuColor(p.cpuPct) }}
+                      />
+                    </div>
+                    <span className="proc-col-pid proc-muted">{p.pid}</span>
+                    <span className="proc-col-cpu" style={{ color: cpuColor(p.cpuPct) }}>
+                      {p.cpuPct < 0.1 ? '<0.1' : p.cpuPct.toFixed(1)}%
+                    </span>
+                    <span className="proc-col-mem" style={{ color: memColor(p.memMb) }}>
+                      {p.memMb >= 1024
+                        ? `${(p.memMb / 1024).toFixed(1)} GB`
+                        : `${Math.round(p.memMb)} MB`}
+                    </span>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </Panel>

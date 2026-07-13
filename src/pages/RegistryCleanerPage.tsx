@@ -1,12 +1,17 @@
 ﻿import { Archive, CheckCircle2, Circle, FileWarning, FolderSearch, Info, ScanLine, ShieldCheck, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { useSettings } from '../hooks/useSettings';
 import { recordCompanionAction } from '../lib/actionHistory';
+import { EASE_OUT } from '../lib/motion';
 import { backupRegistryIssues, cleanRegistryIssues, restoreRegistryBackup, scanRegistryIssues } from '../services/systemService';
 import type { RegistryBackup, RegistryIssue } from '../types/system';
 export function RegistryCleanerPage() {
+  const { settings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const [issues, setIssues] = useState<RegistryIssue[]>([]);
   const [backup, setBackup] = useState<RegistryBackup | null>(null);
   const [log, setLog] = useState<string[]>(['Scan pending.']);
@@ -176,24 +181,34 @@ export function RegistryCleanerPage() {
             <div className="reg-empty">No actionable issues found in this category.</div>
           ) : (
             <div className="registry-list">
-              {visibleIssues.map((issue) => (
-                <label className="registry-row" key={issue.id}>
-                  <input type="checkbox" checked={issue.selected} onChange={() => toggle(issue.id)} />
-                  <div className="registry-row-body">
-                    <div className="cleanup-item-title">
-                      <strong>{issue.valueName || issue.keyPath.split('\\').pop() || issue.category}</strong>
-                      <span className={`risk risk-${issue.severity}`}>{issue.severity}</span>
-                      <span className={issue.safe ? 'recommendation rec-keep' : 'recommendation rec-review'}>
-                        {issue.safe ? 'safe' : 'review'}
-                      </span>
+              <AnimatePresence initial={false}>
+                {visibleIssues.map((issue) => (
+                  <motion.label
+                    className="registry-row"
+                    key={issue.id}
+                    layout={animateEntrance}
+                    initial={animateEntrance ? { opacity: 0 } : false}
+                    animate={{ opacity: 1 }}
+                    exit={animateEntrance ? { opacity: 0 } : undefined}
+                    transition={{ duration: 0.16, ease: EASE_OUT }}
+                  >
+                    <input type="checkbox" checked={issue.selected} onChange={() => toggle(issue.id)} />
+                    <div className="registry-row-body">
+                      <div className="cleanup-item-title">
+                        <strong>{issue.valueName || issue.keyPath.split('\\').pop() || issue.category}</strong>
+                        <span className={`risk risk-${issue.severity}`}>{issue.severity}</span>
+                        <span className={issue.safe ? 'recommendation rec-keep' : 'recommendation rec-review'}>
+                          {issue.safe ? 'safe' : 'review'}
+                        </span>
+                      </div>
+                      <p>{issue.description}</p>
+                      <code title={`${issue.hive}\\${issue.keyPath}${issue.valueName ? `\\${issue.valueName}` : ''}`}>
+                        {issue.hive}\{issue.keyPath}{issue.valueName ? `\${issue.valueName}` : ''}
+                      </code>
                     </div>
-                    <p>{issue.description}</p>
-                    <code title={`${issue.hive}\\${issue.keyPath}${issue.valueName ? `\\${issue.valueName}` : ''}`}>
-                      {issue.hive}\{issue.keyPath}{issue.valueName ? `\${issue.valueName}` : ''}
-                    </code>
-                  </div>
-                </label>
-              ))}
+                  </motion.label>
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </Panel>

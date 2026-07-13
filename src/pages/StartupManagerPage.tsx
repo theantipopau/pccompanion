@@ -1,11 +1,16 @@
 import { AlertTriangle, CheckCircle2, Power, ShieldCheck, TimerReset } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
+import { useSettings } from '../hooks/useSettings';
+import { EASE_OUT } from '../lib/motion';
 import { scanStartupItems, setStartupItemEnabled } from '../services/systemService';
 import type { StartupItem } from '../types/system';
 
 export function StartupManagerPage() {
+  const { settings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const [items, setItems] = useState<StartupItem[]>([]);
   const [log, setLog] = useState<string>('Scan pending.');
   const [busy, setBusy] = useState(true);
@@ -57,20 +62,29 @@ export function StartupManagerPage() {
             <Power size={19} />
           </div>
           <div className="startup-list">
-            {items.map((item) => (
-              <div className="startup-row" key={item.id}>
-                <button className={item.enabled ? 'switch on' : 'switch'} onClick={() => void toggle(item)} aria-label={`Toggle ${item.name}`}>
-                  <span />
-                </button>
-                <div>
-                  <strong>{item.name}</strong>
-                  <small>{item.publisher} · {item.location}</small>
-                  <code>{item.command}</code>
-                </div>
-                <span className={`risk risk-${impactTone(item.impact)}`}>{item.impact}</span>
-                <span className={`recommendation rec-${item.recommended}`}>{item.recommended}</span>
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {items.map((item, index) => (
+                <motion.div
+                  className="startup-row"
+                  key={item.id}
+                  initial={animateEntrance ? { opacity: 0, y: 6 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={animateEntrance ? { opacity: 0 } : undefined}
+                  transition={{ delay: Math.min(index, 12) * 0.02, duration: 0.18, ease: EASE_OUT }}
+                >
+                  <button className={item.enabled ? 'switch on' : 'switch'} onClick={() => void toggle(item)} aria-label={`Toggle ${item.name}`}>
+                    <span />
+                  </button>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>{item.publisher} · {item.location}</small>
+                    <code>{item.command}</code>
+                  </div>
+                  <span className={`risk risk-${impactTone(item.impact)}`}>{item.impact}</span>
+                  <span className={`recommendation rec-${item.recommended}`}>{item.recommended}</span>
+                </motion.div>
+              ))}
+            </AnimatePresence>
             {!busy && items.length === 0 && (
               <div className="empty-state">
                 <ShieldCheck size={18} />

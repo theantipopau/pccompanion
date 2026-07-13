@@ -1,4 +1,6 @@
+import { memo } from 'react';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
+import { gaugeTone } from '../lib/severity';
 
 type GaugeProps = {
   label: string;
@@ -24,16 +26,14 @@ function arc(d1: number, d2: number, large: boolean, radius = R) {
 /** Tick dot positions at 0 %, 25 %, 50 %, 75 %, 100 % of arc */
 const TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
 
-export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
+export const Gauge = memo(function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
   const animated = useAnimatedNumber(value);
   const pct = Math.min(Math.max(animated / max, 0), 1);
   const fillEnd = START + SWEEP * pct;
   const large = pct * SWEEP > 180;
 
-  // Color thresholds
-  const color    = pct >= 0.85 ? '#ff6d6d' : pct >= 0.65 ? '#f5c86b' : '#55d6ff';
-  const colorEnd = pct >= 0.85 ? '#ff9999' : pct >= 0.65 ? '#fad482' : '#84f0c4';
-  const glow     = pct >= 0.85 ? 'rgba(255,109,109,0.36)' : pct >= 0.65 ? 'rgba(245,200,107,0.34)' : 'rgba(85,214,255,0.34)';
+  // Color thresholds — theme-aware via CSS custom properties, see lib/severity.ts
+  const { start: color, end: colorEnd, glow } = gaugeTone(pct);
 
   // Gradient endpoint coordinates
   const [gx1, gy1] = ptRaw(START);
@@ -104,4 +104,4 @@ export function Gauge({ label, value, unit, max = 100 }: GaugeProps) {
       <span className="gauge-label">{label}</span>
     </div>
   );
-}
+});

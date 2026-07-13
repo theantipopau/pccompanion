@@ -5,9 +5,42 @@
 /// Tauri command handlers read from the shared [`HardwareCache`] without
 /// blocking.
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::{Duration, Instant};
 use sysinfo::{Components, Networks, System};
+
+/// Poison-tolerant lock access.
+///
+/// `monitor_loop` polls at 1 Hz on a dedicated thread; a bare `.expect()` on a
+/// poisoned lock there would panic every subsequent tick forever (the lock stays
+/// poisoned once poisoned), silently killing all telemetry until the process is
+/// restarted. Since a stale-but-readable cache is always preferable to a
+/// permanently dead monitor thread, recover the guard instead of propagating
+/// the panic.
+pub(crate) trait LockExt<T> {
+    fn read_recover(&self) -> RwLockReadGuard<'_, T>;
+    fn write_recover(&self) -> RwLockWriteGuard<'_, T>;
+}
+
+impl<T> LockExt<T> for RwLock<T> {
+    fn read_recover(&self) -> RwLockReadGuard<'_, T> {
+        self.read().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn write_recover(&self) -> RwLockWriteGuard<'_, T> {
+        self.write().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+pub(crate) trait MutexExt<T> {
+    fn lock_recover(&self) -> MutexGuard<'_, T>;
+}
+
+impl<T> MutexExt<T> for Mutex<T> {
+    fn lock_recover(&self) -> MutexGuard<'_, T> {
+        self.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
 
 // ─── Shared IPC types ───────────────────────────────────────────────────────
 
@@ -488,7 +521,7 @@ impl MonitoringEngine {
 
     /// Read the current cache snapshot as a [`HardwareSample`].
     pub fn snapshot(&self) -> HardwareSample {
-        let c = self.cache.read().expect("hardware cache read lock");
+        let c = self.cache.read_recover();
         HardwareSample {
             timestamp: c.timestamp,
             state: c.state.clone(),
@@ -541,7 +574,7 @@ impl MonitoringEngine {
     /// Reset runtime cache surfaces so monitoring can recover quickly after
     /// a manual restart action from the tray menu.
     pub fn restart_runtime_state(&self) -> String {
-        let mut c = self.cache.write().expect("hardware cache write lock");
+        let mut c = self.cache.write_recover();
         c.state = "initializing".to_string();
         c.timestamp = timestamp_now().0;
         c.history.clear();
@@ -572,7 +605,7 @@ impl MonitoringEngine {
     /// Read the cached system info (or a sensible placeholder while it
     /// initialises).
     pub fn system_info_snapshot(&self, sys: &System) -> SystemInfo {
-        let c = self.cache.read().expect("hardware cache read lock");
+        let c = self.cache.read_recover();
         if let Some(mut info) = c.system_info.clone() {
             let current_gpu_vendor = c.gpu_vendor.trim().to_lowercase();
             let current_gpu_name = c.gpu_name.trim().to_string();
@@ -662,7 +695,7 @@ impl MonitoringEngine {
 
     /// Return a registry-style summary of available telemetry capabilities.
     pub fn capability_snapshot(&self) -> Vec<HardwareCapability> {
-        let c = self.cache.read().expect("hardware cache read lock");
+        let c = self.cache.read_recover();
         let gpu_vendor = c.gpu_vendor.to_lowercase();
         let gpu_provider = c.gpu_provider.to_lowercase();
 
@@ -793,10 +826,10 @@ impl MonitoringEngine {
     pub fn telemetry_diagnostics_snapshot(&self) -> TelemetryDiagnosticsSnapshot {
         let sample = self.snapshot();
         let system_info = {
-            let sys_guard = self.sysinfo.lock().expect("sysinfo lock");
+            let sys_guard = self.sysinfo.lock_recover();
             self.system_info_snapshot(&sys_guard.sys)
         };
-        let cache = self.cache.read().expect("hardware cache read lock");
+        let cache = self.cache.read_recover();
         let providers = build_provider_diagnostics(&cache);
         let sidecar_lifecycle = build_sidecar_lifecycle(&cache);
         let capabilities = self.capability_snapshot();
@@ -1676,7 +1709,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
     #[cfg(windows)]
     {
         if igcl_opt.is_some() {
-            let mut c = cache.write().expect("cache write");
+            let mut c = cache.write_recover();
             c.intel_igcl_loaded = true;
         }
     }
@@ -1686,7 +1719,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
     {
         if let Some(ctx) = &wmi_opt {
             let static_info = crate::wmi_provider::query_static_system_info(ctx);
-            let mut c = cache.write().expect("cache write");
+            let mut c = cache.write_recover();
             // Merge WMI static info into cache.
             if !static_info.gpu_name.is_empty() {
                 c.gpu_name = static_info.gpu_name.clone();
@@ -1705,7 +1738,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
     {
         if let Some(nvml) = &nvml_opt {
             if let Some(ver) = nvml.query_driver_version() {
-                let mut c = cache.write().expect("cache write");
+                let mut c = cache.write_recover();
                 if let Some(info) = c.system_info.as_mut() {
                     info.gpu_driver_version = ver;
                 }
@@ -1720,7 +1753,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
     {
         if let Some(amd) = &amd_opt {
             if let Some(ver) = amd.query_driver_version() {
-                let mut c = cache.write().expect("cache write");
+                let mut c = cache.write_recover();
                 if let Some(info) = c.system_info.as_mut() {
                     info.gpu_driver_version = ver;
                 }
@@ -1859,7 +1892,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
             .flat_map(|provider| provider.errors.clone())
             .collect();
 
-        let mut c = cache.write().expect("cache write");
+        let mut c = cache.write_recover();
         c.provider_load_order = provider_load_order;
         c.provider_diagnostics = provider_diagnostics;
         c.provider_warnings = provider_warnings;
@@ -1878,7 +1911,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
 
         // --- sysinfo refresh (every tick) ---
         let tick = {
-            let mut state = sysinfo.lock().expect("sysinfo lock");
+            let mut state = sysinfo.lock_recover();
             state.tick()
         };
 
@@ -2033,7 +2066,7 @@ pub fn monitor_loop(cache: Arc<RwLock<HardwareCache>>, sysinfo: Arc<Mutex<Sysinf
         // --- Write cache ---
         let (ts, time_str) = timestamp_now();
         {
-            let mut c = cache.write().expect("cache write");
+            let mut c = cache.write_recover();
             c.timestamp = ts;
             c.state = state.to_string();
             c.cpu_usage = tick.cpu_usage;
@@ -2424,4 +2457,110 @@ pub fn timestamp_now() -> (u128, String) {
     let m = secs / 60;
     let s = secs % 60;
     (dur.as_millis(), format!("{m:02}:{s:02}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bytes_to_gb_converts_binary_gigabytes() {
+        assert!((bytes_to_gb(1_073_741_824) - 1.0).abs() < 0.0001);
+        assert!((bytes_to_gb(0) - 0.0).abs() < 0.0001);
+        assert!((bytes_to_gb(17_179_869_184) - 16.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn adapter_type_from_name_detects_wifi_variants() {
+        assert_eq!(adapter_type_from_name("Intel(R) Wi-Fi 6 AX200"), "wifi");
+        assert_eq!(adapter_type_from_name("Wireless-AC 9560"), "wifi");
+        assert_eq!(adapter_type_from_name("802.11ax Adapter"), "wifi");
+    }
+
+    #[test]
+    fn adapter_type_from_name_detects_ethernet_variants() {
+        assert_eq!(adapter_type_from_name("Realtek PCIe GbE Family Controller"), "ethernet");
+        assert_eq!(adapter_type_from_name("Killer E3000 Ethernet Controller"), "ethernet");
+        assert_eq!(adapter_type_from_name("Local Area Connection"), "ethernet");
+    }
+
+    #[test]
+    fn adapter_type_from_name_falls_back_to_unknown() {
+        assert_eq!(adapter_type_from_name("Bluetooth Device (Personal Area Network)"), "unknown");
+        assert_eq!(adapter_type_from_name(""), "unknown");
+    }
+
+    #[test]
+    fn vendor_from_str_identifies_amd() {
+        assert_eq!(vendor_from_str("AMD Ryzen 7 9800X3D"), "amd");
+        assert_eq!(vendor_from_str("Radeon RX 9070 XT"), "amd");
+    }
+
+    #[test]
+    fn vendor_from_str_identifies_intel() {
+        assert_eq!(vendor_from_str("Intel Core i9-14900K"), "intel");
+        assert_eq!(vendor_from_str("Intel Arc A770"), "intel");
+    }
+
+    #[test]
+    fn vendor_from_str_identifies_nvidia() {
+        assert_eq!(vendor_from_str("NVIDIA GeForce RTX 4090"), "nvidia");
+        assert_eq!(vendor_from_str("GTX 1660 Super"), "nvidia");
+    }
+
+    #[test]
+    fn vendor_from_str_falls_back_to_unknown() {
+        assert_eq!(vendor_from_str("System Product Name"), "unknown");
+        assert_eq!(vendor_from_str(""), "unknown");
+    }
+
+    #[test]
+    fn vendor_from_str_is_case_insensitive() {
+        assert_eq!(vendor_from_str("AMD"), vendor_from_str("amd"));
+        assert_eq!(vendor_from_str("NVIDIA"), vendor_from_str("nvidia"));
+    }
+
+    #[test]
+    fn provider_state_from_enabled_prioritises_loaded_over_staged() {
+        assert_eq!(provider_state_from_enabled(true, true), "loaded");
+        assert_eq!(provider_state_from_enabled(true, false), "loaded");
+        assert_eq!(provider_state_from_enabled(false, true), "staged");
+        assert_eq!(provider_state_from_enabled(false, false), "unavailable");
+    }
+
+    #[test]
+    fn confidence_from_state_rates_live_high_confidence_providers() {
+        assert_eq!(confidence_from_state("live", "NVML", false), "high");
+        assert_eq!(confidence_from_state("live", "ADL2", false), "high");
+        assert_eq!(confidence_from_state("live", "WMI", false), "medium");
+    }
+
+    #[test]
+    fn confidence_from_state_downgrades_fallback_live_readings() {
+        assert_eq!(confidence_from_state("live", "NVML", true), "medium");
+    }
+
+    #[test]
+    fn confidence_from_state_rates_non_live_states() {
+        assert_eq!(confidence_from_state("partial", "WMI", false), "medium");
+        assert_eq!(confidence_from_state("staged", "IGCL", false), "medium");
+        assert_eq!(confidence_from_state("blocked", "WMI", false), "low");
+        assert_eq!(confidence_from_state("driver_required", "WMI", false), "low");
+        assert_eq!(confidence_from_state("degraded", "WMI", false), "low");
+        assert_eq!(confidence_from_state("unsupported", "WMI", false), "low");
+        assert_eq!(confidence_from_state("elevated_required", "WMI", false), "low");
+        assert_eq!(confidence_from_state("something_new", "WMI", false), "unknown");
+    }
+
+    #[test]
+    fn timestamp_now_returns_mm_ss_within_bounds() {
+        let (millis, label) = timestamp_now();
+        assert!(millis > 0);
+        let parts: Vec<&str> = label.split(':').collect();
+        assert_eq!(parts.len(), 2);
+        let minutes: u32 = parts[0].parse().expect("minutes should be numeric");
+        let seconds: u32 = parts[1].parse().expect("seconds should be numeric");
+        assert!(minutes < 60);
+        assert!(seconds < 60);
+    }
 }

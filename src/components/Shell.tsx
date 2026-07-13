@@ -7,6 +7,8 @@ import { brand } from '../lib/branding';
 import { recordCompanionAction } from '../lib/actionHistory';
 import { pct, temp } from '../lib/format';
 import { extractTrayValue } from '../lib/trayIcon';
+import { temperatureClass, usageClass } from '../lib/severity';
+import { EASE_OUT } from '../lib/motion';
 import type { NavItem } from '../types/navigation';
 import { useMonitor } from '../hooks/useMonitor';
 import { useSettings } from '../hooks/useSettings';
@@ -358,7 +360,7 @@ export function Shell({ navItems, activeView, onNavigate, onPrefetchView, childr
                     onFocus={() => onPrefetchView?.(item.id)}
                     aria-current={active ? 'page' : undefined}
                     title={item.label}
-                    transition={{ duration: 0.12, ease: [0.2, 0, 0.13, 1] }}
+                    transition={{ duration: 0.12, ease: EASE_OUT }}
                   >
                     <Icon size={16} />
                     <span>{item.label}</span>
@@ -366,7 +368,7 @@ export function Shell({ navItems, activeView, onNavigate, onPrefetchView, childr
                       <motion.span
                         className="nav-active-pip"
                         layoutId="nav-active-pip"
-                        transition={{ duration: motionEnabled ? 0.2 : 0, ease: [0.2, 0, 0.13, 1] }}
+                        transition={{ duration: motionEnabled ? 0.2 : 0, ease: EASE_OUT }}
                       />
                     )}
                   </motion.button>
@@ -383,14 +385,14 @@ export function Shell({ navItems, activeView, onNavigate, onPrefetchView, childr
           <div className="sidebar-metric-row">
             <ThermalIcon size={13} />
             <span>CPU</span>
-            <strong className={tempClass(sample?.cpu.temperature)}>
+            <strong className={temperatureClass(sample?.cpu.temperature)}>
               {sample ? temp(sample.cpu.temperature, settings.monitoring.temperatureUnit) : '-'}
             </strong>
           </div>
           <div className="sidebar-metric-row">
             <GpuIcon size={13} />
             <span>GPU</span>
-            <strong className={tempClass(sample?.gpu.temperature)}>
+            <strong className={temperatureClass(sample?.gpu.temperature)}>
               {sample ? temp(sample.gpu.temperature, settings.monitoring.temperatureUnit) : '-'}
             </strong>
           </div>
@@ -631,18 +633,4 @@ export function Shell({ navItems, activeView, onNavigate, onPrefetchView, childr
       </section>
     </div>
   );
-}
-
-function tempClass(value: number | undefined | null): string {
-  if (value == null) return '';
-  if (value >= 85) return 'metric-hot';
-  if (value >= 70) return 'metric-warm';
-  return 'metric-cool';
-}
-
-function usageClass(value: number | undefined | null): string {
-  if (value == null) return '';
-  if (value >= 85) return 'metric-hot';
-  if (value >= 65) return 'metric-warm';
-  return 'metric-cool';
 }

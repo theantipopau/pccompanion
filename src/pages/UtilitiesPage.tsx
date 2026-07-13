@@ -1,10 +1,12 @@
 import { Activity, Bot, Cpu, Fan, FileWarning, Gamepad2, HardDrive, Network, PackageMinus, Palette, RefreshCw, Rocket, ShieldCheck, TimerReset, type LucideIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useSettings } from '../hooks/useSettings';
 import { brand } from '../lib/branding';
 import { assets } from '../lib/assets';
+import { EASE_OUT } from '../lib/motion';
 import { discoverRgbDevices, getPerformanceProfiles } from '../services/systemService';
 import type { PerformanceProfile, RgbDiscovery } from '../types/system';
 
@@ -228,10 +230,11 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
           <ShieldCheck size={20} />
         </div>
         <div className="maintenance-focus-grid">
-          {maintenanceTools.map((module) => (
+          {maintenanceTools.map((module, index) => (
             <UtilityCard
                   key={module.title}
                   module={module}
+                  index={index}
                   onNavigate={onNavigate}
                   rgbDiscovery={module.title === 'RGB integration' ? rgbDiscovery : undefined}
                   rgbBusy={module.title === 'RGB integration' ? rgbBusy : false}
@@ -298,10 +301,11 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
               </div>
             </div>
             <div className="utility-grid">
-              {modules.filter((module) => module.group === group.id).map((module) => (
+              {modules.filter((module) => module.group === group.id).map((module, index) => (
                 <UtilityCard
                   key={module.title}
                   module={module}
+                  index={index}
                   onNavigate={onNavigate}
                   rgbDiscovery={module.title === 'RGB integration' ? rgbDiscovery : undefined}
                   rgbBusy={module.title === 'RGB integration' ? rgbBusy : false}
@@ -318,20 +322,29 @@ export function UtilitiesPage({ mode, onNavigate }: { mode: string; onNavigate?:
 
 function UtilityCard({
   module,
+  index = 0,
   onNavigate,
   rgbDiscovery,
   rgbBusy = false,
   onRefreshRgb,
 }: {
   module: UtilityModule;
+  index?: number;
   onNavigate?: (view: string) => void;
   rgbDiscovery?: RgbDiscovery | null;
   rgbBusy?: boolean;
   onRefreshRgb?: () => void;
 }) {
+  const { settings } = useSettings();
+  const animateEntrance = settings.experience.animations;
   const Icon = module.icon;
   const isRgbModule = module.title === 'RGB integration';
   return (
+    <motion.div
+      initial={animateEntrance ? { opacity: 0, y: 8 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.2, ease: EASE_OUT }}
+    >
     <Panel className={`utility-card utility-card-${module.status}`}>
       <div className="utility-card-head">
         <Icon size={21} />
@@ -360,6 +373,7 @@ function UtilityCard({
         )}
       </div>
     </Panel>
+    </motion.div>
   );
 }
 

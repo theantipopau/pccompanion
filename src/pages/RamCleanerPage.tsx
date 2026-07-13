@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { useMonitor } from '../hooks/useMonitor';
 import { gb } from '../lib/format';
+import { usageTone } from '../lib/severity';
 import { optimizeRam } from '../services/systemService';
 import type { RamCleanupResult } from '../types/system';
 
@@ -50,7 +51,7 @@ export function RamCleanerPage() {
           label="In use"
           value={totalGb > 0 ? gb(usedGb) : '—'}
           detail={totalGb > 0 ? `of ${gb(totalGb)} total` : 'Waiting for data'}
-          tone={usagePct > 85 ? 'red' : usagePct > 65 ? 'amber' : 'cyan'}
+          tone={usageTone(usagePct)}
           progress={usagePct}
         />
         <MetricCard
@@ -66,7 +67,7 @@ export function RamCleanerPage() {
           label="Utilization"
           value={totalGb > 0 ? `${usagePct}%` : '—'}
           detail={totalGb > 0 ? `${gb(totalGb)} installed` : 'Loading'}
-          tone={usagePct > 85 ? 'red' : usagePct > 65 ? 'amber' : 'green'}
+          tone={usageTone(usagePct, 'green')}
           progress={usagePct}
         />
 

@@ -1,6 +1,6 @@
 [package]
 name = "radium_pcs_companion"
-version = "0.2.0"
+version = "0.3.0"
 description = "Radium PCs Companion"
 authors = ["Radium PCs"]
 edition = "2021"
