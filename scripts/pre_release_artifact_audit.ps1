@@ -1,6 +1,6 @@
 param(
   [string]$ExePath = "src-tauri/target/release/radium_pcs_companion.exe",
-  [string]$SetupPath = "src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.2.0_x64-setup.exe",
+  [string]$SetupPath = "",
   [string]$ExpectedProductName = "Radium PCs Companion",
   [switch]$RequireSignature,
   [string]$ManifestPath = ""
@@ -10,6 +10,21 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $root
+
+if ([string]::IsNullOrWhiteSpace($SetupPath)) {
+  # NSIS output filenames embed the version (e.g. "Radium PCs Companion_0.3.0_x64-setup.exe"), so a
+  # hardcoded default silently drifts stale every release. The bundle directory can also hold installers
+  # from prior versions left over from earlier builds, so pick the most recently written match, not just
+  # any match.
+  $nsisDir = Join-Path $root "src-tauri/target/release/bundle/nsis"
+  $latestSetup = Get-ChildItem -LiteralPath $nsisDir -Filter "*_x64-setup.exe" -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+  if (-not $latestSetup) {
+    throw "No NSIS installer found under $nsisDir. Run 'npm run build:exe' first, or pass -SetupPath explicitly."
+  }
+  $SetupPath = $latestSetup.FullName
+}
 
 function Resolve-ArtifactPath([string]$Path) {
   if ([System.IO.Path]::IsPathRooted($Path)) {
