@@ -20,7 +20,7 @@
   <img alt="Tauri v2" src="https://img.shields.io/badge/Tauri-v2-f97316?style=for-the-badge" />
   <img alt="React 19" src="https://img.shields.io/badge/React-19-38bdf8?style=for-the-badge" />
   <img alt="Rust backend" src="https://img.shields.io/badge/Rust-native_backend-a855f7?style=for-the-badge" />
-  <img alt="Windows pre-release" src="https://img.shields.io/badge/Windows-0.1.0--pre-22c55e?style=for-the-badge" />
+  <img alt="Windows pre-release" src="https://img.shields.io/badge/Windows-0.3.0-22c55e?style=for-the-badge" />
 </p>
 
 Radium PCs Companion is a desktop-native Windows utility for monitoring, support, and safe maintenance workflows. It combines a premium React interface with a Rust/Tauri backend, vendor telemetry providers, tray controls, diagnostics export, and a bundled low-level sensor sidecar path for hardware that needs deeper package-temperature access.
@@ -31,20 +31,25 @@ The product goal is simple: give Radium PCs customers and technicians a polished
 
 | Item | Status |
 |---|---|
-| Version | `0.1.0-pre` |
+| Version | `0.3.0` |
 | Channel | Controlled public pre-release |
 | Platform | Windows 10/11, x64 |
 | Shell | Tauri v2 desktop app |
 | Frontend | React 19 + TypeScript |
 | Backend | Rust command layer + Windows APIs |
 | Installer | NSIS, per-machine |
-| Primary artifact | `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe` |
+| Primary artifact | `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.3.0_x64-setup.exe` |
+
+See [CHANGELOG.md](CHANGELOG.md) for what's new in `0.3.0`.
 
 Useful project documents:
 
 | Document | Purpose |
 |---|---|
+| [Changelog](CHANGELOG.md) | Release notes by version |
 | [Current state](docs/current-state.md) | Short release handoff and operational baseline |
+| [Premium experience roadmap](docs/premium-experience-roadmap.md) | UI/UX audit, competitive research, and prioritized polish roadmap |
+| [Improvement audit](docs/radium-improvement-audit.md) | Living engineering backlog and rolling changelog |
 | [Next stages](docs/next-stages.md) | Feature rollout plan and staged implementation notes |
 | [Sensor provider plan](docs/radium-sensor-provider.md) | PawnIO, LibreHardwareMonitor, and sidecar strategy |
 | [Compatibility matrix](docs/compatibility-matrix.md) | Hardware validation tracking |
@@ -239,7 +244,7 @@ Build output:
 Primary artifact:
 
 ```text
-src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe
+src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.3.0_x64-setup.exe
 ```
 
 Installer notes:
@@ -260,24 +265,25 @@ Recommended tester flow:
 
 ## Validation Snapshot
 
-Latest local validation in this workspace (2026-06-12):
+Latest local validation in this workspace (2026-07-13, `0.3.0`):
 
 | Check | Result |
 |---|---|
 | `npm.cmd run test:telemetry-presentation` | Passed (21 tests) |
 | `npm.cmd run build` | Passed |
-| `npm.cmd run check:rust` | Passed |
+| `cargo check --manifest-path src-tauri/Cargo.toml` | Passed |
+| `cargo test --manifest-path src-tauri/Cargo.toml --lib` | Passed (25 tests, up from 11) |
 | `npm.cmd run test:url-policy` | Passed (2 tests) |
 | `npm.cmd run build:sensor-sidecar` | Passed; LHM `0.9.6` version verified |
 | `npm.cmd run build:exe` | Passed; fresh NSIS installer produced |
-| `npm.cmd run verify:radium-artifact` | Passed; manifest written to `artifacts/radium/radium-artifact-manifest-20260612-170629.json` |
+| `npm.cmd run verify:radium-artifact` | Passed; manifest written to `artifacts/radium/radium-artifact-manifest-20260713-184852.json` |
 
 Fresh artifact details:
 
 | Artifact | SHA-256 |
 |---|---|
-| `src-tauri/target/release/radium_pcs_companion.exe` | `92EF12FE9E37BD9A0EC3DFE137BBA1912DB8C3D7BF9FE806403D34CB60D26C7B` |
-| `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.1.0-pre_x64-setup.exe` | `001EEAF0E495A7CE963591F9381D83DA4F470B1DC17D22791149049E1A7B8624` |
+| `src-tauri/target/release/radium_pcs_companion.exe` | `7161CDB66B5DB62AE3982BC354192ACD77FCB9AA677AAEAA89459897663E8C86` |
+| `src-tauri/target/release/bundle/nsis/Radium PCs Companion_0.3.0_x64-setup.exe` | `7C11CCAE172251693ACF873D5244DC4CD7DFF5B119044E28C405041DF69D9EAD` |
 
 Note: artifacts are currently unsigned in this workspace. Use `npm.cmd run sign:radium` with a configured Authenticode identity before paid or broad public distribution.
 
